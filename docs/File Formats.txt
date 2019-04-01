@@ -1,0 +1,20 @@
+Proprietary
+asMdl:
+	Contains renderable mesh + material info
+	-Meshes are stored as a continuous set of vertex buffers for triangle lists
+	-Buffers can include index buffers (position, normal, tangent, UV1&2, vertex colors)
+	-Skinned meshes are flagged in the header and have and additional boneIdx and boneWeight buffer
+	-Materials support PBR in the style of GLTF's specification (although slightly more limited)
+
+asEcs:
+	Contains a serialization of the components in the entity component system
+	
+asScn: 
+	Contains a bunch of spawn points for components as well as global scene settings (sun, gravity, etc)
+	
+3rd Party
+	mp3: Standard audio
+	dds: Texture
+	newt: Serialized Newton Collision Object 
+	
+	

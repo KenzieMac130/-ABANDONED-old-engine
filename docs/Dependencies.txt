@@ -1,0 +1,29 @@
+Engine (C Only)
+	sdl2 (DLL)
+	sokol
+	cimgui
+	newton dynamics (DLL)
+	minimp3
+	OpenAL (DLL)
+	cglm
+	stb headers
+	cute headers
+	mattiasgustavsson libs
+	xxHash
+	
+Asset Converter (Orthodox C++ Needed for 3 dependencies)
+	C++ STL (as much as it hurts me... tinygltf uses it)
+	xxHash
+	tinygltf
+	nvidia texture tools
+	meshOptimizer
+	mattiasgustavsson libs (asset processing config reading)
+	newton dynamics (for collision serialization)
+	
+Shader Processor (Orthodox C++ Allowed)
+	shaderc
+	
+Blender Scene Exporter (Python with Command Line)
+	Blender Python Stuff
+	Asset Converter (exe)
+	CMFT (exe)

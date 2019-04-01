@@ -1,0 +1,9 @@
+@PROJECT_NAME = "astrengine"
+@OPTIMIZE_OUTPUT_FOR_C = YES
+STRIP_FROM_PATH        = @PROJECT_SOURCE_DIR@/source \
+INPUT                  = @doxy_main_page@ \
+                         @PROJECT_SOURCE_DIR@/source/engine \
+FILE_PATTERNS          = *.h \
+                         *.c
+RECURSIVE              = YES
+USE_MDFILE_AS_MAINPAGE = @doxy_main_page@
