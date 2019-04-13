@@ -1,3 +1,10 @@
+find_package(SDL2 REQUIRED)
+find_package(Vulkan REQUIRED)
+
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/engine)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tools)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tests)
