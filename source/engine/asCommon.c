@@ -1,8 +1,5 @@
 #include "include/asCommon.h"
 
-#define INI_IMPLEMENTATION
-#include "../thirdparty/mattias/ini.h"
-
 #ifdef _WIN32
 #include <Windows.h>
 #endif
@@ -23,6 +20,8 @@ ASEXPORT void asFatalError(const char* msg)
 }
 
 /*Config file*/
+#define INI_IMPLEMENTATION
+#include "../thirdparty/mattias/ini.h"
 
 struct asCfgFile_t
 {
@@ -35,9 +34,12 @@ ASEXPORT asCfgFile_t* asCfgLoad(const char* path)
 	if (!path)
 		return NULL;
 	FILE *fp;
-	fopen_s(&fp, path, "r");
-	if (!fp)
+	fopen_s(&fp, path, "rb");
+	if (!fp) {
+		asDebugLog("Couldn't Open: %s\n", path);
 		return NULL;
+	}
+	asDebugLog("Opened: %s\n", path);
 	fseek(fp, 0, SEEK_END);
 	int size = ftell(fp)+1;
 	fseek(fp, 0, SEEK_SET);
@@ -51,12 +53,28 @@ ASEXPORT asCfgFile_t* asCfgLoad(const char* path)
 	asFree(pCfgData);
 	return result;
 }
+ASEXPORT asCfgFile_t* asCfgFromMem(unsigned char* data, size_t size)
+{
+	asCfgFile_t *result = asMalloc(sizeof(asCfgFile_t));
+	result->pIni = ini_load(data, NULL);
+	result->currentSection = INI_GLOBAL_SECTION;
+	return result;
+}
 ASEXPORT void asCfgFree(asCfgFile_t* cfg)
 {
 	if (!cfg)
 		return;
 	ini_destroy(cfg->pIni);
 	asFree(cfg);
+}
+ASEXPORT void asCfgOpenSection(asCfgFile_t* cfg, const char* name)
+{
+	if (!cfg)
+		return;
+	int section = ini_find_section(cfg->pIni, name, (int)strlen(name));
+	if (section == INI_NOT_FOUND)
+		return;
+	cfg->currentSection = section;
 }
 ASEXPORT double asCfgGetNumber(asCfgFile_t* cfg, const char* name, double fallback)
 {
@@ -68,7 +86,7 @@ ASEXPORT double asCfgGetNumber(asCfgFile_t* cfg, const char* name, double fallba
 	const char* propStr = ini_property_value(cfg->pIni, cfg->currentSection, index);
 	char* endptr;
 	double value = strtod(propStr, &endptr);
-	if (!endptr)
+	if (endptr)
 		return value;
 	else
 		return fallback;
@@ -148,6 +166,15 @@ ASEXPORT void asAlloc_LinearFree(void* block)
 }
 
 /*Handle manager*/
+
+int asHandle_toInt(asHandle_t hndl)
+{
+	hndl._index = 2;
+	hndl._generation = 255;
+	int result = hndl._index << 8;
+	result |= hndl._generation;
+	return result;
+}
 
 asHandle_t _constructHandle(uint32_t index, uint32_t generation)
 {
@@ -245,7 +272,7 @@ ASEXPORT void asIdxTableSetIdx(asIdxIndirectionTable_t *pTable, uint32_t fixedId
 ASEXPORT uint32_t asIdxTableAt(asIdxIndirectionTable_t *pTable, uint32_t fixedIdx)
 {
 	if (fixedIdx >= pTable->_max)
-		return;
+		return pTable->_max - 1;
 	return pTable->pIndices[fixedIdx];
 }
 
@@ -272,4 +299,14 @@ ASEXPORT void asIdxTableSwap(asIdxIndirectionTable_t *pTable, uint32_t idxA, int
 		else if (pTable->pIndices[i] == idxB)
 			pTable->pIndices[i] = idxA;
 	}
+}
+
+/*Hashing*/
+#define XXH_STATIC_LINKING_ONLY
+#define XXHASH_IMPLEMENTATION
+#include "xxhash/xxHash.h"
+
+ASEXPORT asHash64_t asHashBytes64_xxHash(const void *pBytes, size_t size)
+{
+	return (asHash64_t)XXH64(pBytes, size, 0);
 }

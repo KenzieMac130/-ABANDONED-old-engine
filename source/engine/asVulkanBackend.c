@@ -3,13 +3,6 @@
 #include <SDL_vulkan.h>
 #include "include/asRendererCore.h"
 
-struct asVkAllocation_t {
-	VkDeviceMemory memHandle;
-	uint32_t memType;
-	VkDeviceSize size;
-	VkDeviceSize offset;
-};
-
 struct vScreenResources_t
 {
 	SDL_Window *pWindow;
@@ -22,6 +15,12 @@ struct vScreenResources_t
 
 	uint32_t imageCount;
 	VkImage *pSwapImages;
+	VkCommandBuffer *pPresentImageToScreenCmds;
+	VkSemaphore swapImageAvailableSemaphores[AS_VK_MAX_INFLIGHT];
+	VkSemaphore blitFinishedSemaphores[AS_VK_MAX_INFLIGHT];
+
+	asTextureHandle_t compositeTexture;
+	asTextureHandle_t depthTexture;
 };
 struct vScreenResources_t vMainScreen;
 
@@ -36,18 +35,21 @@ VkDevice asVkDevice;
 VkQueue asVkQueue_GFX;
 VkQueue asVkQueue_Present;
 
-VkCommandPool asVkMainCommandPool;
+VkCommandPool asVkGeneralCommandPool;
+uint32_t asVkCurrentFrame = 0;
+VkFence asVkInFlightFences[AS_VK_MAX_INFLIGHT];
 
 typedef struct
 {
 	uint32_t graphicsIdx;
 	uint32_t presentIdx;
+	uint32_t computeIdx;
 } vQueueFamilyIndices_t;
 vQueueFamilyIndices_t asVkQueueFamilyIndices;
 
 bool vIsQueueFamilyComplete(vQueueFamilyIndices_t indices)
 {
-	return (indices.graphicsIdx != UINT32_MAX && indices.presentIdx != UINT32_MAX);
+	return (indices.graphicsIdx != UINT32_MAX && indices.presentIdx != UINT32_MAX && indices.computeIdx != UINT32_MAX);
 }
 
 const char* deviceReqExtensions[] = {
@@ -58,6 +60,8 @@ const char* deviceReqExtensions[] = {
 const char* validationLayers[] = {
 	"VK_LAYER_LUNARG_standard_validation"
 };
+bool vMarkersExtensionFound;
+PFN_vkDebugMarkerSetObjectNameEXT vkDebugMarkerSetObjectName;
 
 bool vValidationLayersAvailible()
 {
@@ -107,7 +111,7 @@ VkDebugReportCallbackEXT vDbgCallback;
 
 vQueueFamilyIndices_t vFindQueueFamilyIndices(VkPhysicalDevice gpu)
 {
-	vQueueFamilyIndices_t result = (vQueueFamilyIndices_t) { UINT32_MAX, UINT32_MAX };
+	vQueueFamilyIndices_t result = (vQueueFamilyIndices_t) { UINT32_MAX, UINT32_MAX, UINT32_MAX };
 	uint32_t queueFamilyCount;
 	vkGetPhysicalDeviceQueueFamilyProperties(gpu, &queueFamilyCount, NULL);
 	VkQueueFamilyProperties *queueFamilyProps = asAlloc_LinearMalloc(sizeof(VkQueueFamilyProperties) * queueFamilyCount, 0);
@@ -116,6 +120,8 @@ vQueueFamilyIndices_t vFindQueueFamilyIndices(VkPhysicalDevice gpu)
 	{
 		if (queueFamilyProps[i].queueCount > 0 && queueFamilyProps[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
 			result.graphicsIdx = i;
+		if (queueFamilyProps[i].queueCount > 0 && queueFamilyProps[i].queueFlags & VK_QUEUE_COMPUTE_BIT)
+			result.computeIdx = i;
 
 		VkBool32 present = VK_FALSE;
 		vkGetPhysicalDeviceSurfaceSupportKHR(gpu, i, vMainScreen.surface, &present);
@@ -361,13 +367,11 @@ struct vTexture_t
 	asVkAllocation_t alloc[AS_VK_MAX_INFLIGHT];
 	VkImage image[AS_VK_MAX_INFLIGHT];
 	VkImageView view[AS_VK_MAX_INFLIGHT];
-	VkSampler sampler;
 };
 
 void _invalidateTexture(struct vTexture_t* pTex)
 {
 	pTex->activeImage = 0;
-	pTex->sampler = VK_NULL_HANDLE;
 	for (int i = 0; i < AS_VK_MAX_INFLIGHT; i++)
 	{
 		pTex->alloc[i].memHandle = VK_NULL_HANDLE;
@@ -387,8 +391,6 @@ void _destroyTexture(struct vTexture_t* pTex)
 		if (pTex->view[i] != VK_NULL_HANDLE)
 			vkDestroyImageView(asVkDevice, pTex->view[i], AS_VK_MEMCB);
 	}
-	if (pTex->sampler != VK_NULL_HANDLE)
-		vkDestroySampler(asVkDevice, pTex->sampler, AS_VK_MEMCB);
 	_invalidateTexture(pTex);
 }
 
@@ -417,44 +419,58 @@ void vTextureManager_Shutdown(struct vTextureManager_t* pMan)
 	asFree(pMan->textures);
 }
 
-VkFormat vConvertToNativeFormat(asTextureFormat format)
+VkFormat vConvertToNativeFormat(asColorFormat format)
 {
 	switch (format)
 	{
-	case AS_TEXTUREFORMAT_RGBA8_UNORM:
-		return VK_FORMAT_R8G8B8A8_UNORM;
-	case AS_TEXTUREFORMAT_RGBA16_UNORM:
-		return VK_FORMAT_R16G16B16A16_UNORM;
-	case AS_TEXTUREFORMAT_RGBA16_SFLOAT:
-		return VK_FORMAT_R16G16B16A16_SFLOAT;
-	case AS_TEXTUREFORMAT_R10G10B10A2_UNORM:
-		return VK_FORMAT_A2B10G10R10_UNORM_PACK32;
-	case AS_TEXTUREFORMAT_R8_UNORM:
-		return VK_FORMAT_R8_UNORM;
-	case AS_TEXTUREFORMAT_R16_SFLOAT:
-		return VK_FORMAT_R16_SFLOAT;
-	case AS_TEXTUREFORMAT_R32_SFLOAT:
-		return VK_FORMAT_R32_SFLOAT;
-	case AS_TEXTUREFORMAT_R16G16_SFLOAT:
-		return VK_FORMAT_R16G16_SFLOAT;
-	case AS_TEXTUREFORMAT_BC1_UNORM_BLOCK:
-		return VK_FORMAT_BC1_RGBA_UNORM_BLOCK;
-	case AS_TEXTUREFORMAT_BC3_UNORM_BLOCK:
-		return VK_FORMAT_BC3_UNORM_BLOCK;
-	case AS_TEXTUREFORMAT_BC5_UNORM_BLOCK:
-		return VK_FORMAT_BC5_UNORM_BLOCK;
-	case AS_TEXTUREFORMAT_BC6H_UFLOAT_BLOCK:
-		return VK_FORMAT_BC6H_UFLOAT_BLOCK;
-	case AS_TEXTUREFORMAT_BC7_UNORM_BLOCK:
-		return VK_FORMAT_BC7_UNORM_BLOCK;
-	case AS_TEXTUREFORMAT_DEPTH:
+	case AS_COLORFORMAT_DEPTH:
 		return VK_FORMAT_D32_SFLOAT;
+	case AS_COLORFORMAT_DEPTH_LP:
+		return VK_FORMAT_D16_UNORM;
+	case AS_COLORFORMAT_DEPTH_STENCIL:
+		return VK_FORMAT_D24_UNORM_S8_UINT;
+	case AS_COLORFORMAT_RGBA8_UNORM:
+		return VK_FORMAT_R8G8B8A8_UNORM;
+	case AS_COLORFORMAT_RGBA16_UNORM:
+		return VK_FORMAT_R16G16B16A16_UNORM;
+	case AS_COLORFORMAT_RGBA16_SFLOAT:
+		return VK_FORMAT_R16G16B16A16_SFLOAT;
+	case AS_COLORFORMAT_RGBA32_SFLOAT:
+		return VK_FORMAT_R32G32B32A32_SFLOAT;
+	case AS_COLORFORMAT_R10G10B10A2_UNORM:
+		return VK_FORMAT_A2B10G10R10_UNORM_PACK32;
+	case AS_COLORFORMAT_R8_UNORM:
+		return VK_FORMAT_R8_UNORM;
+	case AS_COLORFORMAT_R16_SFLOAT:
+		return VK_FORMAT_R16_SFLOAT;
+	case AS_COLORFORMAT_R32_SFLOAT:
+		return VK_FORMAT_R32_SFLOAT;
+	case AS_COLORFORMAT_RG16_SFLOAT:
+		return VK_FORMAT_R16G16_SFLOAT;
+	case AS_COLORFORMAT_RG32_SFLOAT:
+		return VK_FORMAT_R32G32_SFLOAT;
+	case AS_COLORFORMAT_RGB16_SFLOAT:
+		return VK_FORMAT_R16G16B16_SFLOAT;
+	case AS_COLORFORMAT_RGB32_SFLOAT:
+		return VK_FORMAT_R32G32B32_SFLOAT;
+	case AS_COLORFORMAT_RGBA32_UINT:
+		return VK_FORMAT_R32G32B32A32_UINT;
+	case AS_COLORFORMAT_BC1_UNORM_BLOCK:
+		return VK_FORMAT_BC1_RGBA_UNORM_BLOCK;
+	case AS_COLORFORMAT_BC3_UNORM_BLOCK:
+		return VK_FORMAT_BC3_UNORM_BLOCK;
+	case AS_COLORFORMAT_BC5_UNORM_BLOCK:
+		return VK_FORMAT_BC5_UNORM_BLOCK;
+	case AS_COLORFORMAT_BC6H_UFLOAT_BLOCK:
+		return VK_FORMAT_BC6H_UFLOAT_BLOCK;
+	case AS_COLORFORMAT_BC7_UNORM_BLOCK:
+		return VK_FORMAT_BC7_UNORM_BLOCK;
 	default:
 		return VK_FORMAT_UNDEFINED;
 	}
 }
 
-ASEXPORT uint32_t asGetDepthFormatSize(asTextureFormat preference)
+ASEXPORT uint32_t asGetDepthFormatSize(asColorFormat preference)
 {
 	return 4; /*Most commonly supported depth format (D32, D24S8) size*/
 }
@@ -505,30 +521,6 @@ VkImageUsageFlags vDecodeTextureUsageFlags(uint32_t abstractFlags)
 	return initial;
 }
 
-VkFilter vConvertTextureFilterToNativeFilter(asTextureFilterType type)
-{
-	switch (type)
-	{
-	case AS_TEXTUREFILTER_NEAREST:
-		return VK_FILTER_NEAREST;
-	default:
-		return VK_FILTER_LINEAR;
-	}
-}
-
-VkSamplerAddressMode vConvertTextureWrapToAddressMode(asTextureWrapType type)
-{
-	switch (type)
-	{
-	case AS_TEXTUREWRAP_CLAMP:
-		return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-	case AS_TEXTUREWRAP_MIRROR:
-		return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
-	default:
-		return VK_SAMPLER_ADDRESS_MODE_REPEAT;
-	}
-}
-
 ASEXPORT asTextureHandle_t asCreateTexture(asTextureDesc_t *pDesc)
 {
 	asTextureHandle_t hndl = (asTextureHandle_t) { 0 };
@@ -554,24 +546,24 @@ ASEXPORT asTextureHandle_t asCreateTexture(asTextureDesc_t *pDesc)
 		}
 		createInfo.mipLevels = pDesc->mips;
 		createInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-		if (pDesc->cpuAccess == AS_GPURESOURCEACCESS_IMMUTABLE)
+		if (pDesc->cpuAccess == AS_GPURESOURCEACCESS_DEVICE)
 			createInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
 		else
 			createInfo.tiling = VK_IMAGE_TILING_LINEAR;
 		createInfo.flags = 0;
 		createInfo.usage = vDecodeTextureUsageFlags(pDesc->usageFlags);
-		if ((pDesc->cpuAccess == AS_GPURESOURCEACCESS_IMMUTABLE) && pDesc->pInitialContentsBuffer)
+		if ((pDesc->cpuAccess == AS_GPURESOURCEACCESS_DEVICE) && pDesc->pInitialContentsBuffer)
 			createInfo.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 		createInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 		createInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-		if (pDesc->cpuAccess == AS_GPURESOURCEACCESS_IMMUTABLE){
+		if (pDesc->cpuAccess != AS_GPURESOURCEACCESS_STREAM){
 			if (vkCreateImage(asVkDevice, &createInfo, AS_VK_MEMCB, &pTex->image[0]) != VK_SUCCESS)
 				asFatalError("vkCreateImage() Failed to create an image");
 			VkMemoryRequirements memReq;
 			vkGetImageMemoryRequirements(asVkDevice, pTex->image[0], &memReq);
 			asVkAlloc(&pTex->alloc[0], memReq.size, asVkFindMemoryType(memReq.memoryTypeBits,
-				VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
+				pDesc->cpuAccess == AS_GPURESOURCEACCESS_DEVICE ? VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT : VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT));
 			vkBindImageMemory(asVkDevice, pTex->image[0], pTex->alloc[0].memHandle, pTex->alloc[0].offset);
 		}
 		else{
@@ -588,14 +580,14 @@ ASEXPORT asTextureHandle_t asCreateTexture(asTextureDesc_t *pDesc)
 	}
 	/*View*/
 	{
-		const int count = pDesc->cpuAccess == AS_GPURESOURCEACCESS_IMMUTABLE ? 1 : AS_VK_MAX_INFLIGHT;
+		const int count = pDesc->cpuAccess == AS_GPURESOURCEACCESS_STREAM ? AS_VK_MAX_INFLIGHT : 1;
 		for (int i = 0; i < count; i++){
 			VkImageViewCreateInfo createInfo = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
 			createInfo.image = pTex->image[i];
 			createInfo.viewType = vConvertTextureTypeToViewType(pDesc->type);
 			createInfo.format = vConvertToNativeFormat(pDesc->format);
 			createInfo.subresourceRange.aspectMask =
-				pDesc->format == AS_TEXTUREFORMAT_DEPTH ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
+				pDesc->format == AS_COLORFORMAT_DEPTH ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
 			createInfo.subresourceRange.baseArrayLayer = 0;
 			createInfo.subresourceRange.baseMipLevel = 0;
 			createInfo.subresourceRange.layerCount = pDesc->type != AS_TEXTURETYPE_3D ? pDesc->depth : 1;
@@ -604,32 +596,11 @@ ASEXPORT asTextureHandle_t asCreateTexture(asTextureDesc_t *pDesc)
 				asFatalError("vkCreateImageView() Failed to create an image view");
 		}
 	}
-	/*Sampler*/
-	{
-		VkSamplerCreateInfo createInfo = { VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
-		createInfo.minLod = pDesc->minLod;
-		createInfo.maxLod = pDesc->maxLod > pDesc->mips ? (float) pDesc->mips : pDesc->maxLod;
-		createInfo.maxAnisotropy = (float)pDesc->maxAnisotropy;
-		if(asVkDeviceFeatures.samplerAnisotropy)
-			createInfo.anisotropyEnable = pDesc->maxAnisotropy > 1 ? VK_TRUE : VK_FALSE;
-		createInfo.mipLodBias = 0.0f;
-		createInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-		createInfo.minFilter = vConvertTextureFilterToNativeFilter(pDesc->minFilter);
-		createInfo.magFilter = vConvertTextureFilterToNativeFilter(pDesc->magFilter);
-		createInfo.addressModeU = vConvertTextureWrapToAddressMode(pDesc->uWrap);
-		createInfo.addressModeV = vConvertTextureWrapToAddressMode(pDesc->vWrap);
-		createInfo.addressModeW = vConvertTextureWrapToAddressMode(pDesc->wWrap);
-		createInfo.compareEnable = VK_FALSE;
-		createInfo.compareOp = VK_COMPARE_OP_ALWAYS;
-		createInfo.unnormalizedCoordinates = VK_FALSE;
-		if(vkCreateSampler(asVkDevice, &createInfo, AS_VK_MEMCB, &pTex->sampler) != VK_SUCCESS)
-			asFatalError("vkCreateSampler() Failed to create a sampler");
-	}
 	/*Upload Data*/
 	{
 		if (pDesc->pInitialContentsBuffer && !((pDesc->usageFlags & AS_TEXTUREUSAGE_RENDERTARGET) == AS_TEXTUREUSAGE_RENDERTARGET))
 		{
-			if (pDesc->cpuAccess == AS_GPURESOURCEACCESS_IMMUTABLE) /*Requires Staging*/
+			if (pDesc->cpuAccess == AS_GPURESOURCEACCESS_DEVICE) /*Requires Staging*/
 			{
 				/*Upload initial contents to GPU*/
 				VkBuffer stagingBuffer;
@@ -655,7 +626,7 @@ ASEXPORT asTextureHandle_t asCreateTexture(asTextureDesc_t *pDesc)
 				{
 					VkCommandBufferAllocateInfo cmdAlloc = (VkCommandBufferAllocateInfo) { VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
 					cmdAlloc.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-					cmdAlloc.commandPool = asVkMainCommandPool;
+					cmdAlloc.commandPool = asVkGeneralCommandPool;
 					cmdAlloc.commandBufferCount = 1;
 					VkCommandBuffer tmpCmd;
 					vkAllocateCommandBuffers(asVkDevice, &cmdAlloc, &tmpCmd);
@@ -676,7 +647,9 @@ ASEXPORT asTextureHandle_t asCreateTexture(asTextureDesc_t *pDesc)
 					toTransferDst.subresourceRange.layerCount = pDesc->type == AS_TEXTURETYPE_3D ? 1 : pDesc->depth;
 					toTransferDst.srcAccessMask = 0;
 					toTransferDst.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-					vkCmdPipelineBarrier(tmpCmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 1, &toTransferDst);
+					vkCmdPipelineBarrier(tmpCmd,
+						VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+						0, 0, NULL, 0, NULL, 1, &toTransferDst);
 					/*Copy each region*/
 					for (uint32_t i = 0; i < pDesc->initialContentsRegionCount; i++)
 					{
@@ -702,7 +675,9 @@ ASEXPORT asTextureHandle_t asCreateTexture(asTextureDesc_t *pDesc)
 					toFinal.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 					toFinal.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 					toFinal.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-					vkCmdPipelineBarrier(tmpCmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0, NULL, 0, NULL, 1, &toFinal);
+					vkCmdPipelineBarrier(tmpCmd,
+						VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+						0, 0, NULL, 0, NULL, 1, &toFinal);
 					/*Execute*/
 					vkEndCommandBuffer(tmpCmd);
 					VkSubmitInfo submitInfo = (VkSubmitInfo){ VK_STRUCTURE_TYPE_SUBMIT_INFO };
@@ -710,7 +685,7 @@ ASEXPORT asTextureHandle_t asCreateTexture(asTextureDesc_t *pDesc)
 					submitInfo.pCommandBuffers = &tmpCmd;
 					vkQueueSubmit(asVkQueue_GFX, 1, &submitInfo, VK_NULL_HANDLE);
 					vkQueueWaitIdle(asVkQueue_GFX);
-					vkFreeCommandBuffers(asVkDevice, asVkMainCommandPool, 1, &tmpCmd);
+					vkFreeCommandBuffers(asVkDevice, asVkGeneralCommandPool, 1, &tmpCmd);
 				}
 				/*Free staging data*/
 				vkDestroyBuffer(asVkDevice, stagingBuffer, AS_VK_MEMCB);
@@ -718,36 +693,32 @@ ASEXPORT asTextureHandle_t asCreateTexture(asTextureDesc_t *pDesc)
 			}
 			else 
 			{
-				/*Uploading currently unsupported for textures*/
+				/*Uploading is currently unsupported for dynamic textures... 
+				you probably shouldn't be doing it this way either.
+				upload to a staging buffer first then copy to a texture
+				this should make it a lot faster to access texel*/
 			}
 		}
 	}
 #if AS_VK_VALIDATION
 	/*Debug Markers*/
 	{
-		/*
-		if (pDesc->pDebugLabel)
+		if (pDesc->pDebugLabel && vMarkersExtensionFound)
 		{
-			VkDebugMarkerObjectNameInfoEXT imageInfo = { VK_STRUCTURE_TYPE_DEBUG_MARKER_OBJECT_NAME_INFO_EXT };
+			VkDebugMarkerObjectNameInfoEXT imageInfo = (VkDebugMarkerObjectNameInfoEXT){ VK_STRUCTURE_TYPE_DEBUG_MARKER_OBJECT_NAME_INFO_EXT };
 			VkDebugMarkerObjectNameInfoEXT viewInfo = imageInfo;
-			VkDebugMarkerObjectNameInfoEXT samplerInfo = viewInfo;
-			samplerInfo.object = (uint64_t)pTex->sampler;
-			samplerInfo.objectType = VK_DEBUG_REPORT_OBJECT_TYPE_SAMPLER_EXT;
-			samplerInfo.pObjectName = pDesc->pDebugLabel;
-			vkDebugMarkerSetObjectNameEXT(asVkDevice, &samplerInfo);
-			const int count = pDesc->cpuAccess == AS_GPURESOURCEACCESS_IMMUTABLE ? 1 : AS_VK_MAX_INFLIGHT;
+			const int count = pDesc->cpuAccess == AS_GPURESOURCEACCESS_STREAM ? AS_VK_MAX_INFLIGHT : 1;
 			for (int i = 0; i < count; i++) {
 				imageInfo.object = (uint64_t)pTex->image[i];
 				imageInfo.objectType = VK_DEBUG_REPORT_OBJECT_TYPE_IMAGE_EXT;
 				imageInfo.pObjectName = pDesc->pDebugLabel;
-				vkDebugMarkerSetObjectNameEXT(asVkDevice, &imageInfo);
+				vkDebugMarkerSetObjectName(asVkDevice, &imageInfo);
 				viewInfo.object = (uint64_t)pTex->view[i];
 				viewInfo.objectType = VK_DEBUG_REPORT_OBJECT_TYPE_IMAGE_VIEW_EXT;
 				viewInfo.pObjectName = pDesc->pDebugLabel;
-				vkDebugMarkerSetObjectNameEXT(asVkDevice, &viewInfo);
+				vkDebugMarkerSetObjectName(asVkDevice, &viewInfo);
 			}
 		}
-		*/
 	}
 #endif
 	
@@ -759,6 +730,309 @@ ASEXPORT void asReleaseTexture(asTextureHandle_t hndl)
 	vkDeviceWaitIdle(asVkDevice);
 	_destroyTexture(&vMainTextureManager.textures[hndl._index]);
 	asDestroyHandle(&vMainTextureManager.handleManager, hndl);
+}
+
+VkImage vGetImageFromTexture(asTextureHandle_t hndl, uint32_t slot)
+{
+	return vMainTextureManager.textures[hndl._index].image[slot];
+}
+
+VkImageView vGetViewFromTexture(asTextureHandle_t hndl, uint32_t slot)
+{
+	return vMainTextureManager.textures[hndl._index].view[slot];
+}
+
+/*Buffer stuff*/
+
+struct vBuffer_t
+{
+	asGpuResourceUploadType cpuAccess;
+	uint32_t activeBuff; /*To support multiple in-flight frames*/
+	asVkAllocation_t alloc[AS_VK_MAX_INFLIGHT];
+	VkBuffer buffer[AS_VK_MAX_INFLIGHT];
+};
+
+void _invalidateBuffer(struct vBuffer_t* pBuf)
+{
+	pBuf->activeBuff = 0;
+	for (int i = 0; i < AS_VK_MAX_INFLIGHT; i++)
+	{
+		pBuf->alloc[i].memHandle = VK_NULL_HANDLE;
+		pBuf->buffer[i] = VK_NULL_HANDLE;
+	}
+}
+
+void _destroyBuffer(struct vBuffer_t* pBuf)
+{
+	for (int i = 0; i < AS_VK_MAX_INFLIGHT; i++)
+	{
+		if (pBuf->alloc[i].memHandle != VK_NULL_HANDLE)
+			asVkFree(&pBuf->alloc[i]);
+		if (pBuf->buffer[i] != VK_NULL_HANDLE)
+			vkDestroyBuffer(asVkDevice, pBuf->buffer[i], AS_VK_MEMCB);
+	}
+	_invalidateBuffer(pBuf);
+}
+
+struct vBufferManager_t
+{
+	asHandleManager_t handleManager;
+	struct vBuffer_t* buffers;
+};
+struct vBufferManager_t vMainBufferManager;
+
+void vBufferManager_Init(struct vBufferManager_t* pMan)
+{
+	asHandleManagerCreate(&pMan->handleManager, AS_MAX_TEXTURES);
+	pMan->buffers = (struct vBuffer_t*)asMalloc(sizeof(pMan->buffers[0]) * AS_MAX_TEXTURES);
+	for (int i = 0; i < AS_MAX_TEXTURES; i++)
+		_invalidateBuffer(&pMan->buffers[i]);
+}
+
+void vBufferManager_Shutdown(struct vBufferManager_t* pMan)
+{
+	asHandleManagerDestroy(&pMan->handleManager);
+	for (int i = 0; i < AS_MAX_TEXTURES; i++)
+	{
+		_destroyBuffer(&pMan->buffers[i]);
+	}
+	asFree(pMan->buffers);
+}
+
+VkBufferUsageFlags vDecodeBufferUsageFlags(uint32_t abstractFlags)
+{
+	VkImageUsageFlags initial = 0;
+	if ((abstractFlags & AS_BUFFERUSAGE_TRANSFER_DST) == AS_BUFFERUSAGE_TRANSFER_DST)
+		initial |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+	if ((abstractFlags & AS_BUFFERUSAGE_TRANSFER_SRC) == AS_BUFFERUSAGE_TRANSFER_SRC)
+		initial |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+	if ((abstractFlags & AS_BUFFERUSAGE_INDEX) == AS_BUFFERUSAGE_INDEX)
+		initial |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+	if ((abstractFlags & AS_BUFFERUSAGE_VERTEX) == AS_BUFFERUSAGE_VERTEX)
+		initial |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+	if ((abstractFlags & AS_BUFFERUSAGE_INDIRECT) == AS_BUFFERUSAGE_INDIRECT)
+		initial |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
+	if ((abstractFlags & AS_BUFFERUSAGE_UNIFORM) == AS_BUFFERUSAGE_UNIFORM)
+		initial |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+	if ((abstractFlags & AS_BUFFERUSAGE_STORAGE) == AS_BUFFERUSAGE_STORAGE)
+		initial |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+	return initial;
+}
+
+ASEXPORT asBufferHandle_t asCreateBuffer(asBufferDesc_t *pDesc)
+{
+	asBufferHandle_t hndl = (asBufferHandle_t) { 0 };
+	vkDeviceWaitIdle(asVkDevice);
+	hndl = asCreateHandle(&vMainBufferManager.handleManager);
+	struct vBuffer_t *pBuff = &vMainBufferManager.buffers[hndl._index];
+	pBuff->cpuAccess = pDesc->cpuAccess;
+	/*Buffer*/
+	{
+		VkBufferCreateInfo createInfo = (VkBufferCreateInfo) { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
+		createInfo.size = pDesc->bufferSize;
+		createInfo.usage = vDecodeBufferUsageFlags(pDesc->usageFlags);
+		if ((pDesc->cpuAccess == AS_GPURESOURCEACCESS_DEVICE) && pDesc->pInitialContentsBuffer)
+			createInfo.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+		createInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+		if (pDesc->cpuAccess != AS_GPURESOURCEACCESS_STREAM) {
+			if (vkCreateBuffer(asVkDevice, &createInfo, AS_VK_MEMCB, &pBuff->buffer[0]) != VK_SUCCESS)
+				asFatalError("vkCreateBuffer() Failed to create a buffer");
+			VkMemoryRequirements memReq;
+			vkGetBufferMemoryRequirements(asVkDevice, pBuff->buffer[0], &memReq);
+			asVkAlloc(&pBuff->alloc[0], memReq.size, asVkFindMemoryType(memReq.memoryTypeBits,
+				pDesc->cpuAccess == AS_GPURESOURCEACCESS_DEVICE ? VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT : VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT));
+			vkBindBufferMemory(asVkDevice, pBuff->buffer[0], pBuff->alloc[0].memHandle, pBuff->alloc[0].offset);
+		}
+		else {
+			for (int i = 0; i < AS_VK_MAX_INFLIGHT; i++) {
+				if (vkCreateBuffer(asVkDevice, &createInfo, AS_VK_MEMCB, &pBuff->buffer[i]) != VK_SUCCESS)
+					asFatalError("vkCreateBuffer() Failed to create a buffer");
+				VkMemoryRequirements memReq;
+				vkGetBufferMemoryRequirements(asVkDevice, pBuff->buffer[i], &memReq);
+				asVkAlloc(&pBuff->alloc[i], memReq.size, asVkFindMemoryType(memReq.memoryTypeBits,
+					VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT));
+				vkBindBufferMemory(asVkDevice, pBuff->buffer[i], pBuff->alloc[i].memHandle, pBuff->alloc[i].offset);
+			}
+		}
+	}
+	/*Upload Data*/
+	{
+		if (pDesc->pInitialContentsBuffer)
+		{
+			if (pDesc->cpuAccess == AS_GPURESOURCEACCESS_DEVICE) /*Requires Staging*/
+			{
+				/*Upload initial contents to GPU*/
+				VkBuffer stagingBuffer;
+				asVkAllocation_t stagingAlloc;
+				{
+					VkBufferCreateInfo bufferInfo = (VkBufferCreateInfo) { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
+					bufferInfo.size = pDesc->initialContentsBufferSize;
+					bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+					bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+					if (vkCreateBuffer(asVkDevice, &bufferInfo, AS_VK_MEMCB, &stagingBuffer) != VK_SUCCESS)
+						asFatalError("vkCreateBuffer() Failed to create a staging buffer");
+					VkMemoryRequirements memReq;
+					vkGetBufferMemoryRequirements(asVkDevice, stagingBuffer, &memReq);
+					asVkAlloc(&stagingAlloc, memReq.size, asVkFindMemoryType(memReq.memoryTypeBits,
+						VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
+					vkBindBufferMemory(asVkDevice, stagingBuffer, stagingAlloc.memHandle, stagingAlloc.offset);
+					void* pData;
+					vkMapMemory(asVkDevice, stagingAlloc.memHandle, stagingAlloc.offset, pDesc->initialContentsBufferSize, 0, &pData);
+					memcpy(pData, pDesc->pInitialContentsBuffer, pDesc->initialContentsBufferSize);
+					vkUnmapMemory(asVkDevice, stagingAlloc.memHandle);
+				}
+				/*Copy staging contents into buffer*/
+				{
+					VkCommandBufferAllocateInfo cmdAlloc = (VkCommandBufferAllocateInfo) { VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
+					cmdAlloc.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+					cmdAlloc.commandPool = asVkGeneralCommandPool;
+					cmdAlloc.commandBufferCount = 1;
+					VkCommandBuffer tmpCmd;
+					vkAllocateCommandBuffers(asVkDevice, &cmdAlloc, &tmpCmd);
+					VkCommandBufferBeginInfo beginInfo = (VkCommandBufferBeginInfo) { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
+					beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+					vkBeginCommandBuffer(tmpCmd, &beginInfo);
+					/*Transition image layout for copy*/
+					VkBufferMemoryBarrier toTransferDst = (VkBufferMemoryBarrier) { VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER };
+					toTransferDst.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+					toTransferDst.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+					toTransferDst.buffer = pBuff->buffer[0];
+					toTransferDst.offset = 0;
+					toTransferDst.size = pDesc->bufferSize;
+					toTransferDst.srcAccessMask = 0;
+					toTransferDst.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+					vkCmdPipelineBarrier(tmpCmd,
+						VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+						0, 0, NULL, 1, &toTransferDst, 0, NULL);
+					/*Copy buffer region*/
+					VkBufferCopy cpy;
+					cpy.dstOffset = 0;
+					cpy.srcOffset = 0;
+					cpy.size = pDesc->bufferSize;
+					vkCmdCopyBuffer(tmpCmd, stagingBuffer, pBuff->buffer[0], 1, &cpy);
+					/*Transition to shader input optimal layout*/
+					VkBufferMemoryBarrier toFinal = toTransferDst;
+					toFinal.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+					toFinal.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+					vkCmdPipelineBarrier(tmpCmd,
+						VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+						0, 0, NULL, 1, &toFinal, 0, NULL);
+					/*Execute*/
+					vkEndCommandBuffer(tmpCmd);
+					VkSubmitInfo submitInfo = (VkSubmitInfo) { VK_STRUCTURE_TYPE_SUBMIT_INFO };
+					submitInfo.commandBufferCount = 1;
+					submitInfo.pCommandBuffers = &tmpCmd;
+					vkQueueSubmit(asVkQueue_GFX, 1, &submitInfo, VK_NULL_HANDLE);
+					vkQueueWaitIdle(asVkQueue_GFX);
+					vkFreeCommandBuffers(asVkDevice, asVkGeneralCommandPool, 1, &tmpCmd);
+				}
+				/*Free staging data*/
+				vkDestroyBuffer(asVkDevice, stagingBuffer, AS_VK_MEMCB);
+				asVkFree(&stagingAlloc);
+			}
+			else /*No staging required*/
+			{
+				/*Simple map and memcpy*/
+				const int count = pDesc->cpuAccess == AS_GPURESOURCEACCESS_STREAM ? AS_VK_MAX_INFLIGHT : 1;
+				for (int i = 0; i < count; i++) {
+					void* pData;
+					vkMapMemory(asVkDevice, pBuff->alloc[i].memHandle, pBuff->alloc[i].offset, pDesc->initialContentsBufferSize, 0, &pData);
+					memcpy(pData, pDesc->pInitialContentsBuffer, pDesc->initialContentsBufferSize);
+					vkUnmapMemory(asVkDevice, pBuff->alloc[i].memHandle);
+				}
+			}
+		}
+	}
+#if AS_VK_VALIDATION
+	/*Debug Markers*/
+	{
+		if (pDesc->pDebugLabel && vMarkersExtensionFound)
+		{
+			VkDebugMarkerObjectNameInfoEXT bufferInfo = (VkDebugMarkerObjectNameInfoEXT) { VK_STRUCTURE_TYPE_DEBUG_MARKER_OBJECT_NAME_INFO_EXT };
+			const int count = pDesc->cpuAccess == AS_GPURESOURCEACCESS_STREAM ? AS_VK_MAX_INFLIGHT : 1;
+			for (int i = 0; i < count; i++) {
+				bufferInfo.object = (uint64_t)pBuff->buffer[i];
+				bufferInfo.objectType = VK_DEBUG_REPORT_OBJECT_TYPE_IMAGE_EXT;
+				bufferInfo.pObjectName = pDesc->pDebugLabel;
+				vkDebugMarkerSetObjectName(asVkDevice, &bufferInfo);
+			}
+		}
+	}
+#endif
+	return hndl;
+}
+
+ASEXPORT void asReleaseBuffer(asBufferHandle_t hndl)
+{
+	vkDeviceWaitIdle(asVkDevice);
+	_destroyBuffer(&vMainBufferManager.buffers[hndl._index]);
+	asDestroyHandle(&vMainBufferManager.handleManager, hndl);
+}
+
+/*Command Buffers*/
+struct vPrimaryCommandBufferManager_t
+{
+	uint32_t count[AS_VK_MAX_INFLIGHT];
+	VkCommandBuffer *pBuffers[AS_VK_MAX_INFLIGHT];
+	VkCommandPool pools[AS_VK_MAX_INFLIGHT];
+	uint32_t maxBuffs;
+};
+
+void vPrimaryCommandBufferManager_Init(struct vPrimaryCommandBufferManager_t *pMan, uint32_t queueFamilyIndex, uint32_t count)
+{
+	for (int i = 0; i < AS_VK_MAX_INFLIGHT; i++)
+	{
+		VkCommandPoolCreateInfo poolInfo = { VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO };
+		poolInfo.queueFamilyIndex = queueFamilyIndex;
+		if (vkCreateCommandPool(asVkDevice, &poolInfo, AS_VK_MEMCB, &pMan->pools[i]) != VK_SUCCESS)
+			asFatalError("vkCreateCommandPool() Failed to create primary command pool for manager");
+		pMan->pBuffers[i] = asMalloc(sizeof(VkCommandBuffer) * count);
+		pMan->maxBuffs = count;
+		pMan->count[i] = 0;
+		VkCommandBufferAllocateInfo allocInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
+		allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+		allocInfo.commandPool = pMan->pools[i];
+		allocInfo.commandBufferCount = count;
+		if (vkAllocateCommandBuffers(asVkDevice, &allocInfo, pMan->pBuffers[i]) != VK_SUCCESS)
+			asFatalError("vkAllocateCommandBuffers() Failed to allocate primary command buffers for manager");
+	}
+}
+
+void vPrimaryCommandBufferManager_Shutdown(struct vPrimaryCommandBufferManager_t *pMan)
+{
+	for (int i = 0; i < AS_VK_MAX_INFLIGHT; i++)
+	{
+		vkDestroyCommandPool(asVkDevice, pMan->pools[i], AS_VK_MEMCB);
+		asFree(pMan->pBuffers[i]);
+	}
+}
+
+void vPrimaryCommandBufferManager_ReleaseFrame(struct vPrimaryCommandBufferManager_t *pMan, uint32_t frame)
+{
+	vkResetCommandPool(asVkDevice, pMan->pools[frame], 0);
+	pMan->count[frame] = 0;
+}
+
+VkCommandBuffer vPrimaryCommandBufferManager_GetNextCommand(struct vPrimaryCommandBufferManager_t *pMan)
+{
+	uint32_t slot;
+	slot = pMan->count[asVkCurrentFrame];
+#pragma omp atomic
+	pMan->count[asVkCurrentFrame]+= 1;
+	return pMan->pBuffers[asVkCurrentFrame][slot];
+}
+
+struct vPrimaryCommandBufferManager_t vMainGraphicsBufferManager;
+struct vPrimaryCommandBufferManager_t vMainComputeBufferManager;
+
+VkCommandBuffer asVkGetNextGraphicsCommandBuffer()
+{
+	return vPrimaryCommandBufferManager_GetNextCommand(&vMainGraphicsBufferManager);
+}
+VkCommandBuffer asVkGetNextComputeCommandBuffer()
+{
+	return vPrimaryCommandBufferManager_GetNextCommand(&vMainComputeBufferManager);
 }
 
 /*Init and shutdown*/
@@ -820,6 +1094,116 @@ void vScreenResourcesCreate(struct vScreenResources_t *pScreen, SDL_Window* pWin
 		pScreen->pSwapImages = asMalloc(sizeof(VkImage) * pScreen->imageCount);
 		vkGetSwapchainImagesKHR(asVkDevice, pScreen->swapchain, &pScreen->imageCount, pScreen->pSwapImages);
 	}
+	/*Synchronization*/
+	{
+		VkSemaphoreCreateInfo createInfo = (VkSemaphoreCreateInfo) { VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
+		for (uint32_t i = 0; i < AS_VK_MAX_INFLIGHT; i++)
+		{
+			if (vkCreateSemaphore(asVkDevice, &createInfo, AS_VK_MEMCB, &pScreen->swapImageAvailableSemaphores[i]) != VK_SUCCESS)
+				asFatalError("vkCreateSemaphore() Failed to create semaphore");
+			if (vkCreateSemaphore(asVkDevice, &createInfo, AS_VK_MEMCB, &pScreen->blitFinishedSemaphores[i]) != VK_SUCCESS)
+				asFatalError("vkCreateSemaphore() Failed to create semaphore");
+		}
+	}
+	/*Render Targets*/
+	{
+		/*Composite*/
+		asTextureDesc_t compositeDesc = asTextureDesc_Init();
+		compositeDesc.width = pScreen->extents.width;
+		compositeDesc.height = pScreen->extents.height;
+		compositeDesc.format = AS_COLORFORMAT_R10G10B10A2_UNORM;
+		compositeDesc.usageFlags |= AS_TEXTUREUSAGE_RENDERTARGET | AS_TEXTUREUSAGE_TRANSFER_SRC;
+		compositeDesc.pDebugLabel = "Composite";
+		pScreen->compositeTexture = asCreateTexture(&compositeDesc);
+		/*Depth*/
+		asTextureDesc_t depthDesc = asTextureDesc_Init();
+		depthDesc.width = pScreen->extents.width;
+		depthDesc.height = pScreen->extents.height;
+		depthDesc.format = AS_COLORFORMAT_DEPTH;
+		depthDesc.usageFlags |= AS_TEXTUREUSAGE_DEPTHBUFFER;
+		depthDesc.pDebugLabel = "Depth";
+		pScreen->depthTexture = asCreateTexture(&depthDesc);
+	}
+	/*Screen Presentation Commands*/
+	{
+		pScreen->pPresentImageToScreenCmds = asMalloc(sizeof(VkCommandBuffer) * pScreen->imageCount);
+
+		VkCommandBufferAllocateInfo allocInfo = (VkCommandBufferAllocateInfo){VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
+		allocInfo.commandPool = asVkGeneralCommandPool;
+		allocInfo.commandBufferCount = pScreen->imageCount;
+		allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+		if(vkAllocateCommandBuffers(asVkDevice, &allocInfo, pScreen->pPresentImageToScreenCmds) != VK_SUCCESS)
+			asFatalError("vkAllocateCommandBuffers() Failed to allocate presentation commands");
+
+		for (uint32_t i = 0; i < pScreen->imageCount; i++)
+		{
+			VkCommandBufferBeginInfo beginInfo = (VkCommandBufferBeginInfo) { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
+			vkBeginCommandBuffer(pScreen->pPresentImageToScreenCmds[i], &beginInfo);
+			/*Transfer swap image and composite for blit*/
+			VkImageMemoryBarrier toTransferDst = (VkImageMemoryBarrier) { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
+			toTransferDst.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			toTransferDst.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+			toTransferDst.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			toTransferDst.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			toTransferDst.image = pScreen->pSwapImages[i];
+			toTransferDst.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			toTransferDst.subresourceRange.baseMipLevel = 0;
+			toTransferDst.subresourceRange.levelCount = 1;
+			toTransferDst.subresourceRange.baseArrayLayer = 0;
+			toTransferDst.subresourceRange.layerCount = 1;
+			toTransferDst.srcAccessMask = 0;
+			toTransferDst.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+			VkImageMemoryBarrier toTransferSrc = (VkImageMemoryBarrier) { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
+			toTransferSrc.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			toTransferSrc.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+			toTransferSrc.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			toTransferSrc.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			toTransferSrc.image = vGetImageFromTexture(pScreen->compositeTexture, 0);
+			toTransferSrc.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			toTransferSrc.subresourceRange.baseMipLevel = 0;
+			toTransferSrc.subresourceRange.levelCount = 1;
+			toTransferSrc.subresourceRange.baseArrayLayer = 0;
+			toTransferSrc.subresourceRange.layerCount = 1;
+			toTransferSrc.srcAccessMask = 0;
+			toTransferSrc.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+			VkImageMemoryBarrier barriers[2] = { toTransferDst, toTransferSrc };
+			vkCmdPipelineBarrier(pScreen->pPresentImageToScreenCmds[i],
+				VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 2, barriers);
+
+			/*Blit composite onto swapchain*/
+			VkImageBlit region = (VkImageBlit) { 0 };
+			region.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			region.dstSubresource.layerCount = 1;
+			region.srcSubresource = region.dstSubresource;
+			region.dstOffsets[1].x = pScreen->extents.width;
+			region.dstOffsets[1].y = pScreen->extents.height;
+			region.dstOffsets[1].z = 1;
+			region.srcOffsets[1] = region.dstOffsets[1];
+			vkCmdBlitImage(pScreen->pPresentImageToScreenCmds[i],
+				vGetImageFromTexture(pScreen->compositeTexture, 0), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				pScreen->pSwapImages[i], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				1, &region, VK_FILTER_LINEAR);
+
+			/*Transfer swap image for present*/
+			VkImageMemoryBarrier toPresent = (VkImageMemoryBarrier) { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
+			toPresent.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+			toPresent.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+			toPresent.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			toPresent.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			toPresent.image = pScreen->pSwapImages[i];
+			toPresent.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			toPresent.subresourceRange.baseMipLevel = 0;
+			toPresent.subresourceRange.levelCount = 1;
+			toPresent.subresourceRange.baseArrayLayer = 0;
+			toPresent.subresourceRange.layerCount = 1;
+			toPresent.srcAccessMask = 0;
+			toPresent.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+			vkCmdPipelineBarrier(pScreen->pPresentImageToScreenCmds[i],
+				VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 1, &toPresent);
+		
+			vkEndCommandBuffer(pScreen->pPresentImageToScreenCmds[i]);
+		}
+	}
 }
 
 void vScreenResourcesDestroy(struct vScreenResources_t *pScreen)
@@ -827,6 +1211,19 @@ void vScreenResourcesDestroy(struct vScreenResources_t *pScreen)
 	/*Wait for device to come to a hault*/
 	if(asVkDevice != VK_NULL_HANDLE)
 		vkDeviceWaitIdle(asVkDevice);
+
+	vkFreeCommandBuffers(asVkDevice, asVkGeneralCommandPool, pScreen->imageCount, pScreen->pPresentImageToScreenCmds);
+	asFree(pScreen->pPresentImageToScreenCmds);
+
+	for (uint32_t i = 0; i < AS_VK_MAX_INFLIGHT; i++){
+		if (pScreen->swapImageAvailableSemaphores[i] == VK_NULL_HANDLE)
+			break;
+		vkDestroySemaphore(asVkDevice, pScreen->swapImageAvailableSemaphores[i], AS_VK_MEMCB);
+		vkDestroySemaphore(asVkDevice, pScreen->blitFinishedSemaphores[i], AS_VK_MEMCB);
+	}
+
+	asReleaseTexture(pScreen->compositeTexture);
+	asReleaseTexture(pScreen->depthTexture);
 	
 	if (pScreen->pSwapImages)
 		asFree(pScreen->pSwapImages);
@@ -879,22 +1276,6 @@ void asVkInit(asAppInfo_t *pAppInfo, asCfgFile_t* pConfig)
 			asFatalError("vkCreateInstance() Failed to create vulkan instance");
 		asAlloc_LinearFree((void*)extensions);
 	}
-#if AS_VK_VALIDATION
-	/*Setup Validation Debugging*/
-	{
-		PFN_vkCreateDebugReportCallbackEXT vkCreateDebugReportCallback = 
-			(PFN_vkCreateDebugReportCallbackEXT)vkGetInstanceProcAddr(asVkInstance, "vkCreateDebugReportCallbackEXT");
-
-		VkDebugReportCallbackCreateInfoEXT createInfo = { VK_STRUCTURE_TYPE_DEBUG_REPORT_CREATE_INFO_EXT };
-		createInfo.pfnCallback = (PFN_vkDebugReportCallbackEXT)vDebugCallback;
-		createInfo.flags = VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT;
-
-		if (vkCreateDebugReportCallback)
-			vkCreateDebugReportCallback(asVkInstance, &createInfo, AS_VK_MEMCB, &vDbgCallback);
-		else
-			asFatalError("Failed to find vkCreateDebugReportCallbackEXT()");
-	}
-#endif
 	/*Create Starting Surface*/
 	{
 		if (!SDL_Vulkan_CreateSurface(asGetMainWindowPtr(), asVkInstance, &vMainScreen.surface))
@@ -927,6 +1308,53 @@ void asVkInit(asAppInfo_t *pAppInfo, asCfgFile_t* pConfig)
 
 		asAlloc_LinearFree(gpus);
 	}
+	/*Find Extensions*/
+	{
+		uint32_t extCount;
+		vkEnumerateDeviceExtensionProperties(asVkPhysicalDevice, NULL, &extCount, NULL);
+		VkExtensionProperties* availible = (VkExtensionProperties*)asAlloc_LinearMalloc(sizeof(VkExtensionProperties)*extCount, 0);
+		vkEnumerateDeviceExtensionProperties(asVkPhysicalDevice, NULL, &extCount, availible);
+		for (uint32_t i = 0; i < ASARRAYSIZE(deviceReqExtensions); i++)
+		{
+			for (uint32_t ii = 0; ii < extCount; ii++)
+			{
+#if AS_VK_VALIDATION
+				/*Debug Markers Extension*/
+				if (strcmp(availible[ii].extensionName, VK_EXT_DEBUG_MARKER_EXTENSION_NAME) == 0)
+				{
+					vMarkersExtensionFound = true;
+				}
+#endif
+			}
+		}
+		asAlloc_LinearFree(availible);
+	}
+#if AS_VK_VALIDATION
+	/*Setup Validation Debug Callback*/
+	{
+		PFN_vkCreateDebugReportCallbackEXT vkCreateDebugReportCallback =
+			(PFN_vkCreateDebugReportCallbackEXT)vkGetInstanceProcAddr(asVkInstance, "vkCreateDebugReportCallbackEXT");
+
+		VkDebugReportCallbackCreateInfoEXT createInfo = { VK_STRUCTURE_TYPE_DEBUG_REPORT_CREATE_INFO_EXT };
+		createInfo.pfnCallback = (PFN_vkDebugReportCallbackEXT)vDebugCallback;
+		createInfo.flags = VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT;
+
+		if (vkCreateDebugReportCallback)
+			vkCreateDebugReportCallback(asVkInstance, &createInfo, AS_VK_MEMCB, &vDbgCallback);
+		else
+			asFatalError("Failed to find vkCreateDebugReportCallbackEXT()");
+
+		/*Object Debug Labels*/
+		if (vMarkersExtensionFound)
+		{
+			vkDebugMarkerSetObjectName = (PFN_vkDebugMarkerSetObjectNameEXT)vkGetInstanceProcAddr(asVkInstance, "vkDebugMarkerSetObjectNameEXT");
+		}
+		else
+		{
+			vkDebugMarkerSetObjectName = VK_NULL_HANDLE;
+		}
+	}
+#endif
 	/*Logical Device and Queues*/
 	{
 		asVkQueueFamilyIndices = vFindQueueFamilyIndices(asVkPhysicalDevice);
@@ -995,6 +1423,28 @@ void asVkInit(asAppInfo_t *pAppInfo, asCfgFile_t* pConfig)
 		vkGetDeviceQueue(asVkDevice, asVkQueueFamilyIndices.graphicsIdx, 0, &asVkQueue_GFX);
 		vkGetDeviceQueue(asVkDevice, asVkQueueFamilyIndices.presentIdx, 0, &asVkQueue_Present);
 	}
+	/*Render Loop Synchronization*/
+	{
+		VkFenceCreateInfo fenceInfo = (VkFenceCreateInfo){ VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
+		fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+		for (uint32_t i = 0; i < AS_VK_MAX_INFLIGHT; i++)
+		{
+			if(vkCreateFence(asVkDevice, &fenceInfo, AS_VK_MEMCB, &asVkInFlightFences[i]) != VK_SUCCESS)
+				asFatalError("vkCreateFence() Failed to create inflight fence");
+		}
+	}
+	/*Command Pools*/
+	{
+		VkCommandPoolCreateInfo createInfo = (VkCommandPoolCreateInfo) { VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO };
+		createInfo.queueFamilyIndex = asVkQueueFamilyIndices.graphicsIdx;
+		createInfo.flags = 0;
+
+		if (vkCreateCommandPool(asVkDevice, &createInfo, AS_VK_MEMCB, &asVkGeneralCommandPool) != VK_SUCCESS)
+			asFatalError("vkCreateCommandPool() Failed to create general command pool");
+
+		vPrimaryCommandBufferManager_Init(&vMainGraphicsBufferManager, asVkQueueFamilyIndices.graphicsIdx, 64);
+		vPrimaryCommandBufferManager_Init(&vMainComputeBufferManager, asVkQueueFamilyIndices.presentIdx, 8);
+	}
 	/*Memory Management*/
 	{
 		vMemoryAllocator_Init(&vMainAllocator);
@@ -1002,20 +1452,67 @@ void asVkInit(asAppInfo_t *pAppInfo, asCfgFile_t* pConfig)
 	/*Texture and Buffers*/
 	{
 		vTextureManager_Init(&vMainTextureManager);
+		vBufferManager_Init(&vMainBufferManager);
 	}
 	/*Screen Resources*/
 	{
 		vScreenResourcesCreate(&vMainScreen, asGetMainWindowPtr());
 	}
-	/*Command Pools*/
-	{
-		VkCommandPoolCreateInfo createInfo = (VkCommandPoolCreateInfo){ VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO };
-		createInfo.queueFamilyIndex = asVkQueueFamilyIndices.graphicsIdx;
-		createInfo.flags = 0;
+}
 
-		if (vkCreateCommandPool(asVkDevice, &createInfo, AS_VK_MEMCB, &asVkMainCommandPool) != VK_SUCCESS)
-			asFatalError("vkCreateCommandPool() Failed to create a command pool");
+void asVkWindowResize()
+{
+	vScreenResourcesDestroy(&vMainScreen);
+	vScreenResourcesCreate(&vMainScreen, asGetMainWindowPtr());
+}
+
+void vPresentFrame(struct vScreenResources_t *pScreen)
+{
+	uint32_t imageIndex;
+	VkResult result = vkAcquireNextImageKHR(asVkDevice, pScreen->swapchain, UINT64_MAX,
+		pScreen->swapImageAvailableSemaphores[asVkCurrentFrame], VK_NULL_HANDLE, &imageIndex);
+	if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+		asVkWindowResize();
+		return;
 	}
+
+	/*Submit Screen*/
+	VkSubmitInfo submitInfo = (VkSubmitInfo) { VK_STRUCTURE_TYPE_SUBMIT_INFO };
+	submitInfo.waitSemaphoreCount = 1;
+	submitInfo.pWaitSemaphores = &pScreen->swapImageAvailableSemaphores[asVkCurrentFrame];
+	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+	submitInfo.pWaitDstStageMask = waitStages;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &pScreen->pPresentImageToScreenCmds[imageIndex];
+	submitInfo.signalSemaphoreCount = 1;
+	submitInfo.pSignalSemaphores = &pScreen->blitFinishedSemaphores[asVkCurrentFrame];
+	vkResetFences(asVkDevice, 1, &asVkInFlightFences[asVkCurrentFrame]);
+	if (vkQueueSubmit(asVkQueue_GFX, 1, &submitInfo, asVkInFlightFences[asVkCurrentFrame]) != VK_SUCCESS)
+		asFatalError("vkQueueSubmit() Failed to blit to swapchain");
+	VkPresentInfoKHR presentInfo = (VkPresentInfoKHR){ VK_STRUCTURE_TYPE_PRESENT_INFO_KHR };
+	presentInfo.waitSemaphoreCount = 1;
+	presentInfo.pWaitSemaphores = &pScreen->blitFinishedSemaphores[asVkCurrentFrame];
+	presentInfo.swapchainCount = 1;
+	presentInfo.pSwapchains = &pScreen->swapchain;
+	presentInfo.pImageIndices = &imageIndex;
+	result = vkQueuePresentKHR(asVkQueue_Present, &presentInfo);
+	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+		asVkWindowResize();
+	}
+}
+
+void asVkDrawFrame()
+{
+	vkWaitForFences(asVkDevice, 1, &asVkInFlightFences[asVkCurrentFrame], VK_TRUE, UINT64_MAX);
+
+	vPresentFrame(&vMainScreen);
+
+	/*Cleanup Frame Resources*/
+	vPrimaryCommandBufferManager_ReleaseFrame(&vMainGraphicsBufferManager, asVkCurrentFrame);
+	vPrimaryCommandBufferManager_ReleaseFrame(&vMainComputeBufferManager, asVkCurrentFrame);
+
+	/*Next Frame*/
+	asVkCurrentFrame = (asVkCurrentFrame + 1) % AS_VK_MAX_INFLIGHT;
 }
 
 void asVkShutdown()
@@ -1023,11 +1520,21 @@ void asVkShutdown()
 	if(asVkDevice != VK_NULL_HANDLE)
 		vkDeviceWaitIdle(asVkDevice);
 
-	if (asVkMainCommandPool != VK_NULL_HANDLE)
-		vkDestroyCommandPool(asVkDevice, asVkMainCommandPool, AS_VK_MEMCB);
 	vScreenResourcesDestroy(&vMainScreen);
+	vBufferManager_Shutdown(&vMainBufferManager);
 	vTextureManager_Shutdown(&vMainTextureManager);
 	vMemoryAllocator_Shutdown(&vMainAllocator);
+
+	vPrimaryCommandBufferManager_Shutdown(&vMainGraphicsBufferManager);
+	vPrimaryCommandBufferManager_Shutdown(&vMainComputeBufferManager);
+	if (asVkGeneralCommandPool != VK_NULL_HANDLE)
+		vkDestroyCommandPool(asVkDevice, asVkGeneralCommandPool, AS_VK_MEMCB);
+
+	for (uint32_t i = 0; i < AS_VK_MAX_INFLIGHT; i++){
+		if (asVkInFlightFences[i] != VK_NULL_HANDLE)
+			vkDestroyFence(asVkDevice, asVkInFlightFences[i], AS_VK_MEMCB);
+	}
+
 	if(asVkDevice != VK_NULL_HANDLE)
 		vkDestroyDevice(asVkDevice, AS_VK_MEMCB);
 #if AS_VK_VALIDATION

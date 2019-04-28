@@ -1,0 +1,80 @@
+#beginMaterial
+{ Vec4, "Color", (0.0, 0.0, 0.0, 1.0)} /*Vector 4 with the name color and an opaque black default*/
+{ Scalar, "Roughness", 0.6} /*Scalar*/
+{ Tex2D, "AlbedoTexture", BLACK} /*Texture2D with the Default value of black*/
+{ Tex2D, "NormalTexture", NORMAL} /*Texture2D with the Default value to match tangent normals*/
+{ Tex3D, "FogVolume", WHITE} /*Volumetric textures*/
+{ TexCube, "InterriorTexture" NORMAL} /*Cubemap textures*/
+{ Tex2DArray, "DetailTexture" GREY} /*Same for texture arrays*/
+{ TexCubeArray, "BLERB" NORMAL} /*Cubemap array*/
+#end
+
+/*This is optional*/
+#beginFixed
+tessCtrlPoints = 0
+fillWidth = 2.0
+fillMode = WIRE
+cullMode = BACK
+[blend0]
+enabled = 0
+G = 1
+colorFunc = ADD
+srcColorParam = ONEMINUS_SRCCOLOR
+#end
+
+/*This is optional*/
+/*maxLod is undefined so it will be the default*/
+/*Aniso 0 is based on user settings above is explicit*/
+#beginSampler(myPixelArtSampler) 
+anisotropy = 0
+uWrap = REPEAT
+vWrap = CLAMP
+wWrap = MIRROR
+minFilter = LINEAR
+magFilter = NEAREST
+minLod = 0.0
+#end
+/*Repeat above for each sampler*/
+#beginSampler(derp) 
+anisotropy = 16
+uWrap = REPEAT
+vWrap = CLAMP
+wWrap = MIRROR
+minFilter = LINEAR
+magFilter = NEAREST
+minLod = 0.0
+maxLod = 10.0
+#end
+
+/*Ask the shader generator for specific things in the output, 
+may overwrite some of our previous fixed function requests*/
+#beginRenderConfig
+lightMode = UNLIT
+grabDepthTexture = 1
+grabColorTexture = 1
+#end
+
+/* Begin a GLSL snippet
+This one is pasted onto the top of each file*/
+#beginGLSL(GLOBALS)
+vec3 colorBlue()
+{
+	return vec3(0.0, 0.0, 1.0);
+}
+#end
+
+/* GLSL snippet that modifies the vertices after skinning but before projection*/
+#beginGLSL(VERTEX_MOD)
+out.VertexColor = colorBlue();
+#end
+
+/* Same thing as above but for the surface (post decoding, pre-lighting)*/
+#beginGLSL(SURFACE)
+float myValue = 2.5;
+out.BaseColor = texture(sampler2D(AlbedoTexture, myPixelArtSampler), UV0);
+out.Emission = colorBlue();
+out.BaseColor *= in.VertexColor;
+out.Roughness = mat.Roughness / myValue;
+out.TangentNormal.xyz = texture(sampler2D(NormalTexture, DEFAULTSAMPLER), UV0);
+#end
+

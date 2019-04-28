@@ -2,12 +2,18 @@
 #include "include/asCommon.h"
 #include "include/asOsEvents.h"
 #include "include/asRendererCore.h"
+#if ASTRENGINE_NUKLEAR
+#include "include/asNuklearImplimentation.h"
+#endif
 #include <SDL.h>
 
 bool gContinueLoop;
 
 ASEXPORT void asShutdown(void)
 {
+#if ASTRENGINE_NUKLEAR
+	asShutdownNk();
+#endif
 	asShutdownGfx();
 	SDL_Quit();
 	asAllocShutdown_Linear();
@@ -31,12 +37,16 @@ ASEXPORT int asIgnite(int argc, char *argv[], asAppInfo_t *pAppInfo, void *pCust
 
 	SDL_Init(SDL_INIT_EVENTS | SDL_INIT_VIDEO | SDL_INIT_TIMER);
 	asInitGfx(pAppInfo, pCustomWindow);
+#if ASTRENGINE_NUKLEAR
+	asInitNk();
+#endif
 	return 0; 
 }
 
 ASEXPORT int asLoopSingleShot()
 {
 	asPollOSEvents();
+	asGfxRenderFrame();
 	return 0;
 }
 

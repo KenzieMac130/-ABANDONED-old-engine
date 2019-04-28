@@ -2,8 +2,7 @@
 
 #include "../asCommon.h"
 #if ASTRENGINE_VK
-#include <vulkan.h>
-
+#include <vulkan/vulkan.h>
 /**
 * @file
 * @brief Low level vulkan functionality
@@ -44,10 +43,6 @@ extern VkPhysicalDeviceMemoryProperties asVkDeviceMemProps;
 * @brief the global selected physical device
 */
 extern VkDevice asVkDevice;
-/**
-* @brief the global command pool
-*/
-extern VkCommandPool asVkMainCommandPool;
 
 /**
 * @brief startup vulkan backend
@@ -61,10 +56,25 @@ void asVkInit(asAppInfo_t *pAppInfo, asCfgFile_t* pConfig);
 void asVkShutdown();
 
 /**
+* @brief draw a single frame
+*/
+void asVkDrawFrame();
+
+/**
+* @brief resize a window
+*/
+void asVkWindowResize();
+
+/**
 * @brief a memory allocation inside the vulkan backend
 * is handled through the custom vulkan allocator
 */
-typedef struct asVkAllocation_t asVkAllocation_t;
+typedef struct {
+	VkDeviceMemory memHandle;
+	uint32_t memType;
+	VkDeviceSize size;
+	VkDeviceSize offset;
+} asVkAllocation_t;
 
 /**
 * @brief find the memory type for the device that fits the requirements given
@@ -83,4 +93,17 @@ void asVkAlloc(asVkAllocation_t* pMem, VkDeviceSize size, uint32_t type);
 * @brief free a vulkan allocation
 */
 void asVkFree(asVkAllocation_t* pMem);
+
+/**
+* @brief aquire a the next available graphics command buffer for the frame 
+* Not reusable from frame to frame
+* Use secondary command buffers for batching
+*/
+VkCommandBuffer asVkGetNextGraphicsCommandBuffer();
+/**
+* @brief aquire a the next available compute command buffer for the frame
+* Not reusable from frame to frame
+* Use secondary command buffers for batching
+*/
+VkCommandBuffer asVkGetNextComputeCommandBuffer();
 #endif

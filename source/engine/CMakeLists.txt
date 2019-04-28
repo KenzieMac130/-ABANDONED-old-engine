@@ -10,6 +10,7 @@ set (ASTRENGINE_VERSION_PATCH 0)
 #	set (ASTRENGINE_VK 0)
 #endif()
 set (ASTRENGINE_VK 1)
+set (ASTRENGINE_NUKLEAR 1)
 
 configure_file (
 	"${PROJECT_SOURCE_DIR}/source/engine/astrengineConfig.h.in"
@@ -17,6 +18,8 @@ configure_file (
 include_directories("${PROJECT_BINARY_DIR}")
 include_directories(${Vulkan_INCLUDE_DIRS})
 include_directories(${SDL2_INCLUDE_DIRS})
+
+include_directories(${PROJECT_SOURCE_DIR}/source/thirdparty)
 
 file(GLOB_RECURSE SRC_FILES "${PROJECT_SOURCE_DIR}/source/engine/*.c")
 file(GLOB_RECURSE HEADER_FILES "${PROJECT_SOURCE_DIR}/source/engine/*.h")

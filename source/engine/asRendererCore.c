@@ -7,8 +7,98 @@
 #include <SDL_vulkan.h>
 #endif
 
-SDL_Window *asMainWindow;
+#if ASTRENGINE_NUKLEAR
+#include "include/asNuklearImplimentation.h"
+#endif
 
+ASEXPORT uint32_t asTextureCalcPitch(asColorFormat format, uint32_t width)
+{
+	uint32_t tmpVal = 0;
+	switch (format)
+	{
+	case AS_COLORFORMAT_BC1_UNORM_BLOCK:
+		tmpVal = ((width + 3) / 4) * 8;
+		return tmpVal < 8 ? 8 : tmpVal;
+		break;
+	case AS_COLORFORMAT_BC3_UNORM_BLOCK:
+	case AS_COLORFORMAT_BC5_UNORM_BLOCK:
+	case AS_COLORFORMAT_BC6H_UFLOAT_BLOCK:
+	case AS_COLORFORMAT_BC7_UNORM_BLOCK:
+		tmpVal = ((width + 3) / 4) * 16;
+		return tmpVal < 16 ? 16 : tmpVal;
+		break;
+	default:
+		switch (format)
+		{
+		case AS_COLORFORMAT_RGBA8_UNORM:
+		case AS_COLORFORMAT_RG16_SFLOAT:
+		case AS_COLORFORMAT_R32_SFLOAT:
+		case AS_COLORFORMAT_R10G10B10A2_UNORM:
+			tmpVal = 4;
+			break;
+		case AS_COLORFORMAT_RGB16_SFLOAT:
+			tmpVal = 6;
+			break;
+		case AS_COLORFORMAT_RGBA16_UNORM:
+		case AS_COLORFORMAT_RGBA16_SFLOAT:
+			tmpVal = 8;
+			break;
+		case AS_COLORFORMAT_RGBA32_SFLOAT:
+		case AS_COLORFORMAT_RGBA32_UINT:
+			tmpVal = 16;
+			break;
+		case AS_COLORFORMAT_RGB32_SFLOAT:
+			tmpVal = 12;
+			break;
+		case AS_COLORFORMAT_R16_SFLOAT:
+			tmpVal = 2;
+			break;
+		case AS_COLORFORMAT_R8_UNORM:
+			tmpVal = 1;
+			break;
+		case AS_COLORFORMAT_DEPTH:
+			asGetDepthFormatSize(format);
+		default:
+			break;
+		}
+		return (width * tmpVal + 7) / 8;
+		break;
+	}
+	return 0;
+}
+
+ASEXPORT asTextureDesc_t asTextureDesc_Init()
+{
+	asTextureDesc_t result = (asTextureDesc_t) { 0 };
+	result.depth = 1;
+	result.mips = 1;
+	result.usageFlags = AS_TEXTUREUSAGE_SAMPLED;
+	return result;
+}
+
+ASEXPORT asBufferDesc_t asBufferDesc_Init()
+{
+	asBufferDesc_t result = (asBufferDesc_t) { 0 };
+	return result;
+}
+
+ASEXPORT asShaderFxDesc_t asShaderFxDesc_Init()
+{
+	asShaderFxDesc_t result = (asShaderFxDesc_t) { 0 };
+	result.fixedFunctions.fillWidth = 1.0f;
+	for (int i = 0; i < AS_MAX_PIXELOUTPUTS; i++)
+	{
+		result.fixedFunctions.colorBlends[i].channelsEnabledFlags = AS_COLORCHANNEL_ALL;
+		result.fixedFunctions.colorBlends[i].srcColorParam = AS_BLENDPARAMS_SRCALPHA;
+		result.fixedFunctions.colorBlends[i].dstColorParam = AS_BLENDPARAMS_ONEMINUS_SRCALPHA;
+		result.fixedFunctions.colorBlends[i].srcAlphaParam = AS_BLENDPARAMS_ONE;
+		result.fixedFunctions.colorBlends[i].dstAlphaParam = AS_BLENDPARAMS_ZERO;
+		result.fixedFunctions.colorBlends[i].alphaFunc = AS_BLENDFUNC_ADD;
+	}
+	return result;
+}
+
+SDL_Window *asMainWindow;
 ASEXPORT SDL_Window* asGetMainWindowPtr()
 {
 	return asMainWindow;
@@ -34,7 +124,7 @@ ASEXPORT void asInitGfx(asAppInfo_t *pAppInfo, void* pCustomWindow)
 		windowFlags |= SDL_WINDOW_VULKAN;
 #endif
 		const char* windowModeStr = asCfgGetString(pConfig, "WindowMode", "windowed");
-		if (strcmp(windowModeStr, "fulscreen") != 0) /*Windowed*/
+		if ((strcmp(windowModeStr, "fullscreen") != 0)) /*Windowed*/
 		{
 			windowDim.x = SDL_WINDOWPOS_CENTERED_DISPLAY(monitor);
 			windowDim.y = SDL_WINDOWPOS_CENTERED_DISPLAY(monitor);
@@ -54,6 +144,7 @@ ASEXPORT void asInitGfx(asAppInfo_t *pAppInfo, void* pCustomWindow)
 			windowDim.w,
 			windowDim.h,
 			windowFlags);
+		SDL_SetWindowMinimumSize(asMainWindow, 640, 480);
 	}
 	if (!asMainWindow)
 	{
@@ -68,67 +159,35 @@ ASEXPORT void asInitGfx(asAppInfo_t *pAppInfo, void* pCustomWindow)
 	asCfgFree(pConfig);
 }
 
+bool _frameSkip = false;
+ASEXPORT void asGfxSetDrawSkip(bool skip)
+{
+	_frameSkip = skip;
+}
+
+ASEXPORT void asGfxTriggerResizeEvent()
+{
+#if ASTRENGINE_VK
+	asVkWindowResize();
+#endif
+}
+
+ASEXPORT void asGfxRenderFrame()
+{
+	if (_frameSkip)
+		return;
+#if ASTRENGINE_NUKLEAR
+	asNkDraw();
+#endif
+#if ASTRENGINE_VK
+	asVkDrawFrame();
+#endif
+}
+
 ASEXPORT void asShutdownGfx()
 {
 #if ASTRENGINE_VK
 	asVkShutdown();
 #endif
 	SDL_DestroyWindow(asMainWindow);
-}
-
-ASEXPORT uint32_t asTextureCalcPitch(asTextureFormat format, uint32_t width)
-{
-	uint32_t tmpVal = 0;
-	switch (format)
-	{
-		case AS_TEXTUREFORMAT_BC1_UNORM_BLOCK:
-			tmpVal = ((width + 3) / 4) * 8;
-			return tmpVal < 8 ? 8 : tmpVal;
-			break;
-		case AS_TEXTUREFORMAT_BC3_UNORM_BLOCK:
-		case AS_TEXTUREFORMAT_BC5_UNORM_BLOCK:
-		case AS_TEXTUREFORMAT_BC6H_UFLOAT_BLOCK:
-		case AS_TEXTUREFORMAT_BC7_UNORM_BLOCK:
-			tmpVal = ((width + 3) / 4) * 16;
-			return tmpVal < 16 ? 16 : tmpVal;
-			break;
-		default:
-			switch (format)
-			{
-			case AS_TEXTUREFORMAT_RGBA8_UNORM:
-			case AS_TEXTUREFORMAT_R16G16_SFLOAT:
-			case AS_TEXTUREFORMAT_R32_SFLOAT:
-			case AS_TEXTUREFORMAT_R10G10B10A2_UNORM:
-				tmpVal = 4;
-				break;
-			case AS_TEXTUREFORMAT_RGBA16_UNORM:
-			case AS_TEXTUREFORMAT_RGBA16_SFLOAT:
-				tmpVal = 8;
-				break;
-			case AS_TEXTUREFORMAT_R16_SFLOAT:
-				tmpVal = 2;
-				break;
-			case AS_TEXTUREFORMAT_R8_UNORM:
-				tmpVal = 1;
-				break;
-			case AS_TEXTUREFORMAT_DEPTH:
-				asGetDepthFormatSize(format);
-			default:
-				break;
-			}
-			return (width * tmpVal + 7) / 8;
-		break;
-	}
-	return 0;
-}
-
-ASEXPORT asTextureDesc_t asTextureDesc_Init()
-{
-	asTextureDesc_t result = (asTextureDesc_t) { 0 };
-	result.depth = 1;
-	result.mips = 1;
-	result.maxLod = FLT_MAX;
-	result.maxAnisotropy = 16;
-	result.usageFlags = AS_TEXTUREUSAGE_SAMPLED;
-	return result;
 }

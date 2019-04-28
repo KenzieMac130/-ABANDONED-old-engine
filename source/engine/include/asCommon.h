@@ -10,8 +10,6 @@
 #include <float.h>
 #include <math.h>
 
-/*#include "../../thirdparty/cglm/cglm.h"*/
-
 /**
 * @file
 * @brief Common utilities for the engine
@@ -68,9 +66,18 @@ typedef struct asCfgFile_t asCfgFile_t;
 */
 ASEXPORT asCfgFile_t* asCfgLoad(const char* path);
 /**
+* @brief Load config file from memory
+* @warning allocates memory on heap, make sure to asCfgFree()
+*/
+ASEXPORT asCfgFile_t* asCfgFromMem(unsigned char* data, size_t size);
+/**
 * @brief Free the config file
 */
 ASEXPORT void asCfgFree(asCfgFile_t* cfg);
+/**
+* @brief Attempt to open a section from the config file
+*/
+ASEXPORT void asCfgOpenSection(asCfgFile_t* cfg, const char* name);
 /**
 * @brief Read a number from the config file
 */
@@ -129,6 +136,7 @@ typedef struct
 	unsigned _index : 8;
 	unsigned _generation : 24;
 } asHandle_t;
+int asHandle_toInt(asHandle_t hndl);
 
 /**
 * @brief Handle Manager
@@ -235,3 +243,12 @@ ASEXPORT void asIdxTableOffsetAfter(asIdxIndirectionTable_t *pTable, uint32_t st
 * this will probably be to slow right now to do large scale sorting since its currently O(n)
 */
 ASEXPORT void asIdxTableSwap(asIdxIndirectionTable_t *pTable, uint32_t idxA, int32_t idxB);
+
+/*Hashing*/
+
+/**
+* @brief a 64 bit hash type
+*/
+typedef uint64_t asHash64_t;
+
+ASEXPORT asHash64_t asHashBytes64_xxHash(const void *pBytes, size_t size);
