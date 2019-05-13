@@ -43,19 +43,24 @@ ASEXPORT int asIgnite(int argc, char *argv[], asAppInfo_t *pAppInfo, void *pCust
 	return 0; 
 }
 
-ASEXPORT int asLoopSingleShot()
+ASEXPORT int asLoopSingleShot(double time, asLoopDesc_t loopDesc)
 {
+	if (loopDesc.fpOnTick)
+		loopDesc.fpOnTick(1.0 / 30);
+	if (loopDesc.fpOnUpdate)
+		loopDesc.fpOnUpdate(time);
 	asPollOSEvents();
 	asGfxRenderFrame();
 	return 0;
 }
 
-ASEXPORT int asEnterLoop()
+ASEXPORT int asEnterLoop(asLoopDesc_t loopDesc)
 {
 	gContinueLoop = true;
+	double deltaTime = 1.0/60;
 	while (gContinueLoop)
 	{
-		asLoopSingleShot();
+		asLoopSingleShot(deltaTime, loopDesc);
 	}
 	return 0;
 }

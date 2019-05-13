@@ -5,77 +5,12 @@
 #define NK_IMPLEMENTATION
 #include "../thirdparty/nuklear/nuklear.h"
 
-int main(int argc, char* argv[])
-{
-	asAppInfo_t appInfo = (asAppInfo_t){0};
-	appInfo.pAppName = "astrengine_Testbed";
-	appInfo.appVersion.major = 1; appInfo.appVersion.minor = 0; appInfo.appVersion.patch = 0;
-	atexit(asShutdown);
-	asIgnite(argc, argv, &appInfo, NULL);
+#define STB_IMAGE_IMPLEMENTATION
+#include "../thirdparty/stb/stb_image.h"
 
-	/*Test handle manager*/
-	{
-		asHandleManager_t man;
-		asHandleManagerCreate(&man, 8000);
-		for (int i = 0; i < 8000; i++)
-		{
-			//asHandle_t hndl = asCreateHandle(&man);
-			if (i >= 50)
-			{
-				//asDestroyHandle(&man, hndl);
-			}
-		}
-		asHandleManagerDestroy(&man);
-	}
-	/*Test texture creation*/
-	{
-		asTextureHandle_t texture;
-		asTextureDesc_t desc = asTextureDesc_Init();
-		desc.usageFlags = AS_TEXTUREUSAGE_SAMPLED;
-		desc.cpuAccess = AS_GPURESOURCEACCESS_DEVICE;
-		desc.format = AS_COLORFORMAT_RGBA8_UNORM;
-		desc.width = 512;
-		desc.height = 512;
-		desc.initialContentsBufferSize = 512 * 512 * 4;
-		desc.initialContentsRegionCount = 1;
-		asTextureContentRegion_t region = (asTextureContentRegion_t) { 0 };
-		region.bufferStart = 0;
-		region.extent[0] = desc.width;
-		region.extent[1] = desc.height;
-		region.extent[2] = 1;
-		region.layerCount = 1;
-		region.layer = 0;
-		region.mipLevel = 0;
-		desc.pInitialContentsRegions = &region;
-		desc.pInitialContentsBuffer = asMalloc(desc.initialContentsBufferSize);
-		memset(desc.pInitialContentsBuffer, 0, desc.initialContentsBufferSize);
-		desc.pDebugLabel = "TestImage";
-		texture = asCreateTexture(&desc);
-		asFree(desc.pInitialContentsBuffer);
-		asReleaseTexture(texture);
-	}
-	/*Test buffer creation*/
-	{
-		asBufferHandle_t buffer;
-		asBufferDesc_t desc = asBufferDesc_Init();
-		desc.bufferSize = 1024;
-		desc.cpuAccess = AS_GPURESOURCEACCESS_STREAM;
-		desc.usageFlags = AS_BUFFERUSAGE_VERTEX;
-		desc.initialContentsBufferSize = desc.bufferSize;
-		desc.pInitialContentsBuffer = asMalloc(desc.initialContentsBufferSize);
-		memset(desc.pInitialContentsBuffer, 0, desc.initialContentsBufferSize);
-		desc.pDebugLabel = "TestBuffer";
-		buffer = asCreateBuffer(&desc);
-		/*Hash test*/
-		asHash64_t hash = asHashBytes64_xxHash(desc.pInitialContentsBuffer, desc.initialContentsBufferSize);
-		asFree(desc.pInitialContentsBuffer);
-		asReleaseBuffer(buffer);
-	}
-	/*Test shader creation*/
-	{
-		//asShaderFxDesc_t shaderDesc = asShaderDesc_Init("Test", 5);
-	}
-	/*Test nuklear, this should be in a loop tho...*/
+void onUpdate(double time)
+{
+	/*Test nuklear*/
 	{
 		struct nk_context *pNkCtx = asGetNuklearContextPtr();
 		enum { EASY, HARD };
@@ -108,5 +43,89 @@ int main(int argc, char* argv[])
 		}
 		nk_end(pNkCtx);
 	}
-	return asEnterLoop();
+}
+
+asTextureHandle_t texture;
+asBufferHandle_t buffer;
+
+void onExit()
+{
+	asReleaseTexture(texture);
+	asReleaseBuffer(buffer);
+	asShutdown();
+}
+
+int main(int argc, char* argv[])
+{
+	asAppInfo_t appInfo = (asAppInfo_t){0};
+	appInfo.pAppName = "astrengine_Testbed";
+	appInfo.appVersion.major = 1; appInfo.appVersion.minor = 0; appInfo.appVersion.patch = 0;
+	atexit(asShutdown);
+	asIgnite(argc, argv, &appInfo, NULL);
+
+	/*Test handle manager*/
+	{
+		asHandleManager_t man;
+		asHandleManagerCreate(&man, 8000);
+		for (int i = 0; i < 8000; i++)
+		{
+			asHandle_t hndl = asCreateHandle(&man);
+			if (i % 6 != 0)
+			{
+				asDestroyHandle(&man, hndl);
+			}
+		}
+		asHandleManagerDestroy(&man);
+	}
+	/*Test texture creation*/
+	{
+		int x, y, channels;
+		unsigned char* img = stbi_load("Derp.jpg", &x, &y, &channels, 4);
+		if (!img)
+			asFatalError("Failed to load image");
+		asTextureDesc_t desc = asTextureDesc_Init();
+		desc.usageFlags = AS_TEXTUREUSAGE_SAMPLED;
+		desc.cpuAccess = AS_GPURESOURCEACCESS_DEVICE;
+		desc.format = AS_COLORFORMAT_RGBA8_UNORM;
+		desc.width = x;
+		desc.height = y;
+		desc.initialContentsBufferSize = x * y * 4;
+		desc.initialContentsRegionCount = 1;
+		asTextureContentRegion_t region = (asTextureContentRegion_t) { 0 };
+		region.bufferStart = 0;
+		region.extent[0] = desc.width;
+		region.extent[1] = desc.height;
+		region.extent[2] = 1;
+		region.layerCount = 1;
+		region.layer = 0;
+		region.mipLevel = 0;
+		desc.pInitialContentsRegions = &region;
+		desc.pInitialContentsBuffer = img;
+		desc.pDebugLabel = "TestImage";
+		texture = asCreateTexture(&desc);
+		stbi_image_free(img);
+	}
+	/*Test buffer creation*/
+	{
+		asBufferDesc_t desc = asBufferDesc_Init();
+		desc.bufferSize = 1024;
+		desc.cpuAccess = AS_GPURESOURCEACCESS_STREAM;
+		desc.usageFlags = AS_BUFFERUSAGE_VERTEX;
+		desc.initialContentsBufferSize = desc.bufferSize;
+		desc.pInitialContentsBuffer = asMalloc(desc.initialContentsBufferSize);
+		memset(desc.pInitialContentsBuffer, 0, desc.initialContentsBufferSize);
+		desc.pDebugLabel = "TestBuffer";
+		buffer = asCreateBuffer(&desc);
+		/*Hash test*/
+		asHash64_t hash = asHashBytes64_xxHash(desc.pInitialContentsBuffer, desc.initialContentsBufferSize);
+		asFree(desc.pInitialContentsBuffer);
+	}
+	/*Test shader creation*/
+	{
+		//asShaderFxDesc_t shaderDesc = asShaderDesc_Init("Test", 5);
+	}
+	asLoopDesc_t loopDesc;
+	loopDesc.fpOnUpdate = (asUpdateFunction_t)onUpdate;
+	loopDesc.fpOnTick = (asUpdateFunction_t)NULL;
+	return asEnterLoop(loopDesc);
 }

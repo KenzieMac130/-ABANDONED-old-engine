@@ -1,6 +1,9 @@
 #pragma once
 
 #include "asCommon.h"
+#ifdef __cplusplus
+extern "C" {
+#endif 
 
 /**
 * @file
@@ -90,6 +93,21 @@ typedef enum {
 	AS_COLORFORMAT_COUNT,
 	AS_COLORFORMAT_MAX = UINT32_MAX
 } asColorFormat;
+
+typedef enum {
+	AS_COLORCHANNEL_R = 1 << 0,
+	AS_COLORCHANNEL_G = 1 << 1,
+	AS_COLORCHANNEL_B = 1 << 2,
+	AS_COLORCHANNEL_A = 1 << 3,
+	AS_COLORCHANNEL_COLOR =
+	AS_COLORCHANNEL_R |
+	AS_COLORCHANNEL_G |
+	AS_COLORCHANNEL_B,
+	AS_COLORCHANNEL_ALL =
+	AS_COLORCHANNEL_COLOR |
+	AS_COLORCHANNEL_A,
+	AS_COLORCHANNEL_MAX = UINT32_MAX
+} asColorChannelsFlags;
 
 /**
 * @brief Texture usage flags
@@ -240,110 +258,6 @@ ASEXPORT void asReleaseBuffer(asBufferHandle_t hndl);
 /*Shader FX Stuff*/
 
 /**
-* @brief Sampler filtering
-*/
-typedef enum {
-	AS_SAMPLERFILTER_LINEAR,
-	AS_SAMPLERFILTER_NEAREST,
-	AS_SAMPLERFILTER_COUNT,
-	AS_SAMPLERFILTER_MAX = UINT32_MAX
-} asSamplerFilterType;
-
-/**
-* @brief Sampler wraping
-*/
-typedef enum {
-	AS_SAMPLERWRAP_REPEAT,
-	AS_SAMPLERWRAP_CLAMP,
-	AS_SAMPLERWRAP_MIRROR,
-	AS_SAMPLERWRAP_COUNT,
-	AS_SAMPLERWRAP_MAX = UINT32_MAX
-} asSamplerWrapType;
-
-/**
-* @brief Description for a sampler
-*/
-typedef struct {
-	asSamplerWrapType uWrap; /**< How to wrap the texture horizontally (default repeats)*/
-	asSamplerWrapType vWrap; /**< How to wrap the texture vertically (default repeats)*/
-	asSamplerWrapType wWrap; /**< How to wrap the texture depth wise (only aplicable to asTextureType::AS_TEXTURETYPE_3D, default repeats)*/
-	asSamplerFilterType minFilter; /**< Minification filter*/
-	asSamplerFilterType magFilter; /**< Maxification filter*/
-	float minLod; /**< Minimum mipmap LOD*/
-	float maxLod; /**< Maximum mipmap LOD*/
-	uint32_t anisotropy; /**< Anisotropy (by default it sets it to 1)*/
-} asSamplerDesc_t;
-
-/**
-* @brief shader resource types
-*/
-typedef enum {
-	AS_SHADERBINDING_UBO, 
-	AS_SHADERBINDING_SBO,
-	AS_SHADERBINDING_SAMPLER,
-	AS_SHADERBINDING_TEX2D,
-	AS_SHADERBINDING_TEX2DARRAY,
-	AS_SHADERBINDING_TEXCUBE,
-	AS_SHADERBINDING_TEXCUBEARRAY,
-	AS_SHADERBINDING_TEX3D,
-	AS_SHADERBINDING_MAX = UINT32_MAX
-} asShaderFxBindingType;
-
-/**
-* @brief Description for a shader resource binding
-*/
-typedef struct {
-	uint32_t slot;
-	asShaderFxBindingType type;
-	asHash64_t nameHash;
-} asShaderFxBindingDesc_t;
-
-/**
-* @brief Description for shader inputs/outputs
-*/
-typedef struct {
-	uint32_t slot;
-	asColorFormat type;
-	asHash64_t nameHash;
-} asShaderFxIODesc_t;
-
-/**
-* @brief shader variable types (We only care about some of the common ones)
-*/
-typedef enum {
-	AS_SHADERVARTYPE_FLOAT,
-	AS_SHADERVARTYPE_FVECTOR2,
-	AS_SHADERVARTYPE_FVECTOR3,
-	AS_SHADERVARTYPE_FVECTOR4,
-	AS_SHADERVARTYPE_FMATRIX2X2,
-	AS_SHADERVARTYPE_FMATRIX3X3,
-	AS_SHADERVARTYPE_FMATRIX4X4,
-	AS_SHADERVARTYPE_INTEGER,
-	AS_SHADERVARTYPE_IVECTOR2,
-	AS_SHADERVARTYPE_IVECTOR3,
-	AS_SHADERVARTYPE_IVECTOR4,
-	AS_SHADERVARTYPE_COUNT,
-	AS_SHADERVARTYPE_MAX = UINT32_MAX
-} asShaderFxVarType;
-
-/**
-* @brief Description for buffer members
-*/
-typedef struct {
-	asShaderFxVarType type;
-	asHash64_t nameHash;
-} asShaderFxBufferMemberDesc_t;
-
-/**
-* @brief Description for buffer layouts
-*/
-typedef struct {
-	asHash64_t nameHash;
-	uint32_t memberCount;
-	asShaderFxBufferMemberDesc_t *pMembers;
-} asShaderFxBufferLayoutDesc_t;
-
-/**
 * @brief shader stages
 */
 typedef enum {
@@ -362,7 +276,6 @@ typedef enum {
 * main is always assumed to be the entry point of the code
 */
 typedef struct {
-	asHash64_t permutationHash; /**< The hash of the shader permutation (different shaders can have different techniques)*/
 	asShaderStage stage; /**< Stage this shader belongs to*/
 	size_t programByteCount; /**< Amount of bytes in asShaderCodeDesc_t::pProgramBytes*/
 	uint8_t* pProgramBytes; /**< Shader code/bytecode for the current API (Vulkan: SPIR-V, OpenGL: GLSL, DirectX: HLSL, ect...)*/
@@ -379,6 +292,9 @@ typedef enum {
 	AS_FILL_MAX = UINT32_MAX
 } asFillMode;
 
+/**
+* @brief Cull modes
+*/
 typedef enum {
 	AS_CULL_BACK,
 	AS_CULL_FRONT,
@@ -387,115 +303,68 @@ typedef enum {
 	AS_CULL_MAX = UINT32_MAX
 } asCullMode;
 
+/**
+* @brief High level blend modes
+*/
 typedef enum {
-	AS_DEPTH_READWRITE_FRONT,
-	AS_DEPTH_READWRITE_BEHIND,
-	AS_DEPTH_READ_FRONT,
-	AS_DEPTH_READ_BEHIND,
-	AS_DEPTH_WRITE,
-	AS_DEPTH_IGNORE,
-	AS_DEPTH_COUNT,
-	AS_DEPTH_MAX = UINT32_MAX
-} asDepthTestMode;
-
-typedef enum {
-	AS_COLORCHANNEL_R = 1 << 0,
-	AS_COLORCHANNEL_G = 1 << 1,
-	AS_COLORCHANNEL_B = 1 << 2,
-	AS_COLORCHANNEL_A = 1 << 3,
-	AS_COLORCHANNEL_COLOR = 
-	AS_COLORCHANNEL_R |
-	AS_COLORCHANNEL_G |
-	AS_COLORCHANNEL_B,
-	AS_COLORCHANNEL_ALL = 
-	AS_COLORCHANNEL_COLOR |
-	AS_COLORCHANNEL_A,
-	AS_COLORCHANNEL_MAX = UINT32_MAX
-} asColorChannelsFlags;
-
-typedef enum {
-	AS_BLENDFUNC_ADD,
-	AS_BLENDFUNC_SUB,
-	AS_BLENDFUNC_REVERSESUB,
-	AS_BLENDFUNC_MINIMUM,
-	AS_BLENDFUNC_MAXIMUM,
-	AS_BLENDFUNC_COUNT,
-	AS_BLENDFUNC_MAX = UINT32_MAX
-} asBlendFuncs;
-
-typedef enum {
-	AS_BLENDPARAMS_ONE,
-	AS_BLENDPARAMS_ZERO,
-	AS_BLENDPARAMS_SRCCOLOR,
-	AS_BLENDPARAMS_DSTCOLOR,
-	AS_BLENDPARAMS_ONEMINUS_SRCCOLOR,
-	AS_BLENDPARAMS_ONEMINUS_DSTCOLOR,
-	AS_BLENDPARAMS_SRCALPHA,
-	AS_BLENDPARAMS_DSTALPHA,
-	AS_BLENDPARAMS_ONEMINUS_SRCALPHA,
-	AS_BLENDPARAMS_ONEMINUS_DSTALPHA,
-	AS_BLENDPARAMS_COUNT,
-	AS_BLENDPARAMS_MAX = UINT32_MAX
-} asBlendParams;
-
-typedef struct
-{
-	bool enabled;
-	int32_t channelsEnabledFlags;
-	asBlendFuncs colorFunc;
-	asBlendParams srcColorParam;
-	asBlendParams dstColorParam;
-	asBlendFuncs alphaFunc;
-	asBlendParams srcAlphaParam;
-	asBlendParams dstAlphaParam;
-} asBlendDesc_t;
-
-#define AS_MAX_PIXELOUTPUTS 8
+	AS_BLEND_NONE,
+	AS_BLEND_MIX,
+	AS_BLEND_ADD,
+	AS_BLEND_MAX = UINT32_MAX
+} asBlendMode;
 
 /**
 * @brief Describes fixed function inputs for a shader
 */
 typedef struct {
 	uint32_t tessCtrlPoints; /** Tessellation control points*/
-	float fillWidth; /**< For non-solid lines*/
+	float fillWidth; /**< Width for non-solid lines and points*/
 	asFillMode fillMode; /**< Polygon fill modes*/
 	asCullMode cullMode; /**< Which side of the face if any is culled*/
-	asDepthTestMode depthMode; /**< Depth testing*/
-	asBlendDesc_t colorBlends[AS_MAX_PIXELOUTPUTS]; /**< Color blending per pixel output*/
+	asBlendMode blendMode; /**< High level blend modes for the surface*/
 } asShaderFxFixedFunctionsDesc_t;
 
 /**
-* @brief shader material defaults
+* @brief shader fx property types
+*/
+typedef enum {
+	AS_SHADERFXPROP_SCALAR,
+	AS_SHADERFXPROP_VECTOR4,
+	AS_SHADERFXPROP_TEX2D,
+	AS_SHADERFXPROP_TEX2DARRAY,
+	AS_SHADERFXPROP_TEXCUBE,
+	AS_SHADERFXPROP_TEXCUBEARRAY,
+	AS_SHADERFXPROP_TEX3D,
+	AS_SHADERFXPROP_MAX = UINT32_MAX
+} asShaderFxPropType;
+
+/**
+* @brief shader material properties
 */
 typedef struct {
+	asShaderFxPropType type;
+	uint16_t offset; /**< This is the byte offset for scalars and vectors and the slot for textures*/
 	asHash64_t nameHash;
 	float values[4];
-} asShaderFxMaterialDefault_t;
+} asShaderFxProp_t;
 
 /**
 * @brief Description for a shader effect
 */
 typedef struct {
-	asHash64_t nameHash; /**< A hash of the shader's name*/
-	asGfxAPIs api; /**< Graphics API for the current shader*/
 	asShaderFxFixedFunctionsDesc_t fixedFunctions; /**< Fixed functions for the shader*/
-	uint32_t bindingCount; /**< Amount of asShaderDesc_t::pBindings*/
-	asShaderFxBindingDesc_t *pBindings; /**< Shader resources to be bound in the shader*/
-	uint32_t vertexInputCount; /**< Amount of asShaderDesc_t::pVertexInputs*/
-	asShaderFxIODesc_t *pVertexInputs; /**< Vertex layout in the shader*/
-	uint32_t pixelOutputCount; /**< Amount of asShaderDesc_t::pPixelOutputs, maximum of AS_MAX_SHADEROUTPUTS*/
-	asShaderFxIODesc_t pixelOutputs[AS_MAX_PIXELOUTPUTS]; /**< Pixel outputs of the shader*/
-	uint32_t bufferDescCount; /**< Amount of asShaderDesc_t::pBufferDescs*/
-	asShaderFxBufferLayoutDesc_t *pBufferDescs; /**< Description of the buffer contents*/
-	uint32_t samplerDescCount; /**< Amount of asShaderDesc_t::pSamplerDescs*/
-	asSamplerDesc_t *pSamplerDescs; /**< Description of the samplers used in the shader*/
-	uint32_t shaderProgramCount; /**< Amount of asShaderDesc_t::pShaderPrograms*/
-	asShaderFxProgramDesc_t *pShaderPrograms; /**< Shader programs*/
-	uint32_t materialDefaultCount; /**< Amount of asShaderDesc_t::pMaterialDefaults*/
-	asShaderFxMaterialDefault_t *pMaterialDefaults; /**< Default material properties*/
+	uint32_t programCount; /**< Amount of asShaderDesc_t::pPrograms*/
+	uint32_t propCount; /**< Amount of asShaderDesc_t::pFxProps*/
+	uint32_t propBufferSize; /**< The size of the data required for fx properties*/
+	asShaderFxProgramDesc_t *pPrograms; /**< Shader programs*/
+	asShaderFxProp_t *pProps; /**< Default fx props (for materials)*/
 } asShaderFxDesc_t;
 
 /**
 * @brief Set the defaults for a shader
 */
 ASEXPORT asShaderFxDesc_t asShaderFxDesc_Init();
+
+#ifdef __cplusplus
+}
+#endif

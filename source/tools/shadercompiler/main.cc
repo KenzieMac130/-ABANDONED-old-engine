@@ -1,10 +1,10 @@
-#include "FileParser.h"
-
-char defaultFile[] = "ShaderFileMockup.asfxdef";
+#include "ShaderGen.h"
 
 int main(int argc, char* argv[])
 {
-	char *fileName = defaultFile;
+	asCfgFile_t* cfg = asCfgLoad("shaderGen.cfg");
+
+	const char *fileName = asCfgGetString(cfg, "DefaultFile", "ShaderFileMockup.asfxdef");
 	/*No file provided*/
 	if (argc <= 1)
 	{
@@ -15,10 +15,10 @@ int main(int argc, char* argv[])
 		fileName = argv[1];
 	}
 	/*Not a valid .asfx file*/
-	if (strstr(fileName, ".asfxdef") == NULL)
+	if (!strstr(fileName, ".asfxdef"))
 	{
 		asDebugLog("ERROR: .asfxdef NOT PROVIDED!\n");
-		return;
+		return 0;
 	}
 
 	/*Load the shader file from disc*/
@@ -29,7 +29,7 @@ int main(int argc, char* argv[])
 		fopen_s(&fp, fileName, "rb");
 		if (!fp) {
 			asDebugLog("ERROR: COULD NOT OPEN FILE!\n");
-			return;
+			return 0;
 		}
 		fseek(fp, 0, SEEK_END);
 		fileSize = ftell(fp) + 1;
@@ -41,8 +41,9 @@ int main(int argc, char* argv[])
 	}
 	
 	/*Generate the shader fx*/
-	generateShaderFromFile(fileBytes, fileSize);
+	generateShaderFromFxTemplates(fileBytes, fileSize, asCfgGetString(cfg, "TemplatePath", "templates"));
 
 	asFree(fileBytes);
+	asCfgFree(cfg);
 	getchar();
 }

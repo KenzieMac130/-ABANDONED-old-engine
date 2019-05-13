@@ -1,5 +1,9 @@
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif 
+
 #include "astrengineConfig.h"
 
 #include <stdlib.h>
@@ -252,3 +256,7 @@ ASEXPORT void asIdxTableSwap(asIdxIndirectionTable_t *pTable, uint32_t idxA, int
 typedef uint64_t asHash64_t;
 
 ASEXPORT asHash64_t asHashBytes64_xxHash(const void *pBytes, size_t size);
+
+#ifdef __cplusplus
+}
+#endif

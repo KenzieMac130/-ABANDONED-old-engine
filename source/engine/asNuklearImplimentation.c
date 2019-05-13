@@ -6,26 +6,51 @@
 
 #include "SDL_events.h"
 
-#define AS_NK_MAXMEMORY 500000
+#if ASTRENGINE_VK
+#include "include/lowlevel/asVulkanBackend.h"
+#include <SDL_vulkan.h>
+#endif
+
+#define AS_NK_MAX_MEMORY 500000
+#define AS_NK_MAX_VERTS 65536
+#define AS_NK_MAX_INDICES 65536
 struct nk_context nkContext;
 void* nkMemory;
 
-struct nk_font_atlas fontAtlas;
-asTextureHandle_t fontTexture;
+struct nk_font_atlas nkFontAtlas;
+asTextureHandle_t nkFontTexture;
+struct nk_draw_null_texture nkNullDraw;
+
+struct nk_buffer nkCommands;
+
+asBufferHandle_t nkVertexBuffer;
+asBufferHandle_t nkIndexBuffer;
+
+struct nkVertex
+{
+	float pos[2];
+	float uv[2];
+	unsigned char rgba[4];
+};
 
 ASEXPORT struct nk_context* asGetNuklearContextPtr()
 {
 	return &nkContext;
 }
 
-ASEXPORT void asInitNk()
+#if ASTRENGINE_VK
+/*Vulkan allows mappings to stay persistant*/
+void* vVertexBufferBindings[AS_VK_MAX_INFLIGHT];
+void* vIndexBufferBindings[AS_VK_MAX_INFLIGHT];
+#endif
+void asInitNk()
 {
 	/*Font*/
 	const void* img;
 	int w, h;
-	nk_font_atlas_init_default(&fontAtlas);
-	img = nk_font_atlas_bake(&fontAtlas, &w, &h, NK_FONT_ATLAS_RGBA32);
-	/*Create texture*/
+	nk_font_atlas_init_default(&nkFontAtlas);
+	img = nk_font_atlas_bake(&nkFontAtlas, &w, &h, NK_FONT_ATLAS_RGBA32);
+	/*Create font texture*/
 	{
 		asTextureDesc_t desc = asTextureDesc_Init();
 		desc.usageFlags = AS_TEXTUREUSAGE_SAMPLED;
@@ -46,28 +71,144 @@ ASEXPORT void asInitNk()
 		desc.pInitialContentsRegions = &region;
 		desc.pInitialContentsBuffer = img;
 		desc.pDebugLabel = "NuklearFont";
-		fontTexture = asCreateTexture(&desc);
+		nkFontTexture = asCreateTexture(&desc);
+	}
+	/*Create vertex buffer*/
+	{
+		asBufferDesc_t desc = asBufferDesc_Init();
+		desc.bufferSize = AS_NK_MAX_VERTS * sizeof(struct nkVertex);
+		desc.cpuAccess = AS_GPURESOURCEACCESS_STREAM;
+		desc.usageFlags = AS_BUFFERUSAGE_VERTEX;
+		desc.initialContentsBufferSize = desc.bufferSize;
+		desc.pDebugLabel = "NuklearVerts";
+		nkVertexBuffer = asCreateBuffer(&desc);
+	}
+	/*Create index buffer*/
+	{
+		asBufferDesc_t desc = asBufferDesc_Init();
+		desc.bufferSize = AS_NK_MAX_INDICES * sizeof(uint16_t);
+		desc.cpuAccess = AS_GPURESOURCEACCESS_STREAM;
+		desc.usageFlags = AS_BUFFERUSAGE_INDEX;
+		desc.initialContentsBufferSize = desc.bufferSize;
+		desc.pDebugLabel = "NuklearIndices";
+		nkIndexBuffer = asCreateBuffer(&desc);
 	}
 	/*Create material*/
 	{
 		/*Todo...*/
 	}
-	nk_font_atlas_end(&fontAtlas, nk_handle_id(asHandle_toInt(fontTexture)) /*Replace with Material Handle*/, 0);
+
+#if ASTRENGINE_VK
+	/*Map persistent memory*/
+	for (int i = 0; i < AS_VK_MAX_INFLIGHT; i++)
+	{
+		asVkAllocation_t vertAlloc = asVkGetAllocFromBuffer(nkVertexBuffer, i);
+		asVkAllocation_t idxAlloc = asVkGetAllocFromBuffer(nkIndexBuffer, i);
+		asVkMapMemory(vertAlloc, 0, vertAlloc.size, &vVertexBufferBindings[i]);
+		asVkMapMemory(idxAlloc, 0, idxAlloc.size, &vIndexBufferBindings[i]);
+	}
+#endif
+
+	nk_font_atlas_end(&nkFontAtlas, nk_handle_id(asHandle_toInt(nkFontTexture)) /*Replace with Material Handle*/, &nkNullDraw);
 
 	/*Context*/
-	nkMemory = asMalloc(AS_NK_MAXMEMORY);
-	memset(nkMemory, 0, AS_NK_MAXMEMORY);
-	nk_init_fixed(&nkContext, nkMemory, AS_NK_MAXMEMORY, &fontAtlas.default_font->handle);
+	nkMemory = asMalloc(AS_NK_MAX_MEMORY);
+	memset(nkMemory, 0, AS_NK_MAX_MEMORY);
+	nk_init_fixed(&nkContext, nkMemory, AS_NK_MAX_MEMORY, &nkFontAtlas.default_font->handle);
+	/*Create nuklear command list*/
+	nk_buffer_init_default(&nkCommands);
 }
 
-ASEXPORT void asNkDraw()
+void asNkDraw()
 {
+	const struct nk_draw_command* nkCmd;
+	nk_draw_index nkOffset = 0;
+	int viewWidth, viewHeight;
 #if ASTRENGINE_VK
+	SDL_Vulkan_GetDrawableSize(asGetMainWindowPtr(), &viewWidth, &viewHeight);
+#endif
+
+	struct nk_buffer nkVerts, nkElements;
+	/*Convert to vertices*/
+	{
+		struct nk_convert_config config = (struct nk_convert_config) { 0 };
+		static const struct nk_draw_vertex_layout_element vertexLayout[] = {
+			{NK_VERTEX_POSITION, NK_FORMAT_FLOAT, offsetof(struct nkVertex, pos)},
+			{NK_VERTEX_TEXCOORD, NK_FORMAT_FLOAT, offsetof(struct nkVertex, uv)},
+			{NK_VERTEX_COLOR, NK_FORMAT_R8G8B8A8, offsetof(struct nkVertex, rgba)},
+			{NK_VERTEX_LAYOUT_END}
+		};
+		config.vertex_layout = vertexLayout;
+		config.vertex_size = sizeof(struct nkVertex);
+		config.vertex_alignment = NK_ALIGNOF(struct nkVertex);
+		config.null = nkNullDraw;
+		config.circle_segment_count = 22;
+		config.curve_segment_count = 22;
+		config.arc_segment_count = 22;
+		config.global_alpha = 1.0f;
+		config.shape_AA = NK_ANTI_ALIASING_OFF;
+		config.line_AA = NK_ANTI_ALIASING_OFF;
+		nk_buffer_init_fixed(&nkVerts, vVertexBufferBindings[asVkCurrentFrame], AS_NK_MAX_VERTS * sizeof(struct nkVertex));
+		nk_buffer_init_fixed(&nkElements, vIndexBufferBindings[asVkCurrentFrame], AS_NK_MAX_INDICES * sizeof(uint16_t));
+		nk_convert(&nkContext, &nkCommands, &nkVerts, &nkElements, &config);
+#if ASTRENGINE_VK
+		asVkAllocation_t vertAlloc = asVkGetAllocFromBuffer(nkVertexBuffer, asVkCurrentFrame);
+		asVkAllocation_t idxAlloc = asVkGetAllocFromBuffer(nkIndexBuffer, asVkCurrentFrame);
+		asVkFlushMemory(vertAlloc);
+		asVkFlushMemory(idxAlloc);
+#endif
+	}
+	/*Render all draws*/
+
+#if ASTRENGINE_VK
+	/*Bind vertex/index buffers*/
+	VkCommandBuffer vCmd = asVkGetNextGraphicsCommandBuffer();
+	VkCommandBufferBeginInfo cmdInfo = (VkCommandBufferBeginInfo) { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
+	vkBeginCommandBuffer(vCmd, &cmdInfo);
+	VkBuffer vVertexBuffer = asVkGetBufferFromBuffer(nkVertexBuffer, asVkCurrentFrame);
+	VkBuffer vIndexBuffer = asVkGetBufferFromBuffer(nkIndexBuffer, asVkCurrentFrame);
+	VkDeviceSize vtxOffset = 0;
+	vkCmdBindVertexBuffers(vCmd, 0, 1, &vVertexBuffer, &vtxOffset);
+	vkCmdBindIndexBuffer(vCmd, vIndexBuffer, 0, VK_INDEX_TYPE_UINT16);
+#endif
+	nk_draw_foreach(nkCmd, &nkContext, &nkCommands)
+	{
+		if (!nkCmd->elem_count) continue;
+#if ASTRENGINE_VK
+		/*Bind material*/
+		/*Todo...*/
+		/*Set scissors*/
+		VkRect2D scissor;
+		scissor.offset.x = (int32_t)(nkCmd->clip_rect.x);
+		scissor.offset.y = (int32_t)(nkCmd->clip_rect.y);
+		scissor.extent.width = (uint32_t)(nkCmd->clip_rect.w);
+		scissor.extent.height = (uint32_t)(nkCmd->clip_rect.h);
+		if (scissor.extent.width > (uint32_t)viewWidth)
+			scissor.extent.width = (uint32_t)viewWidth;
+		if (scissor.extent.height > (uint32_t)viewHeight)
+			scissor.extent.height = (uint32_t)viewHeight;
+		if (scissor.offset.x < 0)
+			scissor.offset.x = 0;
+		if (scissor.offset.y < 0)
+			scissor.offset.y = 0;
+		vkCmdSetScissor(vCmd, 0, 1, &scissor);
+		/*Draw indexed*/
+		//vkCmdDrawIndexed(vCmd, nkCmd->elem_count, 1, 0, 0, 0);
+#endif
+		nkOffset += nkCmd->elem_count;
+	}
+#if ASTRENGINE_VK
+	vkEndCommandBuffer(vCmd);
 #endif
 	nk_clear(&nkContext);
 }
 
-ASEXPORT void asNkPushEvent(void *pEvent)
+void asNkReset()
+{
+	nk_clear(&nkContext);
+}
+
+void asNkPushEvent(void *pEvent)
 {
 	/*Yes... I lifted this straight off of the demos... Not recreating this mess*/
 	SDL_Event *evt = (SDL_Event*)pEvent;
@@ -168,7 +309,6 @@ ASEXPORT void asNkPushEvent(void *pEvent)
 		/* text input */
 		nk_glyph glyph;
 		memcpy(glyph, evt->text.text, NK_UTF_SIZE);
-		asDebugLog(glyph);
 		nk_input_glyph(ctx, glyph);
 		return;
 	}
@@ -179,10 +319,28 @@ ASEXPORT void asNkPushEvent(void *pEvent)
 	}
 }
 
-ASEXPORT void asShutdownNk()
+void asNkBeginInput()
 {
-	asReleaseTexture(fontTexture);
-	nk_font_atlas_clear(&fontAtlas);
+	nk_input_begin(&nkContext);
+}
+void asNkEndInput()
+{
+	nk_input_end(&nkContext);
+}
+
+void asShutdownNk()
+{
+	nk_buffer_free(&nkCommands);
+#if ASTRENGINE_VK
+	for (int i = 0; i < AS_VK_MAX_INFLIGHT; i++)
+	{
+		asVkUnmapMemory(asVkGetAllocFromBuffer(nkVertexBuffer, i));
+		asVkUnmapMemory(asVkGetAllocFromBuffer(nkIndexBuffer, i));
+	}
+#endif
+	asReleaseBuffer(nkVertexBuffer);
+	asReleaseTexture(nkFontTexture);
+	nk_font_atlas_clear(&nkFontAtlas);
 	asFree(nkMemory);
 }
 #endif

@@ -86,15 +86,6 @@ ASEXPORT asShaderFxDesc_t asShaderFxDesc_Init()
 {
 	asShaderFxDesc_t result = (asShaderFxDesc_t) { 0 };
 	result.fixedFunctions.fillWidth = 1.0f;
-	for (int i = 0; i < AS_MAX_PIXELOUTPUTS; i++)
-	{
-		result.fixedFunctions.colorBlends[i].channelsEnabledFlags = AS_COLORCHANNEL_ALL;
-		result.fixedFunctions.colorBlends[i].srcColorParam = AS_BLENDPARAMS_SRCALPHA;
-		result.fixedFunctions.colorBlends[i].dstColorParam = AS_BLENDPARAMS_ONEMINUS_SRCALPHA;
-		result.fixedFunctions.colorBlends[i].srcAlphaParam = AS_BLENDPARAMS_ONE;
-		result.fixedFunctions.colorBlends[i].dstAlphaParam = AS_BLENDPARAMS_ZERO;
-		result.fixedFunctions.colorBlends[i].alphaFunc = AS_BLENDFUNC_ADD;
-	}
 	return result;
 }
 
@@ -167,6 +158,8 @@ ASEXPORT void asGfxSetDrawSkip(bool skip)
 
 ASEXPORT void asGfxTriggerResizeEvent()
 {
+	if (_frameSkip)
+		return;
 #if ASTRENGINE_VK
 	asVkWindowResize();
 #endif
@@ -175,7 +168,10 @@ ASEXPORT void asGfxTriggerResizeEvent()
 ASEXPORT void asGfxRenderFrame()
 {
 	if (_frameSkip)
+	{
+		asNkReset();
 		return;
+	}
 #if ASTRENGINE_NUKLEAR
 	asNkDraw();
 #endif

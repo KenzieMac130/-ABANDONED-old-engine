@@ -9,6 +9,8 @@
 
 ASEXPORT void asPollOSEvents()
 {
+#if ASTRENGINE_NUKLEAR
+#endif
 	SDL_Event event;
 	while (SDL_PollEvent(&event))
 	{
@@ -40,4 +42,7 @@ ASEXPORT void asPollOSEvents()
 		asNkPushEvent(&event);
 #endif
 	}
+#if ASTRENGINE_NUKLEAR
+
+#endif
 }

@@ -356,6 +356,26 @@ void asVkFree(asVkAllocation_t* pMem)
 	pMem->offset = 0;
 }
 
+
+void asVkMapMemory(asVkAllocation_t mem, VkDeviceSize offset, VkDeviceSize size, void** ppData)
+{
+	vkMapMemory(asVkDevice, mem.memHandle, mem.offset + offset, size, 0, ppData);
+}
+
+void asVkUnmapMemory(asVkAllocation_t mem)
+{
+	vkUnmapMemory(asVkDevice, mem.memHandle);
+}
+
+void asVkFlushMemory(asVkAllocation_t mem)
+{
+	VkMappedMemoryRange range = (VkMappedMemoryRange) { VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE };
+	range.memory = mem.memHandle;
+	range.offset = mem.offset;
+	range.size = mem.size;
+	vkFlushMappedMemoryRanges(asVkDevice, 1, &range);
+}
+
 /*Texture Stuff*/
 /*Todo: Investigate how to better better apply DOD with this... (for now, it works)*/
 
@@ -732,14 +752,19 @@ ASEXPORT void asReleaseTexture(asTextureHandle_t hndl)
 	asDestroyHandle(&vMainTextureManager.handleManager, hndl);
 }
 
-VkImage vGetImageFromTexture(asTextureHandle_t hndl, uint32_t slot)
+VkImage asVkGetImageFromTexture(asTextureHandle_t hndl, uint32_t slot)
 {
 	return vMainTextureManager.textures[hndl._index].image[slot];
 }
 
-VkImageView vGetViewFromTexture(asTextureHandle_t hndl, uint32_t slot)
+VkImageView asVkGetViewFromTexture(asTextureHandle_t hndl, uint32_t slot)
 {
 	return vMainTextureManager.textures[hndl._index].view[slot];
+}
+
+asVkAllocation_t asVkGetAllocFromTexture(asTextureHandle_t hndl, uint32_t slot)
+{
+	return vMainTextureManager.textures[hndl._index].alloc[slot];
 }
 
 /*Buffer stuff*/
@@ -953,7 +978,7 @@ ASEXPORT asBufferHandle_t asCreateBuffer(asBufferDesc_t *pDesc)
 			const int count = pDesc->cpuAccess == AS_GPURESOURCEACCESS_STREAM ? AS_VK_MAX_INFLIGHT : 1;
 			for (int i = 0; i < count; i++) {
 				bufferInfo.object = (uint64_t)pBuff->buffer[i];
-				bufferInfo.objectType = VK_DEBUG_REPORT_OBJECT_TYPE_IMAGE_EXT;
+				bufferInfo.objectType = VK_DEBUG_REPORT_OBJECT_TYPE_BUFFER_EXT;
 				bufferInfo.pObjectName = pDesc->pDebugLabel;
 				vkDebugMarkerSetObjectName(asVkDevice, &bufferInfo);
 			}
@@ -968,6 +993,16 @@ ASEXPORT void asReleaseBuffer(asBufferHandle_t hndl)
 	vkDeviceWaitIdle(asVkDevice);
 	_destroyBuffer(&vMainBufferManager.buffers[hndl._index]);
 	asDestroyHandle(&vMainBufferManager.handleManager, hndl);
+}
+
+VkBuffer asVkGetBufferFromBuffer(asBufferHandle_t hndl, uint32_t slot)
+{
+	return vMainBufferManager.buffers[hndl._index].buffer[slot];
+}
+
+asVkAllocation_t asVkGetAllocFromBuffer(asBufferHandle_t hndl, uint32_t slot)
+{
+	return vMainBufferManager.buffers[hndl._index].alloc[slot];
 }
 
 /*Command Buffers*/
@@ -1158,7 +1193,7 @@ void vScreenResourcesCreate(struct vScreenResources_t *pScreen, SDL_Window* pWin
 			toTransferSrc.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
 			toTransferSrc.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 			toTransferSrc.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			toTransferSrc.image = vGetImageFromTexture(pScreen->compositeTexture, 0);
+			toTransferSrc.image = asVkGetImageFromTexture(pScreen->compositeTexture, 0);
 			toTransferSrc.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 			toTransferSrc.subresourceRange.baseMipLevel = 0;
 			toTransferSrc.subresourceRange.levelCount = 1;
@@ -1180,7 +1215,7 @@ void vScreenResourcesCreate(struct vScreenResources_t *pScreen, SDL_Window* pWin
 			region.dstOffsets[1].z = 1;
 			region.srcOffsets[1] = region.dstOffsets[1];
 			vkCmdBlitImage(pScreen->pPresentImageToScreenCmds[i],
-				vGetImageFromTexture(pScreen->compositeTexture, 0), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				asVkGetImageFromTexture(pScreen->compositeTexture, 0), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 				pScreen->pSwapImages[i], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 				1, &region, VK_FILTER_LINEAR);
 
@@ -1286,7 +1321,7 @@ void asVkInit(asAppInfo_t *pAppInfo, asCfgFile_t* pConfig)
 		uint32_t gpuCount;
 		if(vkEnumeratePhysicalDevices(asVkInstance, &gpuCount, NULL) != VK_SUCCESS)
 			asFatalError("Failed to find devices with vkEnumeratePhysicalDevices()");
-		if(gpuCount == 0)
+		if(!gpuCount)
 			asFatalError("No Supported Vulkan Compatible GPU found!");
 		VkPhysicalDevice *gpus = asAlloc_LinearMalloc(gpuCount * sizeof(VkPhysicalDevice), 0);
 		vkEnumeratePhysicalDevices(asVkInstance, &gpuCount, gpus);

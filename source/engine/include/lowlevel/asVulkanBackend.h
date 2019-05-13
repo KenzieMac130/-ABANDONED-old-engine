@@ -1,8 +1,12 @@
 #pragma once
 
 #include "../asCommon.h"
+#include "../asRendererCore.h"
 #if ASTRENGINE_VK
 #include <vulkan/vulkan.h>
+#ifdef __cplusplus
+extern "C" {
+#endif 
 /**
 * @file
 * @brief Low level vulkan functionality
@@ -18,6 +22,12 @@
 #define AS_VK_MEMCB NULL
 
 #define AS_VK_MAX_INFLIGHT 2
+
+/**
+* @brief current inflight frame
+* @warning DO NOT WRITE!
+*/
+extern uint32_t asVkCurrentFrame;
 
 /**
 * @brief the global vulkan instance
@@ -95,6 +105,19 @@ void asVkAlloc(asVkAllocation_t* pMem, VkDeviceSize size, uint32_t type);
 void asVkFree(asVkAllocation_t* pMem);
 
 /**
+* @brief try to map a region of memory to a pointer
+*/
+void asVkMapMemory(asVkAllocation_t mem, VkDeviceSize offset, VkDeviceSize size, void** ppData);
+/**
+* @brief unmap all the memory on an allocation
+*/
+void asVkUnmapMemory(asVkAllocation_t mem);
+/**
+* @brief Flush all memory related to an allocation
+*/
+void asVkFlushMemory(asVkAllocation_t mem);
+
+/**
 * @brief aquire a the next available graphics command buffer for the frame 
 * Not reusable from frame to frame
 * Use secondary command buffers for batching
@@ -106,4 +129,36 @@ VkCommandBuffer asVkGetNextGraphicsCommandBuffer();
 * Use secondary command buffers for batching
 */
 VkCommandBuffer asVkGetNextComputeCommandBuffer();
+
+/**
+* @brief Get a VkImage from a texture at a slot
+* Slot count: pDesc->cpuAccess == AS_GPURESOURCEACCESS_STREAM ? AS_VK_MAX_INFLIGHT : 1;
+*/
+VkImage asVkGetImageFromTexture(asTextureHandle_t hndl, uint32_t slot);
+/**
+* @brief Get a VkImageView from a texture at a slot
+* Slot count: pDesc->cpuAccess == AS_GPURESOURCEACCESS_STREAM ? AS_VK_MAX_INFLIGHT : 1;
+*/
+VkImageView asVkGetViewFromTexture(asTextureHandle_t hndl, uint32_t slot);
+/**
+* @brief Get an asVkAllocation_t from a texture at a slot
+* Slot count: pDesc->cpuAccess == AS_GPURESOURCEACCESS_STREAM ? AS_VK_MAX_INFLIGHT : 1;
+*/
+asVkAllocation_t asVkGetAllocFromTexture(asTextureHandle_t hndl, uint32_t slot);
+
+/**
+* @brief Get an VkBuffer from a buffer at a slot
+* Slot count: pDesc->cpuAccess == AS_GPURESOURCEACCESS_STREAM ? AS_VK_MAX_INFLIGHT : 1;
+*/
+VkBuffer asVkGetBufferFromBuffer(asBufferHandle_t hndl, uint32_t slot);
+/**
+* @brief Get an VkBuffer from a buffer at a slot
+* Slot count: pDesc->cpuAccess == AS_GPURESOURCEACCESS_STREAM ? AS_VK_MAX_INFLIGHT : 1;
+*/
+asVkAllocation_t asVkGetAllocFromBuffer(asBufferHandle_t hndl, uint32_t slot);
+
+#endif
+
+#ifdef __cplusplus
+}
 #endif

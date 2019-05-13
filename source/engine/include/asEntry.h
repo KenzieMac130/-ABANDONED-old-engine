@@ -1,7 +1,9 @@
 #pragma once
 
 #include "asCommon.h"
-
+#ifdef __cplusplus
+extern "C" {
+#endif 
 
 /**
 * @file
@@ -18,9 +20,21 @@
 */
 ASEXPORT int asIgnite(int argc, char *argv[], asAppInfo_t *pAppInfo, void *pCustomWindow);
 /**
+* @brief A type for an update function that passes time as an input
+*/
+typedef (*asUpdateFunction_t)(double);
+/**
+* @brief Description for entering a loop (callbacks)
+*/
+typedef struct
+{
+	asUpdateFunction_t fpOnUpdate;
+	asUpdateFunction_t fpOnTick;
+} asLoopDesc_t;
+/**
 * @brief Enters the main engine loop
 */
-ASEXPORT int asEnterLoop();
+ASEXPORT int asEnterLoop(asLoopDesc_t loopDesc);
 /**
 * @brief Break out of the main engine loop
 */
@@ -28,9 +42,13 @@ ASEXPORT void asExitLoop();
 /**
 * @brief Single shot the engine loop (useful for integrating into editors)
 */
-ASEXPORT int asLoopSingleShot();
+ASEXPORT int asLoopSingleShot(double time, asLoopDesc_t loopDesc);
 /**
 * @brief Shutdown the engine and release all resources
 * @warning do not call this manually in the game loop! try hooking it up to atexit()
 */
 ASEXPORT void asShutdown(void);
+
+#ifdef __cplusplus
+}
+#endif

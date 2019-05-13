@@ -4,11 +4,13 @@ include_directories (${PROJECT_BINARY_DIR}/include)
 include_directories(${PROJECT_SOURCE_DIR}/source/thirdparty)
 
 file(GLOB_RECURSE SRC_FILES "${PROJECT_SOURCE_DIR}/source/tools/shadercompiler/*.c")
+file(GLOB_RECURSE SRC_FILES "${PROJECT_SOURCE_DIR}/source/tools/shadercompiler/*.cc")
 file(GLOB_RECURSE HEADER_FILES "${PROJECT_SOURCE_DIR}/source/tools/shadercompiler/*.h")
 add_executable(asShaderCompiler ${SRC_FILES} ${HEADER_FILES})
 
-set_property(TARGET asShaderCompiler PROPERTY C_STANDARD 99)
+#target_link_libraries(asShaderCompiler ${SDL2_LIBRARIES})
 target_link_libraries (asShaderCompiler astrengine)
+set_property(TARGET astrengine PROPERTY CXX_STANDARD 11)
 
 #tests
 add_test (RUNS asShaderCompiler)
