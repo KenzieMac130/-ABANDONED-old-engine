@@ -34,6 +34,7 @@ VkPhysicalDeviceMemoryProperties asVkDeviceMemProps;
 VkDevice asVkDevice;
 VkQueue asVkQueue_GFX;
 VkQueue asVkQueue_Present;
+VkQueue asVkQueue_Compute;
 
 VkCommandPool asVkGeneralCommandPool;
 uint32_t asVkCurrentFrame = 0;
@@ -72,7 +73,7 @@ bool vValidationLayersAvailible()
 	for (uint32_t i = 0; i < layerCount; i++)
 		asDebugLog("VK Layer: \"%s\" found\n", layerProps[i].layerName);
 	bool found;
-	for (uint32_t i = 0; i < ASARRAYSIZE(validationLayers); i++)
+	for (uint32_t i = 0; i < ASARRAYLEN(validationLayers); i++)
 	{
 		found = false;
 		for (uint32_t ii = 0; ii < layerCount; ii++)
@@ -223,7 +224,7 @@ bool vDeviceHasRequiredExtensions(VkPhysicalDevice gpu)
 
 	bool foundAll = true;
 	bool foundThis;
-	for (uint32_t i = 0; i < ASARRAYSIZE(deviceReqExtensions); i++)
+	for (uint32_t i = 0; i < ASARRAYLEN(deviceReqExtensions); i++)
 	{
 		foundThis = false;
 		for (uint32_t ii = 0; ii < extCount; ii++)
@@ -1301,7 +1302,7 @@ void asVkInit(asAppInfo_t *pAppInfo, asCfgFile_t* pConfig)
 		createInfo.ppEnabledExtensionNames = extensions;
 #if AS_VK_VALIDATION
 		createInfo.ppEnabledLayerNames = validationLayers;
-		createInfo.enabledLayerCount = ASARRAYSIZE(validationLayers);
+		createInfo.enabledLayerCount = ASARRAYLEN(validationLayers);
 #else 
 		createInfo.ppEnabledLayerNames = NULL;
 		createInfo.enabledLayerCount = 0;
@@ -1349,7 +1350,7 @@ void asVkInit(asAppInfo_t *pAppInfo, asCfgFile_t* pConfig)
 		vkEnumerateDeviceExtensionProperties(asVkPhysicalDevice, NULL, &extCount, NULL);
 		VkExtensionProperties* availible = (VkExtensionProperties*)asAlloc_LinearMalloc(sizeof(VkExtensionProperties)*extCount, 0);
 		vkEnumerateDeviceExtensionProperties(asVkPhysicalDevice, NULL, &extCount, availible);
-		for (uint32_t i = 0; i < ASARRAYSIZE(deviceReqExtensions); i++)
+		for (uint32_t i = 0; i < ASARRAYLEN(deviceReqExtensions); i++)
 		{
 			for (uint32_t ii = 0; ii < extCount; ii++)
 			{
@@ -1390,24 +1391,25 @@ void asVkInit(asAppInfo_t *pAppInfo, asCfgFile_t* pConfig)
 		}
 	}
 #endif
-	/*Logical Device and Queues*/
+	/*Logical Device and Queues (Must be updated when you add more queues)*/
 	{
 		asVkQueueFamilyIndices = vFindQueueFamilyIndices(asVkPhysicalDevice);
 		if (!vIsQueueFamilyComplete(asVkQueueFamilyIndices))
 			asFatalError("Device does not have the necessary queues for rendering");
 
 		uint32_t uniqueIdxCount = 0;
-		uint32_t uniqueIndices[2] = { UINT32_MAX, UINT32_MAX };
-		/*Only create a list of unique indices for the queues*/
+		uint32_t uniqueIndices[3] = { UINT32_MAX, UINT32_MAX, UINT32_MAX };
+		/*ONLY create a list of unique indices*/
 		{
-			uint32_t nonUniqueIndices[2] = 
+			uint32_t nonUniqueIndices[3] = 
 			{ asVkQueueFamilyIndices.graphicsIdx, 
-			asVkQueueFamilyIndices.presentIdx };
+			asVkQueueFamilyIndices.presentIdx,
+			asVkQueueFamilyIndices.computeIdx };
 			bool found;
-			for (uint32_t i = 0; i < 2; i++) { /*Add items*/
+			for (uint32_t i = 0; i < ASARRAYLEN(nonUniqueIndices); i++) { /*Add items*/
 				found = false;
 				for (uint32_t ii = 0; ii < uniqueIdxCount + 1; ii++){ /*Search previous items*/
-					if (uniqueIndices[ii] == nonUniqueIndices[i]){ /*Only add if*/
+					if (uniqueIndices[ii] == nonUniqueIndices[i]){ /*Only add if unique*/
 						found = true;
 						break;
 					}
@@ -1418,7 +1420,7 @@ void asVkInit(asAppInfo_t *pAppInfo, asCfgFile_t* pConfig)
 				}
 			}
 		}
-		VkDeviceQueueCreateInfo queueCreateInfos[2];
+		VkDeviceQueueCreateInfo queueCreateInfos[3];
 		float defaultPriority = 1.0f;
 		for (uint32_t i = 0; i < uniqueIdxCount; i++)
 		{
@@ -1442,14 +1444,14 @@ void asVkInit(asAppInfo_t *pAppInfo, asCfgFile_t* pConfig)
 		/*This is no-longer needed but is recomended for driver compatibility*/
 #if AS_VK_VALIDATION
 		createInfo.ppEnabledLayerNames = validationLayers;
-		createInfo.enabledLayerCount = ASARRAYSIZE(validationLayers);
+		createInfo.enabledLayerCount = ASARRAYLEN(validationLayers);
 #else
 		createInfo.ppEnabledLayerNames = NULL;
 		createInfo.enabledLayerCount = 0;
 #endif
 
 		/*Extensions*/
-		createInfo.enabledExtensionCount = ASARRAYSIZE(deviceReqExtensions);
+		createInfo.enabledExtensionCount = ASARRAYLEN(deviceReqExtensions);
 		createInfo.ppEnabledExtensionNames = deviceReqExtensions;
 
 		if(vkCreateDevice(asVkPhysicalDevice, &createInfo, AS_VK_MEMCB, &asVkDevice) != VK_SUCCESS)
@@ -1457,6 +1459,7 @@ void asVkInit(asAppInfo_t *pAppInfo, asCfgFile_t* pConfig)
 
 		vkGetDeviceQueue(asVkDevice, asVkQueueFamilyIndices.graphicsIdx, 0, &asVkQueue_GFX);
 		vkGetDeviceQueue(asVkDevice, asVkQueueFamilyIndices.presentIdx, 0, &asVkQueue_Present);
+		vkGetDeviceQueue(asVkDevice, asVkQueueFamilyIndices.computeIdx, 0, &asVkQueue_Compute);
 	}
 	/*Render Loop Synchronization*/
 	{
@@ -1478,7 +1481,7 @@ void asVkInit(asAppInfo_t *pAppInfo, asCfgFile_t* pConfig)
 			asFatalError("vkCreateCommandPool() Failed to create general command pool");
 
 		vPrimaryCommandBufferManager_Init(&vMainGraphicsBufferManager, asVkQueueFamilyIndices.graphicsIdx, 64);
-		vPrimaryCommandBufferManager_Init(&vMainComputeBufferManager, asVkQueueFamilyIndices.presentIdx, 8);
+		vPrimaryCommandBufferManager_Init(&vMainComputeBufferManager, asVkQueueFamilyIndices.computeIdx, 32);
 	}
 	/*Memory Management*/
 	{

@@ -2,8 +2,11 @@
 #include "FxAssembler.h"
 
 typedef struct {
+	asShaderStage stage;
 	size_t size;
-	char* byteArray;
+	union {
+		char* text;
+		char* byteArray; };
 } glslGenContext_t;
 
 void loadGLSLFromFile(glslGenContext_t* ctx, const char* filePath);

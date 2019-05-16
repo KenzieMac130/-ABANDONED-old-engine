@@ -30,6 +30,13 @@ void appendInputLayout(glslGenContext_t* ctx, int set, int binding, const char* 
 
 int genInputs(glslGenContext_t* ctx, fxContext_t* fx, int baseSet)
 {
+	const char* appVariableText =
+		"uniform asFxAppVar_t {\n"
+		"\tmat4 View;\n"
+		"\tmat4 Proj;\n"
+		"\tvec4 Custom;\n"
+		"\tfloat Time;\n"
+		"\tint DebugMode;\n}";
 	/*Samplers*/
 	appendInputLayout(ctx, baseSet + 0,
 		0, "DEFAULTSAMPLER", "uniform sampler");
@@ -38,30 +45,23 @@ int genInputs(glslGenContext_t* ctx, fxContext_t* fx, int baseSet)
 	appendInputLayout(ctx, baseSet + 0,
 		2, "CLAMPEDSAMPLER", "uniform sampler");
 	/*Application Variables*/
-	appendInputLayout(ctx, baseSet + 1,
-		0, "app", 
-		"uniform asFxAppVar_t {\n"
-		"\tmat4 view;\n"
-		"\tmat4 proj;\n"
-		"\tvec4 custom;\n"
-		"\tfloat time;\n"
-		"\tint DebugMode;\n}");
+	appendInputLayout(ctx, baseSet + 1, 0, "App", appVariableText);
 	/*Material Values*/
 	{
+		const char *header = "uniform genFxProps_t {\n";
 		char* bufferGen = NULL;
-		uint32_t bufferPos = 29;
+		uint32_t bufferPos = strlen(header);
 		uint32_t lineSize;
 		const char* type;
 		const char* varName;
-		arrsetcap(bufferGen, 512);
-		const char *header = "uniform genProps_t {\n";
-		arrsetlen(bufferGen, 29);
-		memcpy(bufferGen, header, 29);
+		arrsetcap(bufferGen, 1024);
+		arrsetlen(bufferGen, strlen(header));
+		memcpy(bufferGen, header, strlen(header));
 		for (uint32_t i = 0; i < fx->desc.propCount; i++)
 		{
-			if (fx->desc.pProps[i].type == AS_SHADERFXPROP_SCALAR)
+			if (fx->desc.pProp_Lookup[i].type == AS_SHADERFXPROP_SCALAR)
 				type = "float";
-			else if (fx->desc.pProps[i].type == AS_SHADERFXPROP_VECTOR4)
+			else if (fx->desc.pProp_Lookup[i].type == AS_SHADERFXPROP_VECTOR4)
 				type = "vec4";
 			else
 				continue;
@@ -75,7 +75,7 @@ int genInputs(glslGenContext_t* ctx, fxContext_t* fx, int baseSet)
 		arrsetlen(bufferGen, bufferPos + 2);
 		bufferGen[bufferPos] = '}';
 		bufferGen[bufferPos+1] = '\0';
-		appendInputLayout(ctx, baseSet + 2, 0, "mat", bufferGen);
+		appendInputLayout(ctx, baseSet + 2, 0, "Mat", bufferGen);
 	}
 	/*Material Textures*/
 	{
@@ -83,28 +83,28 @@ int genInputs(glslGenContext_t* ctx, fxContext_t* fx, int baseSet)
 		{
 			const char* type;
 			const char* varName;
-			switch (fx->desc.pProps[i].type)
+			switch (fx->desc.pProp_Lookup[i].type)
 			{
 			default:
 				continue;
 			case AS_SHADERFXPROP_TEX2D:
-				type = "texture2D";
+				type = "uniform texture2D";
 				break;
 			case AS_SHADERFXPROP_TEX2DARRAY:
-				type = "texture2DArray";
+				type = "uniform texture2DArray";
 				break;
 			case AS_SHADERFXPROP_TEXCUBE:
-				type = "textureCube";
+				type = "uniform textureCube";
 				break;
 			case AS_SHADERFXPROP_TEXCUBEARRAY:
-				type = "textureCubeArray";
+				type = "uniform textureCubeArray";
 				break;
 			case AS_SHADERFXPROP_TEX3D:
-				type = "texture3D";
+				type = "uniform texture3D";
 				break;
 			}
 			varName = strpool_cstr(&fx->stringPool, fx->pFxPropNames[i]);
-			appendInputLayout(ctx, baseSet + 2, fx->desc.pProps[i].offset, varName, type);
+			appendInputLayout(ctx, baseSet + 2, fx->desc.pProp_Offset[i], varName, type);
 		}
 	}
 	return 3;
@@ -128,7 +128,7 @@ void appendSnippet(glslGenContext_t* ctx, fxContext_t* fx, char* snippetName)
 	const char* snippetStr;
 	size_t snippetSize;
 	size_t insertPos;
-	for (size_t i = 0; i < arrlen(fx->pGenNameHashes); i++)
+	for (int i = 0; i < arrlen(fx->pGenNameHashes); i++)
 	{
 		if (fx->pGenNameHashes[i] == snippetNameHash)
 		{
@@ -170,7 +170,10 @@ void genFromComment(glslGenContext_t* ctx, fxContext_t* fx, char* parsePos, int*
 			{
 				++*nextSet;
 			}
-			appendDescSet(ctx, fx, *nextSet);
+			else
+			{
+				appendDescSet(ctx, fx, *nextSet);
+			}
 		}
 		else if (!strncmp(parsePos, "Inputs", 6))
 		{
@@ -199,8 +202,8 @@ void generateGLSLFxFromTemplate(glslGenContext_t* ctx, fxContext_t* fx, glslGenC
 	bool singleLineComment = false;
 	char* commentText = NULL;
 	int nextDescSet = 0;
-	arrsetcap(commentText, arrcap(commentText) + 512);
-	arrsetcap(ctx->byteArray, arrcap(ctx->byteArray) + templateGlsl->size);
+	arrsetcap(commentText, 512);
+	arrsetcap(ctx->byteArray, templateGlsl->size+2048);
 	appendHeader(ctx, fx);
 	for (size_t i = 0; i < templateGlsl->size - 1; i++)
 	{
@@ -262,7 +265,11 @@ void generateGLSLFxFromTemplate(glslGenContext_t* ctx, fxContext_t* fx, glslGenC
 	}
 	arrput(ctx->byteArray, '\0');
 	ctx->size = strlen(ctx->byteArray);
-	asDebugLog(ctx->byteArray);
+	asDebugLog("\nGENERATED GLSL:\n" 
+		"---------------------------------------------------------------"
+		"\n%s\n"
+		"---------------------------------------------------------------\n",
+		ctx->byteArray);
 }
 void glslGenContext_Free(glslGenContext_t* ctx)
 {

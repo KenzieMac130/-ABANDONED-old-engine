@@ -1,5 +1,8 @@
 #include "ShaderGen.h"
 
+/*Todo: Yeahhh this was better suited for C++ in hindsight, when maintnence is needed go ahead and port it*/
+/*Todo: Multiple Files using Multiple Threads (will need to resolve debug logging)*/
+
 int main(int argc, char* argv[])
 {
 	asCfgFile_t* cfg = asCfgLoad("shaderGen.cfg");
@@ -31,6 +34,7 @@ int main(int argc, char* argv[])
 			asDebugLog("ERROR: COULD NOT OPEN FILE!\n");
 			return 0;
 		}
+		asDebugLog("Opened: %s\n", fileName);
 		fseek(fp, 0, SEEK_END);
 		fileSize = ftell(fp) + 1;
 		fseek(fp, 0, SEEK_SET);
@@ -41,7 +45,9 @@ int main(int argc, char* argv[])
 	}
 	
 	/*Generate the shader fx*/
-	generateShaderFromFxTemplates(fileBytes, fileSize, asCfgGetString(cfg, "TemplatePath", "templates"));
+	shaderGenResult_t result = generateShaderFxFromTemplates(fileBytes, fileSize,
+			asCfgGetString(cfg, "TemplatePath", "templates"),
+			asCfgGetString(cfg, "IncludePath", "includes/"));
 
 	asFree(fileBytes);
 	asCfgFree(cfg);

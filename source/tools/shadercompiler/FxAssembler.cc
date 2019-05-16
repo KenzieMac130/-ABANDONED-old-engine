@@ -8,13 +8,21 @@ fxContext_t* fxAssemblerInit()
 	ctx->desc = asShaderFxDesc_Init();
 	strpool_config_t conf = strpool_default_config;
 	strpool_init(&ctx->stringPool, &conf);
+	arrsetcap(ctx->desc.pShaderCode, 1024);
 	return ctx;
 }
 
 void fxAssemblerRelease(fxContext_t *ctx)
 {
-	arrfree(ctx->desc.pProps);
-	arrfree(ctx->pDependencies);
+	arrfree(ctx->desc.pProp_Lookup);
+	arrfree(ctx->desc.pProp_Offset);
+	for (size_t i = 0; i < ctx->desc.techniqueCount; i++)
+		arrfree(ctx->desc.pTechniques[i].pPrograms);
+	arrfree(ctx->desc.pTechniqueNameHashes);
+	arrfree(ctx->desc.pTechniques);
+	arrfree(ctx->desc.pShaderCode);
+	arrfree(ctx->desc.pPropBufferDefault);
+	arrfree(ctx->desc.pPropTextureDefaults);
 	arrfree(ctx->pFxPropNames);
 	arrfree(ctx->pGenNameHashes);
 	arrfree(ctx->pGenValues);
@@ -90,7 +98,8 @@ char* getNextMaterialProperty(char* input, size_t inputSize,
 		*outPropType = AS_SHADERFXPROP_TEX3D;
 	}
 	else {
-		asFatalError("Type: \"%s\" Not Found");
+		asDebugLog("Type: \"%s\" Not Found", tmpBuff);
+		return NULL;
 	}
 
 	/*Get name*/
@@ -137,38 +146,25 @@ char* getNextMaterialProperty(char* input, size_t inputSize,
 		strncpy_s(tmpBuff, 512, defaultStartPos, (defaultEndPos - defaultStartPos));
 		tmpBuff[(defaultEndPos - defaultStartPos)] = '\0';
 		if (strcmp(tmpBuff, "BLACK") == 0) {
-			outDefaults[0] = 0.0f; 
-			outDefaults[1] = 0.0f;
-			outDefaults[2] = 0.0f;
-			outDefaults[3] = 1.0f;
+			outDefaults[0] = (float)AS_SHADERFXTEXDEFAULT_BLACK;
 		}
 		else if (strcmp(tmpBuff, "WHITE") == 0) {
-			outDefaults[0] = 1.0f;
-			outDefaults[1] = 1.0f;
-			outDefaults[2] = 1.0f;
-			outDefaults[3] = 1.0f;
+			outDefaults[0] = (float)AS_SHADERFXTEXDEFAULT_WHITE;
 		}
 		else if (strcmp(tmpBuff, "GREY") == 0) {
-			outDefaults[0] = 0.5f;
-			outDefaults[1] = 0.5f;
-			outDefaults[2] = 0.5f;
-			outDefaults[3] = 1.0f;
+			outDefaults[0] = (float)AS_SHADERFXTEXDEFAULT_GREY;
 		}
 		else if (strcmp(tmpBuff, "NORMAL") == 0) {
-			outDefaults[0] = 0.5f;
-			outDefaults[1] = 0.5f;
-			outDefaults[2] = 1.0f;
-			outDefaults[3] = 0.5f;
+			outDefaults[0] = (float)AS_SHADERFXTEXDEFAULT_NORMAL;
 		}
-		else if (strcmp(tmpBuff, "INVISIBLE") == 0) {
-			outDefaults[0] = 1.0f;
-			outDefaults[1] = 1.0f;
-			outDefaults[2] = 1.0f;
-			outDefaults[3] = 0.0f;
+		else if (strcmp(tmpBuff, "ALPHA") == 0) {
+			outDefaults[0] = (float)AS_SHADERFXTEXDEFAULT_ALPHA;
+		}
+		else {
+			outDefaults[0] = (float)AS_SHADERFXTEXDEFAULT_BLACK;
 		}
 		break;
 	}
-
 	return endPos;
 }
 
@@ -178,10 +174,10 @@ void fxAssemblerSetupMaterialProps(fxContext_t *ctx, char* input, size_t inputSi
 	asShaderFxPropType propType = (asShaderFxPropType)-1;
 	char nameBuff[512];
 	float defaults[4];
-	asShaderFxProp_t member;
 	uint32_t textureSlot = 1; /*Start at 1 to make room for the material*/
 	uint32_t bufferOffset = 0;
 	char* parsePos = input;
+	arrsetcap(ctx->pDefaultBuffer, 128);
 	while (parsePos < input + inputSize)
 	{
 		/*Next property*/
@@ -190,74 +186,79 @@ void fxAssemblerSetupMaterialProps(fxContext_t *ctx, char* input, size_t inputSi
 		if (!parsePos)
 			break;
 		/*Material Members*/
-		member = asShaderFxProp_t();
-		member.type = propType;
+		asShaderFxPropLookup_t propLookup = (asShaderFxPropLookup_t) { 0 };
+		uint16_t propOffset = 0;
+		propLookup.type = propType;
 		if (propType == AS_SHADERFXPROP_SCALAR)
 		{
-			member.offset = bufferOffset;
+			propOffset = bufferOffset;
 			bufferOffset += sizeof(float);
-			ctx->desc.propBufferSize = bufferOffset;
+			arrsetlen(ctx->pDefaultBuffer, bufferOffset);
+			float* fBuff = (float*)(&ctx->pDefaultBuffer[propOffset]);
+			*fBuff = defaults[0];
 		}
 		else if (propType == AS_SHADERFXPROP_VECTOR4)
 		{
-			member.offset = bufferOffset;
 			bufferOffset += bufferOffset % (sizeof(float) * 4); /*Enforce vulkan alignment for vectors*/
+			propOffset = bufferOffset;
 			bufferOffset += sizeof(float) * 4;
-			ctx->desc.propBufferSize = bufferOffset;
+			arrsetlen(ctx->pDefaultBuffer, bufferOffset);
+			float* fBuff = (float*)(&ctx->pDefaultBuffer[propOffset]);
+			fBuff[0] = defaults[0];
+			fBuff[1] = defaults[1];
+			fBuff[2] = defaults[2];
+			fBuff[3] = defaults[3];
 		}
 		else
 		{
-			member.offset = textureSlot;
+			propOffset = textureSlot;
 			textureSlot++;
+			arrput(ctx->desc.pPropTextureDefaults, (asShaderFxTextureDefault)defaults[0]);
+			ctx->desc.propTextureCount++;
 		}
-		member.nameHash = asHashBytes64_xxHash(nameBuff, strlen(nameBuff));
-		member.values[0] = defaults[0];
-		member.values[1] = defaults[1];
-		member.values[2] = defaults[2];
-		member.values[3] = defaults[3];
-		arrput(ctx->desc.pProps, member);
+		propLookup.nameHash = asHashBytes32_xxHash(nameBuff, strlen(nameBuff));
+
+		arrput(ctx->desc.pProp_Lookup, propLookup);
+		arrput(ctx->desc.pProp_Offset, propOffset);
 		arrput(ctx->pFxPropNames, strpool_inject(&ctx->stringPool, nameBuff, (int)strlen(nameBuff)));
-		ctx->desc.propCount++;
 	}
+	ctx->desc.propCount = (uint32_t)arrlen(ctx->desc.pProp_Lookup);
+	ctx->desc.propBufferSize = bufferOffset;
 }
 
 void fxAssemblerSetupFixedFunctionProps(fxContext_t *ctx, char* input, size_t inputSize)
 {
 	asCfgFile_t* cfg = (asCfgFile_t*)asCfgFromMem((unsigned char*)input, inputSize);
 	const char* tmpStr;
-	ctx->desc.fixedFunctions.fillWidth = (float)asCfgGetNumber(cfg, "fillWidth", 1.0f);
-	ctx->desc.fixedFunctions.tessCtrlPoints = (uint32_t)asCfgGetNumber(cfg, "tessCtrlPoints", 0.0f);
+	ctx->fixedFunctions.fillWidth = (float)asCfgGetNumber(cfg, "fillWidth", 1.0f);
+	ctx->fixedFunctions.tessCtrlPoints = (uint32_t)asCfgGetNumber(cfg, "tessCtrlPoints", 0.0f);
+	tmpStr = asCfgGetString(cfg, "bucket", "DEFAULT");
+	ctx->fixedFunctions.bucket = asHashBytes32_xxHash(tmpStr, strlen(tmpStr));
 	/*Fill mode*/
 	tmpStr = asCfgGetString(cfg, "fillMode", "FULL");
 	if (strcmp(tmpStr, "FULL") == 0)
-		ctx->desc.fixedFunctions.fillMode = AS_FILL_FULL;
+		ctx->fixedFunctions.fillMode = AS_FILL_FULL;
 	else if (strcmp(tmpStr, "WIRE") == 0)
-		ctx->desc.fixedFunctions.fillMode = AS_FILL_WIRE;
+		ctx->fixedFunctions.fillMode = AS_FILL_WIRE;
 	else if (strcmp(tmpStr, "POINTS") == 0)
-		ctx->desc.fixedFunctions.fillMode = AS_FILL_POINTS;
+		ctx->fixedFunctions.fillMode = AS_FILL_POINTS;
 	/*Cull mode*/
 	tmpStr = asCfgGetString(cfg, "cullMode", "BACK");
 	if (strcmp(tmpStr, "BACK") == 0)
-		ctx->desc.fixedFunctions.cullMode = AS_CULL_BACK;
+		ctx->fixedFunctions.cullMode = AS_CULL_BACK;
 	else if (strcmp(tmpStr, "FRONT") == 0)
-		ctx->desc.fixedFunctions.cullMode = AS_CULL_FRONT;
+		ctx->fixedFunctions.cullMode = AS_CULL_FRONT;
 	else if (strcmp(tmpStr, "NONE") == 0)
-		ctx->desc.fixedFunctions.cullMode = AS_CULL_NONE;
+		ctx->fixedFunctions.cullMode = AS_CULL_NONE;
 	/*Blend mode*/
 	tmpStr = asCfgGetString(cfg, "blendMode", "NONE");
 	if (strcmp(tmpStr, "NONE") == 0)
-		ctx->desc.fixedFunctions.blendMode = AS_BLEND_NONE;
+		ctx->fixedFunctions.blendMode = AS_BLEND_NONE;
 	else if (strcmp(tmpStr, "MIX") == 0)
-		ctx->desc.fixedFunctions.blendMode = AS_BLEND_MIX;
+		ctx->fixedFunctions.blendMode = AS_BLEND_MIX;
 	else if (strcmp(tmpStr, "ADD") == 0)
-		ctx->desc.fixedFunctions.blendMode = AS_BLEND_ADD;
+		ctx->fixedFunctions.blendMode = AS_BLEND_ADD;
 	asCfgFree(cfg);
-}
-
-void fxAssemblerAddDependency(fxContext_t *ctx, char* fileName, size_t nameSize)
-{
-	STRPOOL_U64 strId = strpool_inject(&ctx->stringPool, fileName, (int)nameSize);
-	arrput(ctx->pDependencies, strId);
 }
 
 void fxAssemblerAddGeneratorProp(fxContext_t *ctx, char* name, size_t nameSize, char* snippet, size_t snippetSize)
@@ -266,4 +267,11 @@ void fxAssemblerAddGeneratorProp(fxContext_t *ctx, char* name, size_t nameSize, 
 	STRPOOL_U64 valueId = strpool_inject(&ctx->stringPool, snippet, (int)snippetSize);
 	arrput(ctx->pGenNameHashes, nameHash);
 	arrput(ctx->pGenValues, valueId);
+}
+
+void fxAssemblerAddNativeShaderCode(fxContext_t *ctx, asHash32_t nameHash, const char* code, size_t size)
+{
+	size_t start = arrlen(ctx->desc.pShaderCode);
+	arrsetlen(ctx->desc.pShaderCode, start + size);
+	memcpy(ctx->desc.pShaderCode + start, code, size);
 }

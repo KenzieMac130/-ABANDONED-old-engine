@@ -262,8 +262,8 @@ ASEXPORT void asReleaseBuffer(asBufferHandle_t hndl);
 */
 typedef enum {
 	AS_SHADERSTAGE_VERTEX, /**< Vertex shader*/
-	AS_SHADERSTAGE_DOMAIN, /**< Tessellation Domain or Control shader*/
-	AS_SHADERSTAGE_HULL, /**< Tessellation Hull or Evaluation shader*/
+	AS_SHADERSTAGE_TESS_CONTROL, /**< Tessellation Hull or Control shader*/
+	AS_SHADERSTAGE_TESS_EVALUATION, /**< Tessellation Domain or Evaluation shader*/
 	AS_SHADERSTAGE_GEOMETRY, /**< Geometry shader*/
 	AS_SHADERSTAGE_FRAGMENT, /**< Fragment shader (sometimes referred to as pixel shaders)*/
 	AS_SHADERSTAGE_COMPUTE, /**< Compute shaders*/
@@ -277,8 +277,8 @@ typedef enum {
 */
 typedef struct {
 	asShaderStage stage; /**< Stage this shader belongs to*/
-	size_t programByteCount; /**< Amount of bytes in asShaderCodeDesc_t::pProgramBytes*/
-	uint8_t* pProgramBytes; /**< Shader code/bytecode for the current API (Vulkan: SPIR-V, OpenGL: GLSL, DirectX: HLSL, ect...)*/
+	uint32_t programByteCount; /**< Amount of bytes in asShaderCodeDesc_t::pProgramBytes*/
+	uint32_t programByteStart; /**< Shader code/bytecode for the current API (Vulkan: SPIR-V, OpenGL: GLSL, DirectX: HLSL, ect...)*/
 } asShaderFxProgramDesc_t;
 
 /**
@@ -317,12 +317,16 @@ typedef enum {
 * @brief Describes fixed function inputs for a shader
 */
 typedef struct {
-	uint32_t tessCtrlPoints; /** Tessellation control points*/
+	asHash32_t bucket; /**< Requested rendering bucket for special rendering inputs (eg, transparent surfaces)*/
+	uint32_t flags; /**< Additional flags*/
+	uint32_t tessCtrlPoints; /**< Tessellation control points*/
 	float fillWidth; /**< Width for non-solid lines and points*/
 	asFillMode fillMode; /**< Polygon fill modes*/
 	asCullMode cullMode; /**< Which side of the face if any is culled*/
 	asBlendMode blendMode; /**< High level blend modes for the surface*/
-} asShaderFxFixedFunctionsDesc_t;
+	uint32_t programCount; /**< Amount of asShaderFxTechniqueDesc_t::pPrograms*/
+	asShaderFxProgramDesc_t* pPrograms;
+} asShaderFxTechniqueDesc_t;
 
 /**
 * @brief shader fx property types
@@ -335,29 +339,56 @@ typedef enum {
 	AS_SHADERFXPROP_TEXCUBE,
 	AS_SHADERFXPROP_TEXCUBEARRAY,
 	AS_SHADERFXPROP_TEX3D,
-	AS_SHADERFXPROP_MAX = UINT32_MAX
+	AS_SHADERFXPROP_MAX = UINT8_MAX
 } asShaderFxPropType;
 
 /**
-* @brief shader material properties
+* @brief shader material property lookup
 */
 typedef struct {
+	asHash32_t nameHash;
 	asShaderFxPropType type;
-	uint16_t offset; /**< This is the byte offset for scalars and vectors and the slot for textures*/
-	asHash64_t nameHash;
-	float values[4];
-} asShaderFxProp_t;
+} asShaderFxPropLookup_t;
 
 /**
-* @brief Description for a shader effect
+* @brief shader material property defaults
 */
 typedef struct {
-	asShaderFxFixedFunctionsDesc_t fixedFunctions; /**< Fixed functions for the shader*/
-	uint32_t programCount; /**< Amount of asShaderDesc_t::pPrograms*/
+	float values[4];
+} asShaderFxTextureDefault_t;
+
+typedef enum {
+	AS_SHADERFXTEXDEFAULT_BLACK,
+	AS_SHADERFXTEXDEFAULT_WHITE,
+	AS_SHADERFXTEXDEFAULT_GREY,
+	AS_SHADERFXTEXDEFAULT_NORMAL,
+	AS_SHADERFXTEXDEFAULT_ALPHA,
+	AS_SHADERFXTEXDEFAULT_MAX = UINT8_MAX
+} asShaderFxTextureDefault;
+
+/**
+* @brief Description for a shader effect (this should be loaded from a file for sake of sanity)
+*/
+typedef struct {
 	uint32_t propCount; /**< Amount of asShaderDesc_t::pFxProps*/
-	uint32_t propBufferSize; /**< The size of the data required for fx properties*/
-	asShaderFxProgramDesc_t *pPrograms; /**< Shader programs*/
-	asShaderFxProp_t *pProps; /**< Default fx props (for materials)*/
+	asShaderFxPropLookup_t *pProp_Lookup; /**< Lookup value for a property*/
+	uint16_t *pProp_Offset; /**< This is the byte offset for scalars and vectors and the slot for textures*/
+	
+	/*Techniques*/
+	uint32_t techniqueCount; /**< Amount of asShaderDesc_t::pTechniques*/
+	asHash32_t *pTechniqueNameHashes; /**< The name of each technique*/
+	asShaderFxTechniqueDesc_t *pTechniques; /**< Techniques*/
+
+	/*Shader Code Bucket*/
+	uint32_t shaderCodeSize; /**< Size of asShaderFxDesc_t::pShaderCode*/
+	unsigned char* pShaderCode; /**<  Shader code/bytecode for the current API (Vulkan: SPIR-V, OpenGL: GLSL, DirectX: HLSL, ect...)*/
+
+	/*Create Default Prop Buffer*/
+	uint32_t propBufferSize; /**< The size of the buffer data required for fx properties*/
+	unsigned char* pPropBufferDefault; /**< Default fx props (for materials)*/
+	/*Create Default Descriptor with Textures*/
+	uint32_t propTextureCount;
+	asShaderFxTextureDefault* pPropTextureDefaults;
 } asShaderFxDesc_t;
 
 /**

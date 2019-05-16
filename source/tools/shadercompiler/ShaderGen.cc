@@ -9,6 +9,7 @@
 #include "cute/cute_files.h"
 
 #include "GLSLGenerator.h"
+#include "SPIRVCompiler.h"
 
 /*Returns next line after*/
 char* getNextMacro(char* input, char* pNameOut, size_t nameOutSize, char* pParamOut, size_t paramOutSize, bool returnBegin)
@@ -22,7 +23,7 @@ char* getNextMacro(char* input, char* pNameOut, size_t nameOutSize, char* pParam
 	memset(pNameOut, 0, nameOutSize);
 
 	/*Find macro start*/
-	startPos = strchr(input, '#');
+	startPos = strchr(input, '@');
 	if (startPos == NULL) {
 		return NULL;
 	}
@@ -86,13 +87,13 @@ char* retrieveSection(char* input, size_t inputSize,
 			if (sectionEnd == NULL)
 			{
 				asDebugLog("Failed to end Section");
-				exit(-1);
+				return NULL;
 			}
 			if (strcmp(nameBuffer, "end") == 0)
 			{
 				strncpy_s(sectionStorage, sectionBuffSize, parsePos, (sectionEnd - parsePos));
 				sectionStorage[(sectionEnd - parsePos)] = '\0';
-				asDebugLog("%s\n", sectionStorage);
+				/*asDebugLog("%s\n", sectionStorage);*/
 			}
 			parsePos = sectionEnd + strlen(nameBuffer);
 			return parsePos;
@@ -103,9 +104,11 @@ char* retrieveSection(char* input, size_t inputSize,
 
 #define TMP_SIZE 10000
 
-void generateShaderFromFxTemplates(char* fileContents, size_t fileSize, const char* templatePath)
+shaderGenResult_t generateShaderFxFromTemplates(char* fileContents, size_t fileSize, const char* templatePath, const char* includePath)
 {
-	asDebugLog("%s\n\n", fileContents);
+	shaderGenResult_t result = (shaderGenResult_t) { 0 };
+	asTimer_t timer = asTimerStart();
+	/*asDebugLog("Loaded Template Contents:\n%s\n\n", fileContents);*/
 
 	/*Parse the file*/
 	char *tmp = (char*)malloc(TMP_SIZE);
@@ -115,27 +118,25 @@ void generateShaderFromFxTemplates(char* fileContents, size_t fileSize, const ch
 	fxContext_t* fx = fxAssemblerInit();
 
 	/*Material*/
-	retrieveSection(fileContents, fileSize, "beginMaterial", NULL, 0, tmp, TMP_SIZE);
+	if (!retrieveSection(fileContents, fileSize, "beginMaterial", NULL, 0, tmp, TMP_SIZE))
+	{
+		fxAssemblerRelease(fx);
+		free(tmp);
+		result.error = -1;
+		return result;
+	}
 	fxAssemblerSetupMaterialProps(fx, tmp, TMP_SIZE);
 	parsePos = fileContents;
 
-	/*Fixed Functions*/
-	retrieveSection(fileContents, fileSize, "beginFixed", NULL, 0, tmp, TMP_SIZE);
-	fxAssemblerSetupFixedFunctionProps(fx, tmp, TMP_SIZE);
-
-	/*Render Config*/
-	retrieveSection(fileContents, fileSize, "beginRenderConfig", NULL, 0, tmp, TMP_SIZE);
-
-	/*GLSL Includes*/
-	parsePos = fileContents;
-	while (parsePos)
+	/*Config*/
+	if (!retrieveSection(fileContents, fileSize, "beginConfig", NULL, 0, tmp, TMP_SIZE))
 	{
-		parsePos = getNextMacro(parsePos, nameBuffer, 512, param, 512, false);
-		if (strcmp(nameBuffer, "includeGLSL") == 0)
-		{
-			fxAssemblerAddDependency(fx, param, strlen(param));
-		}
+		fxAssemblerRelease(fx);
+		free(tmp);
+		result.error = -2;
+		return result;
 	}
+	fxAssemblerSetupFixedFunctionProps(fx, tmp, TMP_SIZE);
 
 	/*GLSL Snippets*/
 	parsePos = fileContents;
@@ -147,63 +148,113 @@ void generateShaderFromFxTemplates(char* fileContents, size_t fileSize, const ch
 		fxAssemblerAddGeneratorProp(fx, param, strlen(param), tmp, strlen(tmp));
 	}
 
+	asDebugLog("Parsed FX File Microseconds: %"PRIu64"\n", asTimerMicroseconds(timer, asTimerTicksElapsed(timer)));
+	timer = asTimerRestart(timer);
+
+	size_t glslTemplateCount = 0;
+	glslGenContext_t* glslTemplates = NULL;
+	asHash32_t *glslTemplateNames = NULL;
+	arrsetcap(glslTemplates, 16);
+	arrsetcap(glslTemplateNames, 16);
 	/*Load Templates*/
-	size_t glslVertTemplateCount = 0;
-	glslGenContext_t* glslVertTemplates = NULL;
-	size_t glslFragTemplateCount = 0;
-	glslGenContext_t* glslFragTemplates = NULL;
 	{
 		cf_dir_t dir;
 		if (!cf_file_exists(templatePath))
 		{
 			asDebugLog("ERROR: TEMPLATE FOLDER \"%s\" INVALID!\n", templatePath);
-			return;
+			{
+				fxAssemblerRelease(fx);
+				free(tmp);
+				result.error = -3;
+				return result;
+			}
 		}
 		cf_dir_open(&dir, templatePath);
 		while (dir.has_next)
 		{
+			asShaderStage stage;
 			cf_file_t file;
 			cf_read_file(&dir, &file);
-			asDebugLog("File: %s\n", file.name);
 			if (file.is_dir)
 			{
 				cf_dir_next(&dir);
 				continue;
 			}
-			if (strcmp(file.ext, ".vert") == 0)
-			{
-				glslGenContext_t glslTemp = glslGenContext_t();
-				loadGLSLFromFile(&glslTemp, file.path);
-				arrput(glslVertTemplates, glslTemp);
-				glslVertTemplateCount++;
+			if (strcmp(file.ext, ".vert") == 0){
+				stage = AS_SHADERSTAGE_VERTEX;
 			}
-			if (strcmp(file.ext, ".frag") == 0)
-			{
-				glslGenContext_t glslTemp = glslGenContext_t();
-				loadGLSLFromFile(&glslTemp, file.path);
-				arrput(glslFragTemplates, glslTemp);
-				glslFragTemplateCount++;
+			else if (strcmp(file.ext, ".frag") == 0){
+				stage = AS_SHADERSTAGE_FRAGMENT;
 			}
+			else{
+				continue;
+			}
+			asDebugLog("Found Template: %s\n", file.name);
+			arrput(glslTemplateNames, asHashBytes32_xxHash(file.name, strlen(file.name)));
+			glslGenContext_t glslTemp = (glslGenContext_t) { 0 };
+			glslTemp.stage = stage;
+			loadGLSLFromFile(&glslTemp, file.path);
+			arrput(glslTemplates, glslTemp);
+			glslTemplateCount++;
 			cf_dir_next(&dir);
 		}
 		cf_dir_close(&dir);
 	}
+	asDebugLog("Loaded Templates Microseconds: %"PRIu64"\n", asTimerMicroseconds(timer, asTimerTicksElapsed(timer)));
+	timer = asTimerRestart(timer);
 
-	/*Create Permutations*/
+	/*Create Programs*/
+	asShaderFxProgramDesc_t *glslShaderDescs = NULL;
 	{
-		for (int i = 0; i < glslVertTemplateCount; i++)
+		arrsetlen(glslShaderDescs, glslTemplateCount);
+		uint32_t offset = 0;
+		for (int i = 0; i < glslTemplateCount; i++)
 		{
-			glslGenContext_t glsl = glslGenContext_t();
-			generateGLSLFxFromTemplate(&glsl, fx, &glslVertTemplates[i]);
+			/*Generate GLSL*/
+			glslGenContext_t glsl = (glslGenContext_t) { 0 };
+			generateGLSLFxFromTemplate(&glsl, fx, &glslTemplates[i]);
+			asDebugLog("Generated GLSL Code Microseconds: %"PRIu64"\n", asTimerMicroseconds(timer, asTimerTicksElapsed(timer)));
+			timer = asTimerRestart(timer);
+
+			/*Compile SPIRV*/
+			spirvGenContext_t spirv = (spirvGenContext_t) { 0 };
+			spirv.includePath = includePath;
+			spirv.macroCount = 0;
+			spirv.pMacros = NULL;
+			if (genSpirvFromGlsl(&spirv, &glsl, glslTemplates[i].stage))
+				continue; /*SPIR-V Compile Failed*/
+			asDebugLog("Compiled SPIRV Microseconds: %"PRIu64"\n", asTimerMicroseconds(timer, asTimerTicksElapsed(timer)));
+			timer = asTimerRestart(timer);
+
+			/*Add Code to FX*/
+			uint32_t size = spirvGenContext_GetLength(&spirv);
+			glslShaderDescs[i].stage = glslTemplates[i].stage;
+			glslShaderDescs[i].programByteCount = size;
+			glslShaderDescs[i].programByteStart = offset;
+			offset += size;
+			fxAssemblerAddNativeShaderCode(fx, glslTemplateNames[i],
+				spirvGenContext_GetBytes(&spirv), glslShaderDescs[i].programByteCount);
+
+			glslGenContext_Free(&glsl);
+			spirvGenContext_Free(&spirv);
 		}
 	}
 
+	/*Create Tecchniques*/
+
+
 	/*Cleanup*/
-	for (int i = 0; i < glslVertTemplateCount; i++)
-		glslGenContext_Free(&glslVertTemplates[i]);
-	arrfree(glslVertTemplates);
-	for (int i = 0; i < glslFragTemplateCount; i++)
-		glslGenContext_Free(&glslFragTemplates[i]);
-	arrfree(glslFragTemplates);
+	for (int i = 0; i < glslTemplateCount; i++)
+		glslGenContext_Free(&glslTemplates[i]);
+	arrfree(glslTemplateNames);
+	arrfree(glslTemplates);
+	arrfree(glslShaderDescs);
 	fxAssemblerRelease(fx);
+	free(tmp);
+	return result;
+}
+
+void shaderGenResult_Free(shaderGenResult_t* res)
+{
+	arrfree(res->pContents);
 }

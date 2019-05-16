@@ -85,7 +85,6 @@ ASEXPORT asBufferDesc_t asBufferDesc_Init()
 ASEXPORT asShaderFxDesc_t asShaderFxDesc_Init()
 {
 	asShaderFxDesc_t result = (asShaderFxDesc_t) { 0 };
-	result.fixedFunctions.fillWidth = 1.0f;
 	return result;
 }
 

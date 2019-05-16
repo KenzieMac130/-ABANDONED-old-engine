@@ -6,6 +6,8 @@ extern "C" {
 
 #include "astrengineConfig.h"
 
+#define __STDC_FORMAT_MACROS
+#include <inttypes.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -26,7 +28,7 @@ extern "C" {
 * @brief determine the size of a C array
 * @warning do not use this for memory created with custom allocators!
 */
-#define ASARRAYSIZE(arr) sizeof(arr)/sizeof(arr[0])
+#define ASARRAYLEN(arr) sizeof(arr)/sizeof(arr[0])
 
 typedef struct {
 	int major; /**< Major version of the app or game */
@@ -255,7 +257,49 @@ ASEXPORT void asIdxTableSwap(asIdxIndirectionTable_t *pTable, uint32_t idxA, int
 */
 typedef uint64_t asHash64_t;
 
+/**
+* @brief Hash bytes to a asHash64_t using the xxHash library
+*/
 ASEXPORT asHash64_t asHashBytes64_xxHash(const void *pBytes, size_t size);
+
+/**
+* @brief a 32 bit hash type
+*/
+typedef uint32_t asHash32_t;
+
+/**
+* @brief Hash bytes to a asHash32_t using the xxHash library
+*/
+ASEXPORT asHash32_t asHashBytes32_xxHash(const void *pBytes, size_t size);
+
+/*Time*/
+
+/**
+* @brief A timer object
+*/
+typedef struct {
+	uint64_t freq;
+	uint64_t last;
+} asTimer_t;
+
+/**
+* @brief Start the timer
+*/
+ASEXPORT asTimer_t asTimerStart();
+/**
+* @brief Restart the timer and return it as a new one
+*/
+ASEXPORT asTimer_t asTimerRestart(asTimer_t prev);
+
+/**
+* @brief Get the last time in platform dependent ticks
+*/
+ASEXPORT uint64_t asTimerTicksElapsed(asTimer_t timer);
+
+/**
+* @brief Get mileseconds that passed based on timer
+*/
+ASEXPORT uint64_t asTimerMicroseconds(asTimer_t timer, uint64_t ticks);
 
 #ifdef __cplusplus
 }
