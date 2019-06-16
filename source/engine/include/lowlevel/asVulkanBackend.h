@@ -21,8 +21,6 @@ extern "C" {
 
 #define AS_VK_MEMCB NULL
 
-#define AS_VK_MAX_INFLIGHT 2
-
 /**
 * @brief current inflight frame
 * @warning DO NOT WRITE!
@@ -132,32 +130,52 @@ VkCommandBuffer asVkGetNextComputeCommandBuffer();
 
 /**
 * @brief Get a VkImage from a texture at a slot
-* Slot count: pDesc->cpuAccess == AS_GPURESOURCEACCESS_STREAM ? AS_VK_MAX_INFLIGHT : 1;
 */
-VkImage asVkGetImageFromTexture(asTextureHandle_t hndl, uint32_t slot);
+VkImage asVkGetImageFromTexture(asTextureHandle_t hndl);
 /**
 * @brief Get a VkImageView from a texture at a slot
-* Slot count: pDesc->cpuAccess == AS_GPURESOURCEACCESS_STREAM ? AS_VK_MAX_INFLIGHT : 1;
 */
-VkImageView asVkGetViewFromTexture(asTextureHandle_t hndl, uint32_t slot);
+VkImageView asVkGetViewFromTexture(asTextureHandle_t hndl);
 /**
 * @brief Get an asVkAllocation_t from a texture at a slot
-* Slot count: pDesc->cpuAccess == AS_GPURESOURCEACCESS_STREAM ? AS_VK_MAX_INFLIGHT : 1;
 */
-asVkAllocation_t asVkGetAllocFromTexture(asTextureHandle_t hndl, uint32_t slot);
+asVkAllocation_t asVkGetAllocFromTexture(asTextureHandle_t hndl);
 
 /**
 * @brief Get an VkBuffer from a buffer at a slot
-* Slot count: pDesc->cpuAccess == AS_GPURESOURCEACCESS_STREAM ? AS_VK_MAX_INFLIGHT : 1;
 */
-VkBuffer asVkGetBufferFromBuffer(asBufferHandle_t hndl, uint32_t slot);
+VkBuffer asVkGetBufferFromBuffer(asBufferHandle_t hndl);
 /**
 * @brief Get an VkBuffer from a buffer at a slot
-* Slot count: pDesc->cpuAccess == AS_GPURESOURCEACCESS_STREAM ? AS_VK_MAX_INFLIGHT : 1;
 */
-asVkAllocation_t asVkGetAllocFromBuffer(asBufferHandle_t hndl, uint32_t slot);
+asVkAllocation_t asVkGetAllocFromBuffer(asBufferHandle_t hndl);
 
 #endif
+
+/*Shader Fx*/
+
+/*
+* @brief a description for a pipeline permutation to be used with the fx system
+*/
+typedef struct
+{
+	asShaderFxProgramLookup_t requestedPrograms[6]; /**< Requested program lookups, parse until capacity or 0 is reached*/
+	VkPipelineBindPoint pipelineType;
+	union 
+	{
+		VkGraphicsPipelineCreateInfo* graphicsInfo;
+		VkComputePipelineCreateInfo* computeInfo;
+	};
+} asVkFxPermutationEntry_t;
+
+typedef struct
+{
+	asHash32_t requiredBucket; /**< Required bucket hash (UINT32_MAX is no requirements)*/
+	asBlendMode requiredBlendMode; /**< Required blend mode (UINT32_MAX is no requirements)*/
+	asFillMode requiredFillMode; /**< Required fill mode (UINT32_MAX is no requirements)*/
+} asVkFxPermutationRequirements_t;
+
+void asVkRegisterFxPipelinePermutation(const char* name, asVkFxPermutationRequirements_t req, asVkFxPermutationEntry_t desc);
 
 #ifdef __cplusplus
 }

@@ -1,14 +1,16 @@
 #pragma once
 #include "FxAssembler.h"
 
-typedef struct {
-	asShaderStage stage;
-	size_t size;
-	union {
-		char* text;
-		char* byteArray; };
-} glslGenContext_t;
+#include <sstream>
+#include "engine/asRendererCore.h"
 
-void loadGLSLFromFile(glslGenContext_t* ctx, const char* filePath);
-void generateGLSLFxFromTemplate(glslGenContext_t* ctx, fxContext_t* fx, glslGenContext_t* templateGlsl);
-void glslGenContext_Free(glslGenContext_t* ctx);
+class cGlslGenContext {
+public:
+	cGlslGenContext(std::ostringstream *debugStream);
+	std::ostringstream *pDebugStream;
+	asShaderStage stage;
+	std::string text;
+
+	void loadGLSLFromFile(const char* filePath);
+	void generateGLSLFxFromTemplate(class cFxContext* fx, cGlslGenContext* templateGlsl);
+};

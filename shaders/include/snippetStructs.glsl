@@ -8,8 +8,7 @@ struct Vertex_t
 	vec3 Tangent;
 	vec3 Binormal;
 	vec4 Color;
-	vec2 UV0;
-	vec2 UV1;
+	vec2 UV[2];
 };
 
 /*Default Constructor*/

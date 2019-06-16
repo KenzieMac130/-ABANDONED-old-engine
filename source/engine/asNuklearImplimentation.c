@@ -23,8 +23,8 @@ struct nk_draw_null_texture nkNullDraw;
 
 struct nk_buffer nkCommands;
 
-asBufferHandle_t nkVertexBuffer;
-asBufferHandle_t nkIndexBuffer;
+asBufferHandle_t nkVertexBuffer[AS_MAX_INFLIGHT];
+asBufferHandle_t nkIndexBuffer[AS_MAX_INFLIGHT];
 
 struct nkVertex
 {
@@ -40,8 +40,8 @@ ASEXPORT struct nk_context* asGetNuklearContextPtr()
 
 #if ASTRENGINE_VK
 /*Vulkan allows mappings to stay persistant*/
-void* vVertexBufferBindings[AS_VK_MAX_INFLIGHT];
-void* vIndexBufferBindings[AS_VK_MAX_INFLIGHT];
+void* vVertexBufferBindings[AS_MAX_INFLIGHT];
+void* vIndexBufferBindings[AS_MAX_INFLIGHT];
 #endif
 void asInitNk()
 {
@@ -81,7 +81,8 @@ void asInitNk()
 		desc.usageFlags = AS_BUFFERUSAGE_VERTEX;
 		desc.initialContentsBufferSize = desc.bufferSize;
 		desc.pDebugLabel = "NuklearVerts";
-		nkVertexBuffer = asCreateBuffer(&desc);
+		for(int i = 0; i < AS_MAX_INFLIGHT; i++)
+			nkVertexBuffer[i] = asCreateBuffer(&desc);
 	}
 	/*Create index buffer*/
 	{
@@ -91,7 +92,8 @@ void asInitNk()
 		desc.usageFlags = AS_BUFFERUSAGE_INDEX;
 		desc.initialContentsBufferSize = desc.bufferSize;
 		desc.pDebugLabel = "NuklearIndices";
-		nkIndexBuffer = asCreateBuffer(&desc);
+		for (int i = 0; i < AS_MAX_INFLIGHT; i++)
+			nkIndexBuffer[i] = asCreateBuffer(&desc);
 	}
 	/*Create material*/
 	{
@@ -100,10 +102,10 @@ void asInitNk()
 
 #if ASTRENGINE_VK
 	/*Map persistent memory*/
-	for (int i = 0; i < AS_VK_MAX_INFLIGHT; i++)
+	for (int i = 0; i < AS_MAX_INFLIGHT; i++)
 	{
-		asVkAllocation_t vertAlloc = asVkGetAllocFromBuffer(nkVertexBuffer, i);
-		asVkAllocation_t idxAlloc = asVkGetAllocFromBuffer(nkIndexBuffer, i);
+		asVkAllocation_t vertAlloc = asVkGetAllocFromBuffer(nkVertexBuffer[i]);
+		asVkAllocation_t idxAlloc = asVkGetAllocFromBuffer(nkIndexBuffer[i]);
 		asVkMapMemory(vertAlloc, 0, vertAlloc.size, &vVertexBufferBindings[i]);
 		asVkMapMemory(idxAlloc, 0, idxAlloc.size, &vIndexBufferBindings[i]);
 	}
@@ -152,8 +154,8 @@ void asNkDraw()
 		nk_buffer_init_fixed(&nkElements, vIndexBufferBindings[asVkCurrentFrame], AS_NK_MAX_INDICES * sizeof(uint16_t));
 		nk_convert(&nkContext, &nkCommands, &nkVerts, &nkElements, &config);
 #if ASTRENGINE_VK
-		asVkAllocation_t vertAlloc = asVkGetAllocFromBuffer(nkVertexBuffer, asVkCurrentFrame);
-		asVkAllocation_t idxAlloc = asVkGetAllocFromBuffer(nkIndexBuffer, asVkCurrentFrame);
+		asVkAllocation_t vertAlloc = asVkGetAllocFromBuffer(nkVertexBuffer[asVkCurrentFrame]);
+		asVkAllocation_t idxAlloc = asVkGetAllocFromBuffer(nkIndexBuffer[asVkCurrentFrame]);
 		asVkFlushMemory(vertAlloc);
 		asVkFlushMemory(idxAlloc);
 #endif
@@ -165,8 +167,8 @@ void asNkDraw()
 	VkCommandBuffer vCmd = asVkGetNextGraphicsCommandBuffer();
 	VkCommandBufferBeginInfo cmdInfo = (VkCommandBufferBeginInfo) { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
 	vkBeginCommandBuffer(vCmd, &cmdInfo);
-	VkBuffer vVertexBuffer = asVkGetBufferFromBuffer(nkVertexBuffer, asVkCurrentFrame);
-	VkBuffer vIndexBuffer = asVkGetBufferFromBuffer(nkIndexBuffer, asVkCurrentFrame);
+	VkBuffer vVertexBuffer = asVkGetBufferFromBuffer(nkVertexBuffer[asVkCurrentFrame]);
+	VkBuffer vIndexBuffer = asVkGetBufferFromBuffer(nkIndexBuffer[asVkCurrentFrame]);
 	VkDeviceSize vtxOffset = 0;
 	vkCmdBindVertexBuffers(vCmd, 0, 1, &vVertexBuffer, &vtxOffset);
 	vkCmdBindIndexBuffer(vCmd, vIndexBuffer, 0, VK_INDEX_TYPE_UINT16);
@@ -332,13 +334,14 @@ void asShutdownNk()
 {
 	nk_buffer_free(&nkCommands);
 #if ASTRENGINE_VK
-	for (int i = 0; i < AS_VK_MAX_INFLIGHT; i++)
+	for (int i = 0; i < AS_MAX_INFLIGHT; i++)
 	{
-		asVkUnmapMemory(asVkGetAllocFromBuffer(nkVertexBuffer, i));
-		asVkUnmapMemory(asVkGetAllocFromBuffer(nkIndexBuffer, i));
+		asVkUnmapMemory(asVkGetAllocFromBuffer(nkVertexBuffer[i]));
+		asVkUnmapMemory(asVkGetAllocFromBuffer(nkIndexBuffer[i]));
+		asReleaseBuffer(nkVertexBuffer[i]);
+		asReleaseBuffer(nkIndexBuffer[i]);
 	}
 #endif
-	asReleaseBuffer(nkVertexBuffer);
 	asReleaseTexture(nkFontTexture);
 	nk_font_atlas_clear(&nkFontAtlas);
 	asFree(nkMemory);

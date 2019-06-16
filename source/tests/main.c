@@ -120,9 +120,15 @@ int main(int argc, char* argv[])
 		asHash64_t hash = asHashBytes64_xxHash(desc.pInitialContentsBuffer, desc.initialContentsBufferSize);
 		asFree(desc.pInitialContentsBuffer);
 	}
-	/*Test shader creation*/
+	/*Test shader loading*/
 	{
-		//asShaderFxDesc_t shaderDesc = asShaderDesc_Init("Test", 5);
+		asShaderFx_FileContext_t ctx;
+		int size = asShaderFxDesc_PeekFile("ShaderFileMockup.asfx", &ctx);
+		if (size <= 0)
+			asFatalError("Failed to load shader file");
+		void* buff = malloc(size);
+		asShaderFxDesc_t desc = asShaderFxDesc_ReadFile(buff, size, &ctx);
+		free(buff);
 	}
 	asLoopDesc_t loopDesc;
 	loopDesc.fpOnUpdate = (asUpdateFunction_t)onUpdate;

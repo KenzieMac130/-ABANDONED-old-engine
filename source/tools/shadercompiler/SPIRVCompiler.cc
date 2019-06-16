@@ -22,16 +22,16 @@ shaderc_shader_kind shadercKindFromNative(asShaderStage stage)
 	case AS_SHADERSTAGE_COMPUTE:
 		return shaderc_compute_shader;
 	default:
-		return shaderc_glsl_infer_from_source;
+		return shaderc_vertex_shader;
 	}
 }
 
 static shaderc_include_result* findIncludeCB(void* user_data, const char* requested_source, int type, const char* requesting_source, size_t include_depth)
 {
-	spirvGenContext_t* ctx = (spirvGenContext_t*)user_data;
+	cSpirvGenContext* ctx = (cSpirvGenContext*)user_data;
 	char* fullPath = NULL;
-	int includePathLenth = strlen(ctx->includePath);
-	int requestedLength = strlen(requested_source);
+	int includePathLenth = (int)strlen(ctx->includePath);
+	int requestedLength = (int)strlen(requested_source);
 	arrsetlen(fullPath, (includePathLenth + requestedLength + 1));
 	memcpy(fullPath, ctx->includePath, includePathLenth);
 	memcpy(fullPath+ includePathLenth, requested_source, requestedLength + 1);
@@ -42,7 +42,8 @@ static shaderc_include_result* findIncludeCB(void* user_data, const char* reques
 		FILE *fp;
 		fopen_s(&fp, fullPath, "rb");
 		if (!fp) {
-			asDebugLog("ERROR: UNABLE TO OPEN %s!\n", fullPath);
+			if(ctx->pDebugStream)
+				*ctx->pDebugStream << "ERROR: UNABLE TO OPEN" << fullPath << "!\n";
 		}
 		else
 		{
@@ -76,49 +77,74 @@ static shaderc_include_result* findIncludeCB(void* user_data, const char* reques
 
 static void releaseIncludeCB(void* user_data, shaderc_include_result* include_result)
 {
-	asFree(include_result->content);
+	asFree((void*)include_result->content);
 	arrfree(include_result->source_name);
 	free(include_result);
 }
 
-int genSpirvFromGlsl(spirvGenContext_t* ctx, glslGenContext_t* glsl, asShaderStage stage)
+int cSpirvGenContext::genSpirvFromGlsl(cGlslGenContext* glsl)
 {
+	cSpirvGenContext* ctx = this;
 	ctx->compiler = shaderc_compiler_initialize();
 	if (!ctx->compiler)
 		return UINT32_MAX;
 
 	shaderc_compile_options_t compilerOptions = shaderc_compile_options_initialize();
 	shaderc_compile_options_set_include_callbacks(compilerOptions, findIncludeCB, releaseIncludeCB, ctx);
+	shaderc_compile_options_set_warnings_as_errors(compilerOptions);
 	shaderc_compile_options_set_optimization_level(compilerOptions, shaderc_optimization_level_performance);
 	shaderc_compile_options_set_source_language(compilerOptions, shaderc_source_language_glsl);
 
-	for (int i = 0; i < ctx->macroCount; i++)
+	for (int i = 0; i < ctx->macros.size(); i++)
 		shaderc_compile_options_add_macro_definition(compilerOptions,
-			ctx->pMacros->name, strlen(ctx->pMacros->name),
-			ctx->pMacros->value, strlen(ctx->pMacros->value));
+			ctx->macros[i].name, strlen(ctx->macros[i].name),
+			ctx->macros[i].value, strlen(ctx->macros[i].value));
 
-	ctx->result = shaderc_compile_into_spv(ctx->compiler, glsl->text, glsl->size,
-		shadercKindFromNative(stage), "GENERATED", "main", compilerOptions);
-	asDebugLog(shaderc_result_get_error_message(ctx->result));
+	ctx->result = shaderc_compile_into_spv(ctx->compiler, glsl->text.c_str(), glsl->text.size(),
+		shadercKindFromNative(glsl->stage), "GENERATED", "main", compilerOptions);
 
-	int numErrors = (int)shaderc_result_get_num_errors(ctx->result);
-	if (!numErrors)
-		asDebugLog("GLSL->SPIRV Compile Successful!\n");
-	return numErrors;
+	size_t numErrors = shaderc_result_get_num_errors(ctx->result);
+	if(ctx->pDebugStream)
+		if (numErrors)
+		{
+			*ctx->pDebugStream <<
+				shaderc_result_get_error_message(ctx->result);
+				/*"-------------------------------DUMP--------------------------------\n" <<
+				glsl->text <<
+				"\n-------------------------------------------------------------------\n";*/
+		}
+		else
+			*ctx->pDebugStream << "GLSL->SPIRV Compile Successful!\n";
+	return (int)numErrors;
 }
 
-size_t spirvGenContext_GetLength(spirvGenContext_t* ctx)
+size_t cSpirvGenContext::GetLength()
 {
-	return shaderc_result_get_length(ctx->result);
+	return shaderc_result_get_length(this->result);
 }
 
-void* spirvGenContext_GetBytes(spirvGenContext_t* ctx)
+void* cSpirvGenContext::GetBytes()
 {
-	return (void*)shaderc_result_get_bytes(ctx->result);
+	return (void*)shaderc_result_get_bytes(this->result);
 }
 
-void spirvGenContext_Free(spirvGenContext_t* ctx)
+cSpirvGenContext::cSpirvGenContext()
 {
-	shaderc_result_release(ctx->result);
-	shaderc_compiler_release(ctx->compiler);
+	this->pDebugStream = NULL;
+}
+
+cSpirvGenContext::cSpirvGenContext(std::ostringstream *debugStream, const char* includeDir)
+{
+	this->pDebugStream = debugStream;
+	this->compiler = nullptr;
+	this->result = nullptr;
+	this->includePath = includeDir;
+}
+
+cSpirvGenContext::~cSpirvGenContext()
+{
+	if(this->result)
+		shaderc_result_release(this->result);
+	if (this->compiler)
+		shaderc_compiler_release(this->compiler);
 }

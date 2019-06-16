@@ -16,8 +16,8 @@ struct vScreenResources_t
 	uint32_t imageCount;
 	VkImage *pSwapImages;
 	VkCommandBuffer *pPresentImageToScreenCmds;
-	VkSemaphore swapImageAvailableSemaphores[AS_VK_MAX_INFLIGHT];
-	VkSemaphore blitFinishedSemaphores[AS_VK_MAX_INFLIGHT];
+	VkSemaphore swapImageAvailableSemaphores[AS_MAX_INFLIGHT];
+	VkSemaphore blitFinishedSemaphores[AS_MAX_INFLIGHT];
 
 	asTextureHandle_t compositeTexture;
 	asTextureHandle_t depthTexture;
@@ -38,7 +38,7 @@ VkQueue asVkQueue_Compute;
 
 VkCommandPool asVkGeneralCommandPool;
 uint32_t asVkCurrentFrame = 0;
-VkFence asVkInFlightFences[AS_VK_MAX_INFLIGHT];
+VkFence asVkInFlightFences[AS_MAX_INFLIGHT];
 
 typedef struct
 {
@@ -384,34 +384,26 @@ struct vTexture_t
 {
 	asTextureType textureType;
 	asGpuResourceUploadType cpuAccess;
-	uint32_t activeImage; /*To support multiple in-flight frames*/
-	asVkAllocation_t alloc[AS_VK_MAX_INFLIGHT];
-	VkImage image[AS_VK_MAX_INFLIGHT];
-	VkImageView view[AS_VK_MAX_INFLIGHT];
+	asVkAllocation_t alloc;
+	VkImage image;
+	VkImageView view;
 };
 
 void _invalidateTexture(struct vTexture_t* pTex)
 {
-	pTex->activeImage = 0;
-	for (int i = 0; i < AS_VK_MAX_INFLIGHT; i++)
-	{
-		pTex->alloc[i].memHandle = VK_NULL_HANDLE;
-		pTex->image[i] = VK_NULL_HANDLE;
-		pTex->view[i] = VK_NULL_HANDLE;
-	}
+	pTex->alloc.memHandle = VK_NULL_HANDLE;
+	pTex->image = VK_NULL_HANDLE;
+	pTex->view = VK_NULL_HANDLE;
 }
 
 void _destroyTexture(struct vTexture_t* pTex)
 {
-	for (int i = 0; i < AS_VK_MAX_INFLIGHT; i++)
-	{
-		if (pTex->alloc[i].memHandle != VK_NULL_HANDLE)
-			asVkFree(&pTex->alloc[i]);
-		if (pTex->image[i] != VK_NULL_HANDLE)
-			vkDestroyImage(asVkDevice, pTex->image[i], AS_VK_MEMCB);
-		if (pTex->view[i] != VK_NULL_HANDLE)
-			vkDestroyImageView(asVkDevice, pTex->view[i], AS_VK_MEMCB);
-	}
+	if (pTex->alloc.memHandle != VK_NULL_HANDLE)
+		asVkFree(&pTex->alloc);
+	if (pTex->image != VK_NULL_HANDLE)
+		vkDestroyImage(asVkDevice, pTex->image, AS_VK_MEMCB);
+	if (pTex->view != VK_NULL_HANDLE)
+		vkDestroyImageView(asVkDevice, pTex->view, AS_VK_MEMCB);
 	_invalidateTexture(pTex);
 }
 
@@ -579,43 +571,40 @@ ASEXPORT asTextureHandle_t asCreateTexture(asTextureDesc_t *pDesc)
 		createInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
 		if (pDesc->cpuAccess != AS_GPURESOURCEACCESS_STREAM){
-			if (vkCreateImage(asVkDevice, &createInfo, AS_VK_MEMCB, &pTex->image[0]) != VK_SUCCESS)
+			if (vkCreateImage(asVkDevice, &createInfo, AS_VK_MEMCB, &pTex->image) != VK_SUCCESS)
 				asFatalError("vkCreateImage() Failed to create an image");
 			VkMemoryRequirements memReq;
-			vkGetImageMemoryRequirements(asVkDevice, pTex->image[0], &memReq);
-			asVkAlloc(&pTex->alloc[0], memReq.size, asVkFindMemoryType(memReq.memoryTypeBits,
+			vkGetImageMemoryRequirements(asVkDevice, pTex->image, &memReq);
+			asVkAlloc(&pTex->alloc, memReq.size, asVkFindMemoryType(memReq.memoryTypeBits,
 				pDesc->cpuAccess == AS_GPURESOURCEACCESS_DEVICE ? VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT : VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT));
-			vkBindImageMemory(asVkDevice, pTex->image[0], pTex->alloc[0].memHandle, pTex->alloc[0].offset);
+			vkBindImageMemory(asVkDevice, pTex->image, pTex->alloc.memHandle, pTex->alloc.offset);
 		}
 		else{
-			for (int i = 0; i < AS_VK_MAX_INFLIGHT; i++){
-				if (vkCreateImage(asVkDevice, &createInfo, AS_VK_MEMCB, &pTex->image[i]) != VK_SUCCESS)
+			for (int i = 0; i < AS_MAX_INFLIGHT; i++){
+				if (vkCreateImage(asVkDevice, &createInfo, AS_VK_MEMCB, &pTex->image) != VK_SUCCESS)
 					asFatalError("vkCreateImage() Failed to create an image");
 				VkMemoryRequirements memReq;
-				vkGetImageMemoryRequirements(asVkDevice, pTex->image[i], &memReq);
-				asVkAlloc(&pTex->alloc[i], memReq.size, asVkFindMemoryType(memReq.memoryTypeBits,
+				vkGetImageMemoryRequirements(asVkDevice, pTex->image, &memReq);
+				asVkAlloc(&pTex->alloc, memReq.size, asVkFindMemoryType(memReq.memoryTypeBits,
 					VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT));
-				vkBindImageMemory(asVkDevice, pTex->image[i], pTex->alloc[i].memHandle, pTex->alloc[i].offset);
+				vkBindImageMemory(asVkDevice, pTex->image, pTex->alloc.memHandle, pTex->alloc.offset);
 			}
 		}
 	}
 	/*View*/
 	{
-		const int count = pDesc->cpuAccess == AS_GPURESOURCEACCESS_STREAM ? AS_VK_MAX_INFLIGHT : 1;
-		for (int i = 0; i < count; i++){
-			VkImageViewCreateInfo createInfo = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
-			createInfo.image = pTex->image[i];
-			createInfo.viewType = vConvertTextureTypeToViewType(pDesc->type);
-			createInfo.format = vConvertToNativeFormat(pDesc->format);
-			createInfo.subresourceRange.aspectMask =
-				pDesc->format == AS_COLORFORMAT_DEPTH ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
-			createInfo.subresourceRange.baseArrayLayer = 0;
-			createInfo.subresourceRange.baseMipLevel = 0;
-			createInfo.subresourceRange.layerCount = pDesc->type != AS_TEXTURETYPE_3D ? pDesc->depth : 1;
-			createInfo.subresourceRange.levelCount = pDesc->mips;
-			if (vkCreateImageView(asVkDevice, &createInfo, AS_VK_MEMCB, &pTex->view[i]) != VK_SUCCESS)
-				asFatalError("vkCreateImageView() Failed to create an image view");
-		}
+		VkImageViewCreateInfo createInfo = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
+		createInfo.image = pTex->image;
+		createInfo.viewType = vConvertTextureTypeToViewType(pDesc->type);
+		createInfo.format = vConvertToNativeFormat(pDesc->format);
+		createInfo.subresourceRange.aspectMask =
+			pDesc->format == AS_COLORFORMAT_DEPTH ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
+		createInfo.subresourceRange.baseArrayLayer = 0;
+		createInfo.subresourceRange.baseMipLevel = 0;
+		createInfo.subresourceRange.layerCount = pDesc->type != AS_TEXTURETYPE_3D ? pDesc->depth : 1;
+		createInfo.subresourceRange.levelCount = pDesc->mips;
+		if (vkCreateImageView(asVkDevice, &createInfo, AS_VK_MEMCB, &pTex->view) != VK_SUCCESS)
+			asFatalError("vkCreateImageView() Failed to create an image view");
 	}
 	/*Upload Data*/
 	{
@@ -660,7 +649,7 @@ ASEXPORT asTextureHandle_t asCreateTexture(asTextureDesc_t *pDesc)
 					toTransferDst.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 					toTransferDst.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 					toTransferDst.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-					toTransferDst.image = pTex->image[0];
+					toTransferDst.image = pTex->image;
 					toTransferDst.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 					toTransferDst.subresourceRange.baseMipLevel = 0;
 					toTransferDst.subresourceRange.levelCount = pDesc->mips;
@@ -688,7 +677,7 @@ ASEXPORT asTextureHandle_t asCreateTexture(asTextureDesc_t *pDesc)
 						cpy.imageSubresource.layerCount = pDesc->pInitialContentsRegions[i].layerCount;
 						cpy.imageSubresource.baseArrayLayer = pDesc->pInitialContentsRegions[i].layer;
 						cpy.imageSubresource.mipLevel = pDesc->pInitialContentsRegions[i].mipLevel;
-						vkCmdCopyBufferToImage(tmpCmd, stagingBuffer, pTex->image[0], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &cpy);
+						vkCmdCopyBufferToImage(tmpCmd, stagingBuffer, pTex->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &cpy);
 					}
 					/*Transition to shader input optimal layout*/
 					VkImageMemoryBarrier toFinal = toTransferDst;
@@ -728,17 +717,14 @@ ASEXPORT asTextureHandle_t asCreateTexture(asTextureDesc_t *pDesc)
 		{
 			VkDebugMarkerObjectNameInfoEXT imageInfo = (VkDebugMarkerObjectNameInfoEXT){ VK_STRUCTURE_TYPE_DEBUG_MARKER_OBJECT_NAME_INFO_EXT };
 			VkDebugMarkerObjectNameInfoEXT viewInfo = imageInfo;
-			const int count = pDesc->cpuAccess == AS_GPURESOURCEACCESS_STREAM ? AS_VK_MAX_INFLIGHT : 1;
-			for (int i = 0; i < count; i++) {
-				imageInfo.object = (uint64_t)pTex->image[i];
-				imageInfo.objectType = VK_DEBUG_REPORT_OBJECT_TYPE_IMAGE_EXT;
-				imageInfo.pObjectName = pDesc->pDebugLabel;
-				vkDebugMarkerSetObjectName(asVkDevice, &imageInfo);
-				viewInfo.object = (uint64_t)pTex->view[i];
-				viewInfo.objectType = VK_DEBUG_REPORT_OBJECT_TYPE_IMAGE_VIEW_EXT;
-				viewInfo.pObjectName = pDesc->pDebugLabel;
-				vkDebugMarkerSetObjectName(asVkDevice, &viewInfo);
-			}
+			imageInfo.object = (uint64_t)pTex->image;
+			imageInfo.objectType = VK_DEBUG_REPORT_OBJECT_TYPE_IMAGE_EXT;
+			imageInfo.pObjectName = pDesc->pDebugLabel;
+			vkDebugMarkerSetObjectName(asVkDevice, &imageInfo);
+			viewInfo.object = (uint64_t)pTex->view;
+			viewInfo.objectType = VK_DEBUG_REPORT_OBJECT_TYPE_IMAGE_VIEW_EXT;
+			viewInfo.pObjectName = pDesc->pDebugLabel;
+			vkDebugMarkerSetObjectName(asVkDevice, &viewInfo);
 		}
 	}
 #endif
@@ -753,19 +739,19 @@ ASEXPORT void asReleaseTexture(asTextureHandle_t hndl)
 	asDestroyHandle(&vMainTextureManager.handleManager, hndl);
 }
 
-VkImage asVkGetImageFromTexture(asTextureHandle_t hndl, uint32_t slot)
+VkImage asVkGetImageFromTexture(asTextureHandle_t hndl)
 {
-	return vMainTextureManager.textures[hndl._index].image[slot];
+	return vMainTextureManager.textures[hndl._index].image;
 }
 
-VkImageView asVkGetViewFromTexture(asTextureHandle_t hndl, uint32_t slot)
+VkImageView asVkGetViewFromTexture(asTextureHandle_t hndl)
 {
-	return vMainTextureManager.textures[hndl._index].view[slot];
+	return vMainTextureManager.textures[hndl._index].view;
 }
 
-asVkAllocation_t asVkGetAllocFromTexture(asTextureHandle_t hndl, uint32_t slot)
+asVkAllocation_t asVkGetAllocFromTexture(asTextureHandle_t hndl)
 {
-	return vMainTextureManager.textures[hndl._index].alloc[slot];
+	return vMainTextureManager.textures[hndl._index].alloc;
 }
 
 /*Buffer stuff*/
@@ -773,30 +759,22 @@ asVkAllocation_t asVkGetAllocFromTexture(asTextureHandle_t hndl, uint32_t slot)
 struct vBuffer_t
 {
 	asGpuResourceUploadType cpuAccess;
-	uint32_t activeBuff; /*To support multiple in-flight frames*/
-	asVkAllocation_t alloc[AS_VK_MAX_INFLIGHT];
-	VkBuffer buffer[AS_VK_MAX_INFLIGHT];
+	asVkAllocation_t alloc;
+	VkBuffer buffer;
 };
 
 void _invalidateBuffer(struct vBuffer_t* pBuf)
 {
-	pBuf->activeBuff = 0;
-	for (int i = 0; i < AS_VK_MAX_INFLIGHT; i++)
-	{
-		pBuf->alloc[i].memHandle = VK_NULL_HANDLE;
-		pBuf->buffer[i] = VK_NULL_HANDLE;
-	}
+	pBuf->alloc.memHandle = VK_NULL_HANDLE;
+	pBuf->buffer = VK_NULL_HANDLE;
 }
 
 void _destroyBuffer(struct vBuffer_t* pBuf)
 {
-	for (int i = 0; i < AS_VK_MAX_INFLIGHT; i++)
-	{
-		if (pBuf->alloc[i].memHandle != VK_NULL_HANDLE)
-			asVkFree(&pBuf->alloc[i]);
-		if (pBuf->buffer[i] != VK_NULL_HANDLE)
-			vkDestroyBuffer(asVkDevice, pBuf->buffer[i], AS_VK_MEMCB);
-	}
+	if (pBuf->alloc.memHandle != VK_NULL_HANDLE)
+		asVkFree(&pBuf->alloc);
+	if (pBuf->buffer != VK_NULL_HANDLE)
+		vkDestroyBuffer(asVkDevice, pBuf->buffer, AS_VK_MEMCB);
 	_invalidateBuffer(pBuf);
 }
 
@@ -862,24 +840,22 @@ ASEXPORT asBufferHandle_t asCreateBuffer(asBufferDesc_t *pDesc)
 		createInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
 		if (pDesc->cpuAccess != AS_GPURESOURCEACCESS_STREAM) {
-			if (vkCreateBuffer(asVkDevice, &createInfo, AS_VK_MEMCB, &pBuff->buffer[0]) != VK_SUCCESS)
+			if (vkCreateBuffer(asVkDevice, &createInfo, AS_VK_MEMCB, &pBuff->buffer) != VK_SUCCESS)
 				asFatalError("vkCreateBuffer() Failed to create a buffer");
 			VkMemoryRequirements memReq;
-			vkGetBufferMemoryRequirements(asVkDevice, pBuff->buffer[0], &memReq);
-			asVkAlloc(&pBuff->alloc[0], memReq.size, asVkFindMemoryType(memReq.memoryTypeBits,
+			vkGetBufferMemoryRequirements(asVkDevice, pBuff->buffer, &memReq);
+			asVkAlloc(&pBuff->alloc, memReq.size, asVkFindMemoryType(memReq.memoryTypeBits,
 				pDesc->cpuAccess == AS_GPURESOURCEACCESS_DEVICE ? VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT : VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT));
-			vkBindBufferMemory(asVkDevice, pBuff->buffer[0], pBuff->alloc[0].memHandle, pBuff->alloc[0].offset);
+			vkBindBufferMemory(asVkDevice, pBuff->buffer, pBuff->alloc.memHandle, pBuff->alloc.offset);
 		}
 		else {
-			for (int i = 0; i < AS_VK_MAX_INFLIGHT; i++) {
-				if (vkCreateBuffer(asVkDevice, &createInfo, AS_VK_MEMCB, &pBuff->buffer[i]) != VK_SUCCESS)
-					asFatalError("vkCreateBuffer() Failed to create a buffer");
-				VkMemoryRequirements memReq;
-				vkGetBufferMemoryRequirements(asVkDevice, pBuff->buffer[i], &memReq);
-				asVkAlloc(&pBuff->alloc[i], memReq.size, asVkFindMemoryType(memReq.memoryTypeBits,
-					VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT));
-				vkBindBufferMemory(asVkDevice, pBuff->buffer[i], pBuff->alloc[i].memHandle, pBuff->alloc[i].offset);
-			}
+			if (vkCreateBuffer(asVkDevice, &createInfo, AS_VK_MEMCB, &pBuff->buffer) != VK_SUCCESS)
+				asFatalError("vkCreateBuffer() Failed to create a buffer");
+			VkMemoryRequirements memReq;
+			vkGetBufferMemoryRequirements(asVkDevice, pBuff->buffer, &memReq);
+			asVkAlloc(&pBuff->alloc, memReq.size, asVkFindMemoryType(memReq.memoryTypeBits,
+				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT));
+			vkBindBufferMemory(asVkDevice, pBuff->buffer, pBuff->alloc.memHandle, pBuff->alloc.offset);
 		}
 	}
 	/*Upload Data*/
@@ -923,7 +899,7 @@ ASEXPORT asBufferHandle_t asCreateBuffer(asBufferDesc_t *pDesc)
 					VkBufferMemoryBarrier toTransferDst = (VkBufferMemoryBarrier) { VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER };
 					toTransferDst.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 					toTransferDst.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-					toTransferDst.buffer = pBuff->buffer[0];
+					toTransferDst.buffer = pBuff->buffer;
 					toTransferDst.offset = 0;
 					toTransferDst.size = pDesc->bufferSize;
 					toTransferDst.srcAccessMask = 0;
@@ -936,7 +912,7 @@ ASEXPORT asBufferHandle_t asCreateBuffer(asBufferDesc_t *pDesc)
 					cpy.dstOffset = 0;
 					cpy.srcOffset = 0;
 					cpy.size = pDesc->bufferSize;
-					vkCmdCopyBuffer(tmpCmd, stagingBuffer, pBuff->buffer[0], 1, &cpy);
+					vkCmdCopyBuffer(tmpCmd, stagingBuffer, pBuff->buffer, 1, &cpy);
 					/*Transition to shader input optimal layout*/
 					VkBufferMemoryBarrier toFinal = toTransferDst;
 					toFinal.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
@@ -960,13 +936,10 @@ ASEXPORT asBufferHandle_t asCreateBuffer(asBufferDesc_t *pDesc)
 			else /*No staging required*/
 			{
 				/*Simple map and memcpy*/
-				const int count = pDesc->cpuAccess == AS_GPURESOURCEACCESS_STREAM ? AS_VK_MAX_INFLIGHT : 1;
-				for (int i = 0; i < count; i++) {
-					void* pData;
-					vkMapMemory(asVkDevice, pBuff->alloc[i].memHandle, pBuff->alloc[i].offset, pDesc->initialContentsBufferSize, 0, &pData);
-					memcpy(pData, pDesc->pInitialContentsBuffer, pDesc->initialContentsBufferSize);
-					vkUnmapMemory(asVkDevice, pBuff->alloc[i].memHandle);
-				}
+				void* pData;
+				vkMapMemory(asVkDevice, pBuff->alloc.memHandle, pBuff->alloc.offset, pDesc->initialContentsBufferSize, 0, &pData);
+				memcpy(pData, pDesc->pInitialContentsBuffer, pDesc->initialContentsBufferSize);
+				vkUnmapMemory(asVkDevice, pBuff->alloc.memHandle);
 			}
 		}
 	}
@@ -976,13 +949,10 @@ ASEXPORT asBufferHandle_t asCreateBuffer(asBufferDesc_t *pDesc)
 		if (pDesc->pDebugLabel && vMarkersExtensionFound)
 		{
 			VkDebugMarkerObjectNameInfoEXT bufferInfo = (VkDebugMarkerObjectNameInfoEXT) { VK_STRUCTURE_TYPE_DEBUG_MARKER_OBJECT_NAME_INFO_EXT };
-			const int count = pDesc->cpuAccess == AS_GPURESOURCEACCESS_STREAM ? AS_VK_MAX_INFLIGHT : 1;
-			for (int i = 0; i < count; i++) {
-				bufferInfo.object = (uint64_t)pBuff->buffer[i];
-				bufferInfo.objectType = VK_DEBUG_REPORT_OBJECT_TYPE_BUFFER_EXT;
-				bufferInfo.pObjectName = pDesc->pDebugLabel;
-				vkDebugMarkerSetObjectName(asVkDevice, &bufferInfo);
-			}
+			bufferInfo.object = (uint64_t)pBuff->buffer;
+			bufferInfo.objectType = VK_DEBUG_REPORT_OBJECT_TYPE_BUFFER_EXT;
+			bufferInfo.pObjectName = pDesc->pDebugLabel;
+			vkDebugMarkerSetObjectName(asVkDevice, &bufferInfo);
 		}
 	}
 #endif
@@ -996,28 +966,28 @@ ASEXPORT void asReleaseBuffer(asBufferHandle_t hndl)
 	asDestroyHandle(&vMainBufferManager.handleManager, hndl);
 }
 
-VkBuffer asVkGetBufferFromBuffer(asBufferHandle_t hndl, uint32_t slot)
+VkBuffer asVkGetBufferFromBuffer(asBufferHandle_t hndl)
 {
-	return vMainBufferManager.buffers[hndl._index].buffer[slot];
+	return vMainBufferManager.buffers[hndl._index].buffer;
 }
 
-asVkAllocation_t asVkGetAllocFromBuffer(asBufferHandle_t hndl, uint32_t slot)
+asVkAllocation_t asVkGetAllocFromBuffer(asBufferHandle_t hndl)
 {
-	return vMainBufferManager.buffers[hndl._index].alloc[slot];
+	return vMainBufferManager.buffers[hndl._index].alloc;
 }
 
 /*Command Buffers*/
 struct vPrimaryCommandBufferManager_t
 {
-	uint32_t count[AS_VK_MAX_INFLIGHT];
-	VkCommandBuffer *pBuffers[AS_VK_MAX_INFLIGHT];
-	VkCommandPool pools[AS_VK_MAX_INFLIGHT];
+	uint32_t count[AS_MAX_INFLIGHT];
+	VkCommandBuffer *pBuffers[AS_MAX_INFLIGHT];
+	VkCommandPool pools[AS_MAX_INFLIGHT];
 	uint32_t maxBuffs;
 };
 
 void vPrimaryCommandBufferManager_Init(struct vPrimaryCommandBufferManager_t *pMan, uint32_t queueFamilyIndex, uint32_t count)
 {
-	for (int i = 0; i < AS_VK_MAX_INFLIGHT; i++)
+	for (int i = 0; i < AS_MAX_INFLIGHT; i++)
 	{
 		VkCommandPoolCreateInfo poolInfo = { VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO };
 		poolInfo.queueFamilyIndex = queueFamilyIndex;
@@ -1037,7 +1007,7 @@ void vPrimaryCommandBufferManager_Init(struct vPrimaryCommandBufferManager_t *pM
 
 void vPrimaryCommandBufferManager_Shutdown(struct vPrimaryCommandBufferManager_t *pMan)
 {
-	for (int i = 0; i < AS_VK_MAX_INFLIGHT; i++)
+	for (int i = 0; i < AS_MAX_INFLIGHT; i++)
 	{
 		vkDestroyCommandPool(asVkDevice, pMan->pools[i], AS_VK_MEMCB);
 		asFree(pMan->pBuffers[i]);
@@ -1070,6 +1040,16 @@ VkCommandBuffer asVkGetNextComputeCommandBuffer()
 {
 	return vPrimaryCommandBufferManager_GetNextCommand(&vMainComputeBufferManager);
 }
+
+/*Shader Fx*/
+asVkFxPermutationRequirements_t vFxPermutationRequirements[16];
+asVkFxPermutationEntry_t vFxPermutationEntries[16];
+
+void asVkRegisterFxPipelinePermutation(const char* name, asVkFxPermutationRequirements_t req, asVkFxPermutationEntry_t desc)
+{
+
+}
+
 
 /*Init and shutdown*/
 
@@ -1133,7 +1113,7 @@ void vScreenResourcesCreate(struct vScreenResources_t *pScreen, SDL_Window* pWin
 	/*Synchronization*/
 	{
 		VkSemaphoreCreateInfo createInfo = (VkSemaphoreCreateInfo) { VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
-		for (uint32_t i = 0; i < AS_VK_MAX_INFLIGHT; i++)
+		for (uint32_t i = 0; i < AS_MAX_INFLIGHT; i++)
 		{
 			if (vkCreateSemaphore(asVkDevice, &createInfo, AS_VK_MEMCB, &pScreen->swapImageAvailableSemaphores[i]) != VK_SUCCESS)
 				asFatalError("vkCreateSemaphore() Failed to create semaphore");
@@ -1194,7 +1174,7 @@ void vScreenResourcesCreate(struct vScreenResources_t *pScreen, SDL_Window* pWin
 			toTransferSrc.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
 			toTransferSrc.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 			toTransferSrc.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			toTransferSrc.image = asVkGetImageFromTexture(pScreen->compositeTexture, 0);
+			toTransferSrc.image = asVkGetImageFromTexture(pScreen->compositeTexture);
 			toTransferSrc.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 			toTransferSrc.subresourceRange.baseMipLevel = 0;
 			toTransferSrc.subresourceRange.levelCount = 1;
@@ -1216,7 +1196,7 @@ void vScreenResourcesCreate(struct vScreenResources_t *pScreen, SDL_Window* pWin
 			region.dstOffsets[1].z = 1;
 			region.srcOffsets[1] = region.dstOffsets[1];
 			vkCmdBlitImage(pScreen->pPresentImageToScreenCmds[i],
-				asVkGetImageFromTexture(pScreen->compositeTexture, 0), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				asVkGetImageFromTexture(pScreen->compositeTexture), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 				pScreen->pSwapImages[i], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 				1, &region, VK_FILTER_LINEAR);
 
@@ -1251,7 +1231,7 @@ void vScreenResourcesDestroy(struct vScreenResources_t *pScreen)
 	vkFreeCommandBuffers(asVkDevice, asVkGeneralCommandPool, pScreen->imageCount, pScreen->pPresentImageToScreenCmds);
 	asFree(pScreen->pPresentImageToScreenCmds);
 
-	for (uint32_t i = 0; i < AS_VK_MAX_INFLIGHT; i++){
+	for (uint32_t i = 0; i < AS_MAX_INFLIGHT; i++){
 		if (pScreen->swapImageAvailableSemaphores[i] == VK_NULL_HANDLE)
 			break;
 		vkDestroySemaphore(asVkDevice, pScreen->swapImageAvailableSemaphores[i], AS_VK_MEMCB);
@@ -1465,7 +1445,7 @@ void asVkInit(asAppInfo_t *pAppInfo, asCfgFile_t* pConfig)
 	{
 		VkFenceCreateInfo fenceInfo = (VkFenceCreateInfo){ VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
 		fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-		for (uint32_t i = 0; i < AS_VK_MAX_INFLIGHT; i++)
+		for (uint32_t i = 0; i < AS_MAX_INFLIGHT; i++)
 		{
 			if(vkCreateFence(asVkDevice, &fenceInfo, AS_VK_MEMCB, &asVkInFlightFences[i]) != VK_SUCCESS)
 				asFatalError("vkCreateFence() Failed to create inflight fence");
@@ -1550,7 +1530,7 @@ void asVkDrawFrame()
 	vPrimaryCommandBufferManager_ReleaseFrame(&vMainComputeBufferManager, asVkCurrentFrame);
 
 	/*Next Frame*/
-	asVkCurrentFrame = (asVkCurrentFrame + 1) % AS_VK_MAX_INFLIGHT;
+	asVkCurrentFrame = (asVkCurrentFrame + 1) % AS_MAX_INFLIGHT;
 }
 
 void asVkShutdown()
@@ -1568,7 +1548,7 @@ void asVkShutdown()
 	if (asVkGeneralCommandPool != VK_NULL_HANDLE)
 		vkDestroyCommandPool(asVkDevice, asVkGeneralCommandPool, AS_VK_MEMCB);
 
-	for (uint32_t i = 0; i < AS_VK_MAX_INFLIGHT; i++){
+	for (uint32_t i = 0; i < AS_MAX_INFLIGHT; i++){
 		if (asVkInFlightFences[i] != VK_NULL_HANDLE)
 			vkDestroyFence(asVkDevice, asVkInFlightFences[i], AS_VK_MEMCB);
 	}

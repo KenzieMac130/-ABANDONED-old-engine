@@ -15,11 +15,15 @@ extern "C" {
 #include <string.h>
 #include <float.h>
 #include <math.h>
+#include <assert.h>
 
 /**
 * @file
 * @brief Common utilities for the engine
 */
+
+/*Assert*/
+#define ASASSERT(e) assert(e)
 
 /*Exportable*/
 #define ASEXPORT __declspec(dllexport)
@@ -35,6 +39,11 @@ typedef struct {
 	int minor; /**< Minor version of the app or game */
 	int patch; /**< Patch number of the app or game */
 } asVersion_t;
+
+/**
+* @brief Endian mode (0x00: little, 0xFF; big)
+*/
+#define AS_ENDIAN 0x00
 
 /**
 * @brief Config for starting up astrengine
@@ -300,6 +309,18 @@ ASEXPORT uint64_t asTimerTicksElapsed(asTimer_t timer);
 * @brief Get mileseconds that passed based on timer
 */
 ASEXPORT uint64_t asTimerMicroseconds(asTimer_t timer, uint64_t ticks);
+
+/*Resources*/
+
+/**
+* @brief a Resource File ID
+*/
+typedef uint64_t asResourceFileID_t;
+
+/**
+* @brief Creates a asResourceFileID_t from the path relative to the assets folder
+*/
+ASEXPORT asResourceFileID_t asResourceFileIDFromRelativePath(const char* pPath, size_t size);
 
 #ifdef __cplusplus
 }

@@ -3,22 +3,28 @@
 #define STRPOOL_U64 uint64_t
 #include "mattias/strpool.h"
 
-typedef struct
+#include <vector>
+#include <string>
+#include <sstream>
+
+class cFxContext
 {
+public:
+	cFxContext(std::ostringstream *debugStream);
+	~cFxContext();
+	std::ostringstream *pDebugStream;
+
+	void fxAssemblerSetupMaterialProps(char* input, size_t inputSize);
+	void fxAssemblerSetupFixedFunctionProps(char* input, size_t inputSize);
+	void fxAssemblerAddGeneratorProp(char* name, size_t nameSize, char* prop, size_t propSize);
+	void fxAssemblerAddNativeShaderCode(asHash32_t nameHash, asShaderStage stage, const char* code, size_t size);
+
+	int saveToFile(const char* filename);
+
 	asShaderFxDesc_t desc;
-	asShaderFxTechniqueDesc_t fixedFunctions;
-	STRPOOL_U64 *pFxPropNames;
-	asHash64_t *pGenNameHashes;
-	STRPOOL_U64 *pGenValues;
-	unsigned char *pDefaultBuffer;
-	strpool_t stringPool;
-} fxContext_t;
-
-fxContext_t* fxAssemblerInit();
-
-void fxAssemblerSetupMaterialProps(fxContext_t *ctx, char* input, size_t inputSize);
-void fxAssemblerSetupFixedFunctionProps(fxContext_t *ctx, char* input, size_t inputSize);
-void fxAssemblerAddGeneratorProp(fxContext_t *ctx, char* name, size_t nameSize, char* prop, size_t propSize);
-void fxAssemblerAddNativeShaderCode(fxContext_t *ctx, asHash32_t nameHash, const char* code, size_t size);
-
-void fxAssemblerRelease(fxContext_t *ctx);
+	std::vector<std::string> FxPropNames;
+	std::vector<asHash64_t> GenNameHashes;
+	std::vector<std::string> GenValues;
+	
+	int defaultBufferPadding;
+};

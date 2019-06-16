@@ -1,35 +1,40 @@
 #include "GLSLGenerator.h"
 #include "stb/stb_ds.h"
 
-void loadGLSLFromFile(glslGenContext_t* ctx, const char* filePath)
+void cGlslGenContext::loadGLSLFromFile(const char* filePath)
 {
+	cGlslGenContext* ctx = this;
 	FILE* fp = fopen(filePath, "rb");
 	if (!fp)
 		return;
 	fseek(fp, 0, SEEK_END);
-	ctx->size = ftell(fp) + 1;
+	ctx->text.resize(ftell(fp));
 	fseek(fp, 0, SEEK_SET);
-	arrsetlen(ctx->byteArray, ctx->size);
-	fread(ctx->byteArray, ctx->size, 1, fp);
-	ctx->byteArray[ctx->size - 1] = 0;
+	fread((void*)ctx->text.data(), ctx->text.size(), 1, fp);
 	fclose(fp);
 }
 
-void appendInputLayout(glslGenContext_t* ctx, int set, int binding, const char* name, const char* type)
+void appendInputLayout(cGlslGenContext* ctx, int set, int binding, const char* name, const char* type)
 {
-	size_t size;
-	size_t insertPos;
-	char buff[128];
-	memset(buff, 0, 128);
-	snprintf(buff, 128, "layout(set = %d, binding = %d) %s %s;\n", set, binding, type, name);
-	size = strlen(buff);
-	insertPos = arrlen(ctx->byteArray);
-	arrsetlen(ctx->byteArray, insertPos + size);
-	memcpy(ctx->byteArray + insertPos, buff, size);
+	char buff[2048];
+	snprintf(buff, 1024, "layout(set = %d, binding = %d) %s %s;\n", set, binding, type, name);
+	ctx->text.append(buff);
 }
 
-int genInputs(glslGenContext_t* ctx, fxContext_t* fx, int baseSet)
+int genInputs(cGlslGenContext* ctx, cFxContext* fx, int baseSet)
 {
+	/*Samplers*/
+	appendInputLayout(ctx, baseSet + 0,
+		0, "SAMPLER_DEFAULT", "uniform sampler");
+	appendInputLayout(ctx, baseSet + 0,
+		1, "SAMPLER_NEAREST", "uniform sampler");
+	appendInputLayout(ctx, baseSet + 0,
+		2, "SAMPLER_CLAMPED", "uniform sampler");
+	appendInputLayout(ctx, baseSet + 0,
+		3, "SAMPLER_CLAMPEDNEAREST", "uniform sampler");
+	appendInputLayout(ctx, baseSet + 0,
+		4, "SAMPLER_SHADOW", "uniform sampler");
+	/*Application Variables*/
 	const char* appVariableText =
 		"uniform asFxAppVar_t {\n"
 		"\tmat4 View;\n"
@@ -37,112 +42,79 @@ int genInputs(glslGenContext_t* ctx, fxContext_t* fx, int baseSet)
 		"\tvec4 Custom;\n"
 		"\tfloat Time;\n"
 		"\tint DebugMode;\n}";
-	/*Samplers*/
-	appendInputLayout(ctx, baseSet + 0,
-		0, "DEFAULTSAMPLER", "uniform sampler");
-	appendInputLayout(ctx, baseSet + 0,
-		1, "NEARESTSAMPLER", "uniform sampler");
-	appendInputLayout(ctx, baseSet + 0,
-		2, "CLAMPEDSAMPLER", "uniform sampler");
-	/*Application Variables*/
 	appendInputLayout(ctx, baseSet + 1, 0, "App", appVariableText);
+	/*Global Texture Array*/
+	appendInputLayout(ctx, baseSet + 2,
+		0, "TEXTURES_2D", "uniform texture2D[512]");
+	appendInputLayout(ctx, baseSet + 2,
+		1, "TEXTURES_3D", "uniform texture3D[512]");
+	appendInputLayout(ctx, baseSet + 2,
+		2, "TEXTURES_CUBE", "uniform textureCube[512]");
 	/*Material Values*/
 	{
-		const char *header = "uniform genFxProps_t {\n";
-		char* bufferGen = NULL;
-		uint32_t bufferPos = strlen(header);
+		std::string buffGen;
+		std::string typeBlock;
+		typeBlock.reserve(512);
+		buffGen.reserve(512);
 		uint32_t lineSize;
 		const char* type;
 		const char* varName;
-		arrsetcap(bufferGen, 1024);
-		arrsetlen(bufferGen, strlen(header));
-		memcpy(bufferGen, header, strlen(header));
+		/*Props*/
 		for (uint32_t i = 0; i < fx->desc.propCount; i++)
 		{
-			if (fx->desc.pProp_Lookup[i].type == AS_SHADERFXPROP_SCALAR)
-				type = "float";
-			else if (fx->desc.pProp_Lookup[i].type == AS_SHADERFXPROP_VECTOR4)
-				type = "vec4";
-			else
-				continue;
-			varName = strpool_cstr(&fx->stringPool, fx->pFxPropNames[i]);
-			lineSize = snprintf(NULL, 0, "\t%s %s;\n", type, varName);
-			arrsetlen(bufferGen, bufferPos + lineSize);
-			snprintf(bufferGen + bufferPos, lineSize, "\t%s %s;", type, varName);
-			bufferPos += lineSize;
-			bufferGen[bufferPos-1] = '\n';
-		}
-		arrsetlen(bufferGen, bufferPos + 2);
-		bufferGen[bufferPos] = '}';
-		bufferGen[bufferPos+1] = '\0';
-		appendInputLayout(ctx, baseSet + 2, 0, "Mat", bufferGen);
-	}
-	/*Material Textures*/
-	{
-		for (uint32_t i = 0; i < fx->desc.propCount; i++)
-		{
-			const char* type;
-			const char* varName;
-			switch (fx->desc.pProp_Lookup[i].type)
+			if (fx->desc.pPropLookup[i].type == AS_SHADERFXPROP_VECTOR4)
 			{
-			default:
-				continue;
-			case AS_SHADERFXPROP_TEX2D:
-				type = "uniform texture2D";
-				break;
-			case AS_SHADERFXPROP_TEX2DARRAY:
-				type = "uniform texture2DArray";
-				break;
-			case AS_SHADERFXPROP_TEXCUBE:
-				type = "uniform textureCube";
-				break;
-			case AS_SHADERFXPROP_TEXCUBEARRAY:
-				type = "uniform textureCubeArray";
-				break;
-			case AS_SHADERFXPROP_TEX3D:
-				type = "uniform texture3D";
-				break;
+				typeBlock.append("\tvec4 ");
 			}
-			varName = strpool_cstr(&fx->stringPool, fx->pFxPropNames[i]);
-			appendInputLayout(ctx, baseSet + 2, fx->desc.pProp_Offset[i], varName, type);
+			else if (fx->desc.pPropLookup[i].type == AS_SHADERFXPROP_SCALAR)
+			{
+				typeBlock.append("\tfloat ");
+			}
+			else
+			{
+				typeBlock.append("\tint ");
+			}
+			varName = fx->FxPropNames[i].c_str();
+			typeBlock.append(varName);
+			typeBlock.append(";\n");
 		}
+		/*Padding (useful for addressing bindless materials)*/
+		{
+			typeBlock.append("\tint _padding[");
+			typeBlock.append(std::to_string(fx->defaultBufferPadding / 4));
+			typeBlock.append("];\n");
+		}
+
+		buffGen = "uniform genMat_t {\n";
+		buffGen.append(typeBlock);
+		buffGen.append("}");
+		appendInputLayout(ctx, baseSet + 2,
+			3, "Mat", buffGen.c_str());
 	}
-	return 3;
+	return 4;
 }
 
-void appendDescSet(glslGenContext_t* ctx, fxContext_t* fx, int set)
+void appendDescSet(cGlslGenContext* ctx, cFxContext* fx, int set)
 {
-	size_t size;
-	size_t insertPos;
 	char buff[16];
 	memset(buff, 0, 16);
 	snprintf(buff, 16, "set = %d\0", set);
-	size = strlen(buff);
-	insertPos = arrlen(ctx->byteArray);
-	arrsetlen(ctx->byteArray, insertPos + size);
-	memcpy(ctx->byteArray + insertPos, buff, size);
+	ctx->text.append(buff);
 }
-void appendSnippet(glslGenContext_t* ctx, fxContext_t* fx, char* snippetName)
+void appendSnippet(cGlslGenContext* ctx, cFxContext* fx, char* snippetName)
 {
 	asHash64_t snippetNameHash = asHashBytes64_xxHash(snippetName, strlen(snippetName));
-	const char* snippetStr;
-	size_t snippetSize;
-	size_t insertPos;
-	for (int i = 0; i < arrlen(fx->pGenNameHashes); i++)
+	for (int i = 0; i < fx->GenNameHashes.size(); i++)
 	{
-		if (fx->pGenNameHashes[i] == snippetNameHash)
+		if (fx->GenNameHashes[i] == snippetNameHash)
 		{
-			snippetStr = strpool_cstr(&fx->stringPool, fx->pGenValues[i]);
-			snippetSize = strlen(snippetStr);
-			insertPos = arrlen(ctx->byteArray);
-			arrsetlen(ctx->byteArray, insertPos + snippetSize);
-			memcpy(ctx->byteArray + insertPos, snippetStr, snippetSize);
+			ctx->text.append(fx->GenValues[i].c_str());
 			return;
 		}
 	}
 }
 
-void genFromComment(glslGenContext_t* ctx, fxContext_t* fx, char* parsePos, int* nextSet)
+void genFromComment(cGlslGenContext* ctx, cFxContext* fx, char* parsePos, int* nextSet)
 {
 	while (parsePos[0] == ' ')
 		parsePos++;
@@ -183,41 +155,39 @@ void genFromComment(glslGenContext_t* ctx, fxContext_t* fx, char* parsePos, int*
 	}
 }
 
-void appendHeader(glslGenContext_t* ctx, fxContext_t* fx)
+void appendHeader(cGlslGenContext* ctx, cFxContext* fx)
 {
 	const char* topOfFile =
 		"#version 450\n"
 		"#extension GL_ARB_separate_shader_objects : enable\n";
-	const size_t size = strlen(topOfFile);
-	size_t insertPos;
-	insertPos = arrlen(ctx->byteArray);
-	arrsetlen(ctx->byteArray, insertPos + size);
-	memcpy(ctx->byteArray + insertPos, topOfFile, size);
+	ctx->text.append(topOfFile);
 }
 
-void generateGLSLFxFromTemplate(glslGenContext_t* ctx, fxContext_t* fx, glslGenContext_t* templateGlsl)
+void cGlslGenContext::generateGLSLFxFromTemplate(cFxContext* fx, cGlslGenContext* templateGlsl)
 {
 	/*Parse until you hit a comment*/
+	cGlslGenContext* ctx = this;
+	this->stage = templateGlsl->stage;
 	bool inCommentSection = false;
 	bool singleLineComment = false;
 	char* commentText = NULL;
 	int nextDescSet = 0;
 	arrsetcap(commentText, 512);
-	arrsetcap(ctx->byteArray, templateGlsl->size+2048);
+	ctx->text.reserve(templateGlsl->text.size()+2048);
 	appendHeader(ctx, fx);
-	for (size_t i = 0; i < templateGlsl->size - 1; i++)
+	for (size_t i = 0; i < templateGlsl->text.size(); i++)
 	{
 		/*Entered Comment Section*/
 		if (!inCommentSection)
 		{
-			if (templateGlsl->byteArray[i] == '/' && templateGlsl->byteArray[i + 1] == '/')
+			if (templateGlsl->text[i] == '/' && templateGlsl->text[i + 1] == '/')
 			{
 				inCommentSection = true;
 				singleLineComment = true;
 				i++;
 				continue;
 			}
-			else if (templateGlsl->byteArray[i] == '/' && templateGlsl->byteArray[i + 1] == '*')
+			else if (templateGlsl->text[i] == '/' && templateGlsl->text[i + 1] == '*')
 			{
 				inCommentSection = true;
 				singleLineComment = false;
@@ -230,7 +200,7 @@ void generateGLSLFxFromTemplate(glslGenContext_t* ctx, fxContext_t* fx, glslGenC
 			/*Exited Comment Section*/
 			if (singleLineComment)
 			{
-				if ((templateGlsl->byteArray[i] == '\n') || (templateGlsl->byteArray[i] == '\r'))
+				if ((templateGlsl->text[i] == '\n') || (templateGlsl->text[i] == '\r'))
 				{
 					arrput(commentText, '\0');
 					genFromComment(ctx, fx, commentText, &nextDescSet);
@@ -242,7 +212,7 @@ void generateGLSLFxFromTemplate(glslGenContext_t* ctx, fxContext_t* fx, glslGenC
 			}
 			else
 			{
-				if (templateGlsl->byteArray[i] == '*' && templateGlsl->byteArray[i + 1] == '/')
+				if (templateGlsl->text[i] == '*' && templateGlsl->text[i + 1] == '/')
 				{
 					arrput(commentText, '\0');
 					genFromComment(ctx, fx, commentText, &nextDescSet);
@@ -256,22 +226,24 @@ void generateGLSLFxFromTemplate(glslGenContext_t* ctx, fxContext_t* fx, glslGenC
 		/*Append to Comment*/
 		if (inCommentSection)
 		{
-			arrput(commentText, templateGlsl->byteArray[i]);
+			arrput(commentText, templateGlsl->text[i]);
 		}
 		else
 		{
-			arrput(ctx->byteArray, templateGlsl->byteArray[i]);
+			ctx->text.push_back(templateGlsl->text[i]);
 		}
 	}
-	arrput(ctx->byteArray, '\0');
-	ctx->size = strlen(ctx->byteArray);
-	asDebugLog("\nGENERATED GLSL:\n" 
-		"---------------------------------------------------------------"
-		"\n%s\n"
-		"---------------------------------------------------------------\n",
-		ctx->byteArray);
+	if (this->pDebugStream)
+	{
+		*this->pDebugStream << "\nGENERATED GLSL:\n"
+			<< "---------------------------------------------------------------\n"
+			<< std::string(ctx->text.c_str())
+			<< "\n---------------------------------------------------------------\n";
+	}
+	arrfree(commentText);
 }
-void glslGenContext_Free(glslGenContext_t* ctx)
+
+cGlslGenContext::cGlslGenContext(std::ostringstream *debugStream)
 {
-	arrfree(ctx->byteArray);
+	this->pDebugStream = debugStream;
 }

@@ -5,19 +5,30 @@
 extern "C" {
 #endif 
 
+#define AS_MAX_INFLIGHT 2
+
 /**
 * @file
 * @brief The mid level (above the API but below the ECS/postfx/etc) core of the engine's renderer
-* Its job is not to encapsulate every aspect of rendering API but rather provide only meaninful and useful abstractions
+* Its job is not to abstract/encapsulate every aspect of rendering APIs but rather provide only meaninful and useful utilities
 * to tasks such as texture/buffer resource management/interfacing with programmable shaders and materials
 * each subsystem of the renderer is responsible for implimenting rendering algorithms (often using native calls) for each backend/API
 */
-
 typedef enum {
 	AS_GFXAPI_NULL,
 	AS_GFXAPI_VULKAN,
+	AS_GFXAPI_OPENGL,
+	AS_GFXAPI_DIRECTX,
+	AS_GFXAPI_METAL,
 	AS_GFXAPI_MAX = UINT32_MAX
 } asGfxAPIs;
+
+#if ASTRENGINE_VK
+/*Current Graphics API*/
+#define AS_GFXAPI AS_GFXAPI_VULKAN
+/*Major API Version (example: (dx)12, (vk)1, (gl)45, etc)*/
+#define AS_GFXAPI_VERSION 1
+#endif
 
 /**
 * @brief Get the Main window as a SDL Window
@@ -50,7 +61,7 @@ ASEXPORT void asGfxSetDrawSkip(bool skip);
 */
 ASEXPORT void asShutdownGfx();
 
-/*Texture Stuff*/
+/*Textures*/
 
 /**
 * @brief Types of textures
@@ -63,7 +74,7 @@ typedef enum {
 	AS_TEXTURETYPE_3D,
 	AS_TEXTURETYPE_COUNT,
 	AS_TEXTURETYPE_MAX = UINT32_MAX
-} asTextureType; 
+} asTextureType;
 
 /**
 * @brief Common image color formats for rendering
@@ -77,6 +88,7 @@ typedef enum {
 	AS_COLORFORMAT_RGBA16_SFLOAT,
 	AS_COLORFORMAT_RGBA32_SFLOAT,
 	AS_COLORFORMAT_R10G10B10A2_UNORM,
+	AS_COLORFORMAT_B10G11R11_UFLOAT,
 	AS_COLORFORMAT_R8_UNORM,
 	AS_COLORFORMAT_R16_SFLOAT,
 	AS_COLORFORMAT_R32_SFLOAT,
@@ -200,7 +212,7 @@ ASEXPORT void asReleaseTexture(asTextureHandle_t hndl);
 */
 #define AS_MAX_TEXTURES 512
 
-/*Buffer Stuff*/
+/*Buffers*/
 
 /**
 * @brief Texture usage flags
@@ -255,7 +267,7 @@ ASEXPORT void asReleaseBuffer(asBufferHandle_t hndl);
 */
 #define AS_MAX_BUFFERS 1024
 
-/*Shader FX Stuff*/
+/*Shader FX*/
 
 /**
 * @brief shader stages
@@ -272,13 +284,20 @@ typedef enum {
 } asShaderStage;
 
 /**
+* @brief shader code lookup
+*/
+typedef struct {
+	asHash32_t nameHash;
+	asShaderStage stage; /**< Stage this shader belongs to*/
+} asShaderFxProgramLookup_t;
+
+/**
 * @brief Describes a shader program
 * main is always assumed to be the entry point of the code
 */
 typedef struct {
-	asShaderStage stage; /**< Stage this shader belongs to*/
-	uint32_t programByteCount; /**< Amount of bytes in asShaderCodeDesc_t::pProgramBytes*/
 	uint32_t programByteStart; /**< Shader code/bytecode for the current API (Vulkan: SPIR-V, OpenGL: GLSL, DirectX: HLSL, ect...)*/
+	uint32_t programByteCount; /**< Amount of bytes in asShaderCodeDesc_t::pProgramBytes*/
 } asShaderFxProgramDesc_t;
 
 /**
@@ -314,26 +333,12 @@ typedef enum {
 } asBlendMode;
 
 /**
-* @brief Describes fixed function inputs for a shader
-*/
-typedef struct {
-	asHash32_t bucket; /**< Requested rendering bucket for special rendering inputs (eg, transparent surfaces)*/
-	uint32_t flags; /**< Additional flags*/
-	uint32_t tessCtrlPoints; /**< Tessellation control points*/
-	float fillWidth; /**< Width for non-solid lines and points*/
-	asFillMode fillMode; /**< Polygon fill modes*/
-	asCullMode cullMode; /**< Which side of the face if any is culled*/
-	asBlendMode blendMode; /**< High level blend modes for the surface*/
-	uint32_t programCount; /**< Amount of asShaderFxTechniqueDesc_t::pPrograms*/
-	asShaderFxProgramDesc_t* pPrograms;
-} asShaderFxTechniqueDesc_t;
-
-/**
 * @brief shader fx property types
 */
 typedef enum {
 	AS_SHADERFXPROP_SCALAR,
 	AS_SHADERFXPROP_VECTOR4,
+	AS_SHADERFXPROP_INTEGER,
 	AS_SHADERFXPROP_TEX2D,
 	AS_SHADERFXPROP_TEX2DARRAY,
 	AS_SHADERFXPROP_TEXCUBE,
@@ -366,35 +371,85 @@ typedef enum {
 	AS_SHADERFXTEXDEFAULT_MAX = UINT8_MAX
 } asShaderFxTextureDefault;
 
+#define AS_MATERIAL_BUFFER_SIZE 256
+
+#define AS_SHADERFX_VERSION 1
+
 /**
-* @brief Description for a shader effect (this should be loaded from a file for sake of sanity)
+* @brief Description for a shader effect
 */
 typedef struct {
-	uint32_t propCount; /**< Amount of asShaderDesc_t::pFxProps*/
-	asShaderFxPropLookup_t *pProp_Lookup; /**< Lookup value for a property*/
-	uint16_t *pProp_Offset; /**< This is the byte offset for scalars and vectors and the slot for textures*/
-	
-	/*Techniques*/
-	uint32_t techniqueCount; /**< Amount of asShaderDesc_t::pTechniques*/
-	asHash32_t *pTechniqueNameHashes; /**< The name of each technique*/
-	asShaderFxTechniqueDesc_t *pTechniques; /**< Techniques*/
+	uint32_t flags; /**< Flags for future use*/
+	asHash32_t bucket; /**< Requested rendering bucket for special rendering inputs (eg, transparent surfaces)*/
+	uint32_t tessCtrlPoints; /**< Tessellation control points*/
+	float fillSize; /**< Width for non-solid lines and points*/
+	asFillMode fillMode; /**< Polygon fill modes*/
+	asCullMode cullMode; /**< Which side of the face if any is culled*/
+	asBlendMode blendMode; /**< High level blend modes for the surface*/
+	uint32_t reserved[5]; /**< Reserved for future use*/
 
-	/*Shader Code Bucket*/
+	uint32_t propCount; /**< Amount of asShaderDesc_t::pFxProps*/
+	uint32_t programCount; /**< Amount of asShaderDesc_t::pProgramDescs*/
 	uint32_t shaderCodeSize; /**< Size of asShaderFxDesc_t::pShaderCode*/
+	uint32_t propBufferSize; /**< The size of the buffer data required for fx properties*/
+
+	asShaderFxPropLookup_t *pPropLookup; /**< Lookup value for a property*/
+	uint16_t *pPropOffset; /**< This is the byte offset for the propbuffer*/
+
+	asShaderFxProgramLookup_t *pProgramLookup; /**< Lookup value of each shader program*/
+	asShaderFxProgramDesc_t *pProgramDescs; /**< Programm contents offsets*/
 	unsigned char* pShaderCode; /**<  Shader code/bytecode for the current API (Vulkan: SPIR-V, OpenGL: GLSL, DirectX: HLSL, ect...)*/
 
-	/*Create Default Prop Buffer*/
-	uint32_t propBufferSize; /**< The size of the buffer data required for fx properties*/
-	unsigned char* pPropBufferDefault; /**< Default fx props (for materials)*/
-	/*Create Default Descriptor with Textures*/
-	uint32_t propTextureCount;
-	asShaderFxTextureDefault* pPropTextureDefaults;
+	unsigned char* pPropBufferDefault; /**< Default fx prop buffer (material values)*/
 } asShaderFxDesc_t;
 
 /**
 * @brief Set the defaults for a shader
 */
 ASEXPORT asShaderFxDesc_t asShaderFxDesc_Init();
+
+/**
+* @brief Save the fx to file
+*/
+ASEXPORT int32_t asShaderFxDesc_SaveToFile(const char* fileName, asShaderFxDesc_t *fx, asGfxAPIs api, uint32_t apiVersion);
+
+/*
+* @brief Read context for the shaderfx file
+*/
+typedef struct
+{
+	FILE* fp;
+} asShaderFx_FileContext_t;
+
+/*
+* @brief Open the file and get the number of bytes needed to store it's data buffers (return<=0 if incompatible)
+*/
+ASEXPORT int32_t asShaderFxDesc_PeekFile(const char* fileName, asShaderFx_FileContext_t *ctx);
+
+/*
+* @brief Create a asShaderFxDesc_t from the file and place it's resizable data into an output buffer
+* get the size of the required output buffer from the asShaderFxDesc_PeekFile() function
+* @warning do not free/relocate the output buffer before you are done working with the fx contents
+*/
+ASEXPORT asShaderFxDesc_t asShaderFxDesc_ReadFile(unsigned char* outBuffer, size_t outbufferSize, asShaderFx_FileContext_t *ctx);
+
+/*Material System*/
+
+/**
+* @brief Description for a material
+*/
+typedef struct {
+	asResourceFileID_t fxFile; /**< ID for the fx associated with this material*/
+	uint32_t propCount; /**< Amount of asMaterialDesc_t::pProps*/
+	uint32_t textureFileCount; /**< Amount of asMaterialDesc_t::pProps*/
+	uint32_t propBufferSize; /**< The size of asMaterialDesc_t::pPropBuffer*/
+
+	asResourceFileID_t *pTextureFiles; /**< IDs for the texture files associated with the material*/
+	asShaderFxPropLookup_t *pPropLookup; /**< Lookup value for a property*/
+	uint16_t *pPropOffset; /**< This is the byte offset for the propbuffer*/
+
+	unsigned char* pPropBuffer; /**< Contains the material values*/
+} asMaterialDesc_t;
 
 #ifdef __cplusplus
 }

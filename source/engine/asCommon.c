@@ -108,6 +108,7 @@ ASEXPORT const char* asCfgGetString(asCfgFile_t* cfg, const char* name, const ch
 }
 
 /*Linear allocator*/
+/*Todo: Fix limited arenas*/
 struct
 {
 	unsigned char* bytes;
@@ -136,11 +137,7 @@ ASEXPORT void asAllocShutdown_Linear()
 
 ASEXPORT void* asAlloc_LinearMalloc(size_t size, size_t arenaIdx)
 {
-	if (_linearAllocArenas[arenaIdx].maxMemory < size + (sizeof(uint32_t) * 2))
-	{
-		asFatalError("Linear Allocator out of Memory");
-		return NULL; /*Not enough room for the allocation*/
-	}
+	ASASSERT(_linearAllocArenas[arenaIdx].maxMemory >= size + (sizeof(uint32_t) * 2));
 	/*Create alloc header*/
 	struct linearHeader{
 		uint32_t start;
@@ -343,4 +340,28 @@ ASEXPORT uint64_t asTimerTicksElapsed(asTimer_t timer)
 ASEXPORT uint64_t asTimerMicroseconds(asTimer_t timer, uint64_t ticks)
 {
 	return ticks / (timer.freq / 1000000);
+}
+
+/*Resource Files*/
+
+ASEXPORT asResourceFileID_t asResourceFileIDFromRelativePath(const char* pPath, size_t size)
+{
+	ASASSERT(size > 1024);
+	char tmpBuff[1024];
+	memset(tmpBuff, 0, 1024);
+	memcpy(tmpBuff, pPath, size);
+	/*Remove Windows slashes*/
+	for (size_t i = 0; i < size; i++)
+	{
+		if (tmpBuff[i] == '\\')
+			tmpBuff[i] = '/';
+	}
+	/*Remove relative start*/
+	const char* buffStart = strstr(tmpBuff, "resources/");
+	if (!buffStart)
+		buffStart = tmpBuff;
+	/*Remove beginning slash*/
+	if (buffStart[0] == '/')
+		buffStart++;
+	asHashBytes64_xxHash(buffStart, strlen(buffStart));
 }
