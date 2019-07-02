@@ -15,6 +15,7 @@ ASEXPORT void asShutdown(void)
 	asShutdownNk();
 #endif
 	asShutdownGfx();
+	asShutdownResource();
 	SDL_Quit();
 	asAllocShutdown_Linear();
 	asDebugLog("astrengine Quit...");
@@ -36,7 +37,9 @@ ASEXPORT int asIgnite(int argc, char *argv[], asAppInfo_t *pAppInfo, void *pCust
 	asAllocInit_Linear(100000);
 
 	SDL_Init(SDL_INIT_EVENTS | SDL_INIT_VIDEO | SDL_INIT_TIMER);
+	asInitResource("resourceManifest.ini");
 	asInitGfx(pAppInfo, pCustomWindow);
+
 #if ASTRENGINE_NUKLEAR
 	asInitNk();
 #endif

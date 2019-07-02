@@ -22,6 +22,24 @@ extern "C" {
 * @brief Common utilities for the engine
 */
 
+/**
+* @brief Return codes and errors
+*/
+typedef enum
+{
+	AS_SUCCESS = 0,
+	AS_FAILURE_UNKNOWN = 1,
+	AS_FAILURE_OUT_OF_MEMORY = 2,
+	AS_FAILURE_INVALID_PARAM = 3,
+	AS_FAILURE_UNSUPPORTED_HARDWARE = 4,
+	AS_FAILURE_UNKNOWN_FORMAT = 5,
+	AS_FAILURE_OUT_OF_BOUNDS = 6,
+	AS_FAILURE_PARSE_ERROR = 7,
+	AS_FAILURE_DECOMPRESSION_ERROR = 8,
+	AS_FAILURE_FILE_NOT_FOUND = 9,
+	AS_FAILURE_FILE_INACCESSIBLE = 10
+} asResults;
+
 /*Assert*/
 #define ASASSERT(e) assert(e)
 
@@ -62,6 +80,11 @@ typedef struct {
 * @brief wraps around printf (but can be overriden in the future to output to remote debug tools)
 */
 #define asDebugLog(_format, ...) printf((_format), __VA_ARGS__)
+
+/**
+* @brief wraps around printf (but can be overriden in the future to output to remote debug tools)
+*/
+#define asDebugWarning(_format, ...) printf(("WARNING: "_format), __VA_ARGS__)
 /**
 * @brief Display an error in a platform independent way
 */
@@ -79,29 +102,36 @@ typedef struct asCfgFile_t asCfgFile_t;
 * @brief Load config file from disk
 * @warning allocates memory on heap, make sure to asCfgFree()
 */
-ASEXPORT asCfgFile_t* asCfgLoad(const char* path);
+ASEXPORT asCfgFile_t* asCfgLoad(const char* pPath);
 /**
 * @brief Load config file from memory
 * @warning allocates memory on heap, make sure to asCfgFree()
 */
-ASEXPORT asCfgFile_t* asCfgFromMem(unsigned char* data, size_t size);
+ASEXPORT asCfgFile_t* asCfgFromMem(unsigned char* pData, size_t size);
 /**
 * @brief Free the config file
 */
-ASEXPORT void asCfgFree(asCfgFile_t* cfg);
+ASEXPORT void asCfgFree(asCfgFile_t* pCfg);
 /**
 * @brief Attempt to open a section from the config file
 */
-ASEXPORT void asCfgOpenSection(asCfgFile_t* cfg, const char* name);
+ASEXPORT void asCfgOpenSection(asCfgFile_t* pCfg, const char* pName);
 /**
 * @brief Read a number from the config file
 */
-ASEXPORT double asCfgGetNumber(asCfgFile_t* cfg, const char* name, double fallback);
+ASEXPORT double asCfgGetNumber(asCfgFile_t* pCfg, const char* pName, double fallback);
 /**
 * @brief Read a string from the config file
 * @warning when the config file is freed the string is no longer valid 
 */
-ASEXPORT const char* asCfgGetString(asCfgFile_t* cfg, const char* name, const char* fallback);
+ASEXPORT const char* asCfgGetString(asCfgFile_t* pCfg, const char* pName, const char* pFallback);
+
+/**
+* @brief Read the next property from the config file
+* @warning when the config file is freed the strings are no longer valid
+* returns 0 when no more properties are found in the section
+*/
+ASEXPORT int asCfgGetNextProp(asCfgFile_t* pCfg, const char** ppName, const char** ppValue);
 
 /**
 * @brief should behave just like malloc
@@ -140,7 +170,7 @@ ASEXPORT void* asAlloc_LinearMalloc(size_t size, size_t arenaIdx);
 * @warning if you attempt to free something that hasn't been created with asAlloc_LinearMalloc()
 * you are in for a bad time
 */
-ASEXPORT void asAlloc_LinearFree(void* block);
+ASEXPORT void asAlloc_LinearFree(void* pBlock);
 
 /**
 * @brief Handle into a handle manager
@@ -148,10 +178,11 @@ ASEXPORT void asAlloc_LinearFree(void* block);
 */
 typedef struct
 {
-	unsigned _index : 8;
-	unsigned _generation : 24;
+	unsigned _generation : 8;
+	unsigned _index : 24;
 } asHandle_t;
-int asHandle_toInt(asHandle_t hndl);
+
+ASEXPORT asHandle_t asHandle_Invalidate();
 
 /**
 * @brief Handle Manager
@@ -309,18 +340,6 @@ ASEXPORT uint64_t asTimerTicksElapsed(asTimer_t timer);
 * @brief Get mileseconds that passed based on timer
 */
 ASEXPORT uint64_t asTimerMicroseconds(asTimer_t timer, uint64_t ticks);
-
-/*Resources*/
-
-/**
-* @brief a Resource File ID
-*/
-typedef uint64_t asResourceFileID_t;
-
-/**
-* @brief Creates a asResourceFileID_t from the path relative to the assets folder
-*/
-ASEXPORT asResourceFileID_t asResourceFileIDFromRelativePath(const char* pPath, size_t size);
 
 #ifdef __cplusplus
 }

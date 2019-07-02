@@ -1,6 +1,7 @@
 #pragma once
 
 #include "asCommon.h"
+#include "asResource.h"
 #ifdef __cplusplus
 extern "C" {
 #endif 

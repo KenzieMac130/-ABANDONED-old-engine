@@ -138,10 +138,10 @@ ASEXPORT asShaderFxDesc_t asShaderFxDesc_ReadFile(unsigned char* outBuffer, size
 	fread(outBuffer, outBufferSize, 1, ctx->fp);
 
 	/*offset pointers into buffers*/
-	result.pPropLookup = outBuffer;
-	result.pPropOffset = outBuffer += sizeof(result.pPropLookup[0]) * result.propCount;
-	result.pProgramLookup = outBuffer += sizeof(result.pPropOffset[0]) * result.propCount;
-	result.pProgramDescs = outBuffer += sizeof(result.pProgramLookup[0]) * result.programCount;
+	result.pPropLookup = (asShaderFxPropLookup_t*)outBuffer;
+	result.pPropOffset = (uint16_t*)outBuffer += sizeof(result.pPropLookup[0]) * result.propCount;
+	result.pProgramLookup = (asShaderFxProgramLookup_t*)outBuffer += sizeof(result.pPropOffset[0]) * result.propCount;
+	result.pProgramDescs = (asShaderFxProgramDesc_t*)outBuffer += sizeof(result.pProgramLookup[0]) * result.programCount;
 	result.pShaderCode = outBuffer += sizeof(result.pProgramDescs[0]) * result.programCount;
 	result.pPropBufferDefault = outBuffer += result.shaderCodeSize;
 

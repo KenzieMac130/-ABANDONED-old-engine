@@ -56,8 +56,6 @@ int genInputs(cGlslGenContext* ctx, cFxContext* fx, int baseSet)
 		std::string typeBlock;
 		typeBlock.reserve(512);
 		buffGen.reserve(512);
-		uint32_t lineSize;
-		const char* type;
 		const char* varName;
 		/*Props*/
 		for (uint32_t i = 0; i < fx->desc.propCount; i++)

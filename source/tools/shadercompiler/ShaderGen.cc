@@ -108,7 +108,6 @@ int ShaderGenerator::parseShaderFx(cFxContext& fx, char* fileContents, size_t fi
 	std::vector<char> tmp;
 	tmp.resize(TMP_SIZE);
 	char param[512];
-	char nameBuffer[512];
 	char* parsePos;
 
 	/*Material*/
@@ -135,4 +134,5 @@ int ShaderGenerator::parseShaderFx(cFxContext& fx, char* fileContents, size_t fi
 			break;
 		fx.fxAssemblerAddGeneratorProp(param, strlen(param), tmp.data(), strlen(tmp.data()));
 	}
+	return 0;
 }

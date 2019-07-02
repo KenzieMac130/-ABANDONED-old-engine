@@ -378,7 +378,7 @@ void asVkFlushMemory(asVkAllocation_t mem)
 }
 
 /*Texture Stuff*/
-/*Todo: Investigate how to better better apply DOD with this... (for now, it works)*/
+/*Todo: Break up vTexture_t into multiple arrays*/
 
 struct vTexture_t
 {
@@ -755,6 +755,7 @@ asVkAllocation_t asVkGetAllocFromTexture(asTextureHandle_t hndl)
 }
 
 /*Buffer stuff*/
+/*Todo: Break up vBuffer_t into multiple arrays*/
 
 struct vBuffer_t
 {
@@ -1024,7 +1025,7 @@ VkCommandBuffer vPrimaryCommandBufferManager_GetNextCommand(struct vPrimaryComma
 {
 	uint32_t slot;
 	slot = pMan->count[asVkCurrentFrame];
-#pragma omp atomic
+/*Todo: Atomic lock*/
 	pMan->count[asVkCurrentFrame]+= 1;
 	return pMan->pBuffers[asVkCurrentFrame][slot];
 }
@@ -1042,14 +1043,19 @@ VkCommandBuffer asVkGetNextComputeCommandBuffer()
 }
 
 /*Shader Fx*/
-asVkFxPermutationRequirements_t vFxPermutationRequirements[16];
-asVkFxPermutationEntry_t vFxPermutationEntries[16];
+uint32_t vFxPermutationCount = 0;
+asHash64_t vFxPermutationNameHashes[AS_VK_MAX_PERMUTATION_ENTRIES];
+asVkFxPermutationRequirements_t vFxPermutationRequirements[AS_VK_MAX_PERMUTATION_ENTRIES];
+asVkFxPermutationEntry_t vFxPermutationEntries[AS_VK_MAX_PERMUTATION_ENTRIES];
 
-void asVkRegisterFxPipelinePermutation(const char* name, asVkFxPermutationRequirements_t req, asVkFxPermutationEntry_t desc)
+void asVkRegisterFxPipelinePermutation(const char* name, size_t nameSize, asVkFxPermutationRequirements_t req, asVkFxPermutationEntry_t desc)
 {
-
+	ASASSERT(vFxPermutationCount >= AS_VK_MAX_PERMUTATION_ENTRIES);
+	vFxPermutationNameHashes[vFxPermutationCount] = asHashBytes64_xxHash(name, nameSize);
+	vFxPermutationRequirements[vFxPermutationCount] = req;
+	vFxPermutationEntries[vFxPermutationCount] = desc;
+	vFxPermutationCount++;
 }
-
 
 /*Init and shutdown*/
 
@@ -1308,7 +1314,7 @@ void asVkInit(asAppInfo_t *pAppInfo, asCfgFile_t* pConfig)
 		vkEnumeratePhysicalDevices(asVkInstance, &gpuCount, gpus);
 
 		int preferredGPU = (int)asCfgGetNumber(pConfig, "GPUIndex", -1);
-		if (preferredGPU > 0 && preferredGPU < (int)gpuCount) /*User selected GPU*/
+		if (preferredGPU >= 0 && preferredGPU < (int)gpuCount) /*User selected GPU*/
 		{
 			asVkPhysicalDevice = gpus[preferredGPU];
 		}

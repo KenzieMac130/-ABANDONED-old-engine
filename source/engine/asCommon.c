@@ -6,6 +6,13 @@
 
 #include <SDL_timer.h>
 
+#define STB_DS_IMPLEMENTATION
+#include "stb/stb_ds.h"
+#define  STRPOOL_IMPLEMENTATION
+#include "mattias/strpool.h"
+#define HASHTABLE_IMPLEMENTATION
+#include "mattias/hashtable.h"
+
 /*Errors*/
 
 ASEXPORT void asError(const char* msg)
@@ -29,6 +36,7 @@ struct asCfgFile_t
 {
 	ini_t *pIni;
 	int currentSection;
+	int nextProperty;
 };
 
 ASEXPORT asCfgFile_t* asCfgLoad(const char* path)
@@ -52,6 +60,7 @@ ASEXPORT asCfgFile_t* asCfgLoad(const char* path)
 	asCfgFile_t *result = asMalloc(sizeof(asCfgFile_t));
 	result->pIni = ini_load(pCfgData, NULL);
 	result->currentSection = INI_GLOBAL_SECTION;
+	result->nextProperty = 0;
 	asFree(pCfgData);
 	return result;
 }
@@ -60,6 +69,7 @@ ASEXPORT asCfgFile_t* asCfgFromMem(unsigned char* data, size_t size)
 	asCfgFile_t *result = asMalloc(sizeof(asCfgFile_t));
 	result->pIni = ini_load(data, NULL);
 	result->currentSection = INI_GLOBAL_SECTION;
+	result->nextProperty = 0;
 	return result;
 }
 ASEXPORT void asCfgFree(asCfgFile_t* cfg)
@@ -77,6 +87,7 @@ ASEXPORT void asCfgOpenSection(asCfgFile_t* cfg, const char* name)
 	if (section == INI_NOT_FOUND)
 		return;
 	cfg->currentSection = section;
+	cfg->nextProperty = 0;
 }
 ASEXPORT double asCfgGetNumber(asCfgFile_t* cfg, const char* name, double fallback)
 {
@@ -105,6 +116,18 @@ ASEXPORT const char* asCfgGetString(asCfgFile_t* cfg, const char* name, const ch
 		return propStr;
 	else
 		return fallback;
+}
+
+ASEXPORT int asCfgGetNextProp(asCfgFile_t* cfg, const char** name, const char** value)
+{
+	if (!cfg)
+		return 0;
+	if (cfg->nextProperty >= ini_property_count(cfg->pIni, cfg->currentSection))
+		return 0;
+	*value = ini_property_value(cfg->pIni, cfg->currentSection, cfg->nextProperty);
+	*name = ini_property_name(cfg->pIni, cfg->currentSection, cfg->nextProperty);
+	cfg->nextProperty++;
+	return 1;
 }
 
 /*Linear allocator*/
@@ -166,15 +189,6 @@ ASEXPORT void asAlloc_LinearFree(void* block)
 
 /*Handle manager*/
 
-int asHandle_toInt(asHandle_t hndl)
-{
-	hndl._index = 2;
-	hndl._generation = 255;
-	int result = hndl._index << 8;
-	result |= hndl._generation;
-	return result;
-}
-
 asHandle_t _constructHandle(uint32_t index, uint32_t generation)
 {
 	asHandle_t result;
@@ -183,7 +197,10 @@ asHandle_t _constructHandle(uint32_t index, uint32_t generation)
 	return result;
 }
 
-#define MIN_FREE_INDICES 1024
+ASEXPORT asHandle_t asHandle_Invalidate()
+{
+	return _constructHandle(0xFFFFFF, 0xFF);
+}
 
 ASEXPORT void asHandleManagerCreate(asHandleManager_t *pMan, uint32_t maxSlots)
 {
@@ -205,7 +222,7 @@ ASEXPORT void asHandleManagerDestroy(asHandleManager_t *pMan)
 ASEXPORT asHandle_t asCreateHandle(asHandleManager_t* pMan)
 {
 	if (pMan->_slotCount >= pMan->_maxSlots)
-		return _constructHandle(0xFFFFFF, 0xFF);
+		return asHandle_Invalidate();
 	uint32_t idx;
 	if (pMan->_freeIndicesCount)
 	{
@@ -340,28 +357,4 @@ ASEXPORT uint64_t asTimerTicksElapsed(asTimer_t timer)
 ASEXPORT uint64_t asTimerMicroseconds(asTimer_t timer, uint64_t ticks)
 {
 	return ticks / (timer.freq / 1000000);
-}
-
-/*Resource Files*/
-
-ASEXPORT asResourceFileID_t asResourceFileIDFromRelativePath(const char* pPath, size_t size)
-{
-	ASASSERT(size > 1024);
-	char tmpBuff[1024];
-	memset(tmpBuff, 0, 1024);
-	memcpy(tmpBuff, pPath, size);
-	/*Remove Windows slashes*/
-	for (size_t i = 0; i < size; i++)
-	{
-		if (tmpBuff[i] == '\\')
-			tmpBuff[i] = '/';
-	}
-	/*Remove relative start*/
-	const char* buffStart = strstr(tmpBuff, "resources/");
-	if (!buffStart)
-		buffStart = tmpBuff;
-	/*Remove beginning slash*/
-	if (buffStart[0] == '/')
-		buffStart++;
-	asHashBytes64_xxHash(buffStart, strlen(buffStart));
 }

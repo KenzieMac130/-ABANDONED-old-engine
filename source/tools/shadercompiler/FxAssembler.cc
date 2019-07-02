@@ -352,7 +352,7 @@ void cFxContext::fxAssemblerAddNativeShaderCode(asHash32_t nameHash, asShaderSta
 	size_t start = arrlen(ctx->desc.pShaderCode);
 	arrsetlen(ctx->desc.pShaderCode, start + size);
 	memcpy(ctx->desc.pShaderCode + start, code, size);
-	ctx->desc.shaderCodeSize += size;
+	ctx->desc.shaderCodeSize += (uint32_t)size;
 	
 	asShaderFxProgramLookup_t lookup;
 	lookup.nameHash = nameHash;
@@ -361,7 +361,7 @@ void cFxContext::fxAssemblerAddNativeShaderCode(asHash32_t nameHash, asShaderSta
 
 	asShaderFxProgramDesc_t desc;
 	desc.programByteStart = (uint32_t)start;
-	desc.programByteCount = size;
+	desc.programByteCount = (uint32_t)size;
 	arrput(ctx->desc.pProgramDescs, desc);
 
 	ctx->desc.programCount++;

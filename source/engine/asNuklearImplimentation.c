@@ -111,7 +111,7 @@ void asInitNk()
 	}
 #endif
 
-	nk_font_atlas_end(&nkFontAtlas, nk_handle_id(asHandle_toInt(nkFontTexture)) /*Replace with Material Handle*/, &nkNullDraw);
+	nk_font_atlas_end(&nkFontAtlas, nk_handle_id(nkFontTexture._index) /*Todo: Replace with Material Handle*/, &nkNullDraw);
 
 	/*Context*/
 	nkMemory = asMalloc(AS_NK_MAX_MEMORY);

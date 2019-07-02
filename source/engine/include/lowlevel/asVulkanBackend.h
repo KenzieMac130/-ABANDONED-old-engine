@@ -154,6 +154,8 @@ asVkAllocation_t asVkGetAllocFromBuffer(asBufferHandle_t hndl);
 
 /*Shader Fx*/
 
+#define AS_VK_MAX_PERMUTATION_ENTRIES 16
+
 /*
 * @brief a description for a pipeline permutation to be used with the fx system
 */
@@ -175,7 +177,7 @@ typedef struct
 	asFillMode requiredFillMode; /**< Required fill mode (UINT32_MAX is no requirements)*/
 } asVkFxPermutationRequirements_t;
 
-void asVkRegisterFxPipelinePermutation(const char* name, asVkFxPermutationRequirements_t req, asVkFxPermutationEntry_t desc);
+void asVkRegisterFxPipelinePermutation(const char* name, size_t nameSize, asVkFxPermutationRequirements_t req, asVkFxPermutationEntry_t desc);
 
 #ifdef __cplusplus
 }

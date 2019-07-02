@@ -1,5 +1,6 @@
 #include "engine/asEntry.h"
 #include "engine/asRendererCore.h"
+#include "engine/asResource.h"
 
 #include "engine/asNuklearImplimentation.h"
 #define NK_IMPLEMENTATION
@@ -79,8 +80,18 @@ int main(int argc, char* argv[])
 	}
 	/*Test texture creation*/
 	{
+		asResourceType_t resourceType_Texture = asResource_RegisterType("TEXTURE", 8);
+		asResourceLoader_t file;
+		asResourceFileID_t resID = asResource_FileIDFromRelativePath("Derp.jpg", 9);
+		asResourceLoader_Open(&file, resID);
+		size_t fSize = asResourceLoader_GetContentSize(&file);
+		unsigned char* fContents = asMalloc(fSize);
+		asResourceLoader_ReadAll(&file, fSize, fContents);
+		asResourceLoader_Close(&file);
+
 		int x, y, channels;
-		unsigned char* img = stbi_load("Derp.jpg", &x, &y, &channels, 4);
+		unsigned char* img = stbi_load_from_memory(fContents, (int)fSize, &x, &y, &channels, 4);
+		asFree(fContents);
 		if (!img)
 			asFatalError("Failed to load image");
 		asTextureDesc_t desc = asTextureDesc_Init();
@@ -104,6 +115,19 @@ int main(int argc, char* argv[])
 		desc.pDebugLabel = "TestImage";
 		texture = asCreateTexture(&desc);
 		stbi_image_free(img);
+
+		asResourceDataMapping_t map = { texture };
+		asResource_Create(resID, map, resourceType_Texture, 3);
+		asResource_AdjustReferences(resID, -1);
+		asResource_AdjustReferences(resID, -1);
+		asResource_AdjustReferences(resID, -3);
+
+		asResourceDataMapping_t* deleteQueue;
+		size_t count = asResource_GetDeletionQueue(resourceType_Texture, &deleteQueue);
+		for (size_t i = 0; i < count; i++)
+		{
+			asReleaseTexture(deleteQueue[i].hndl);
+		}
 	}
 	/*Test buffer creation*/
 	{
