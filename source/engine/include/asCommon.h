@@ -146,31 +146,37 @@ ASEXPORT int asCfgGetNextProp(asCfgFile_t* pCfg, const char** ppName, const char
 */
 #define asFree(block) free(block)
 
-#define AS_ALLOC_LINEAR_MAXCONTEXTS 1
 /**
-* @brief Initialize central linear memory allocator
-* @warning do not touch...
+* @brief A custom memory allocator base
 */
-ASEXPORT void asAllocInit_Linear(uint32_t memPerContext);
+typedef struct
+{
+	unsigned char* _block;
+	size_t _size;
+	size_t _nextBase;
+	int _type;
+} asLinearMemoryAllocator_t;
+
 /**
-* @brief Shutdown central linear memory allocator
-* @warning do not touch...
+* @brief initialize linear memory allocator
+* this is best used for short lived memory blocks
+* @warning you must asAlloc_LinearFree() your allocations in a reverse order
 */
-ASEXPORT void asAllocShutdown_Linear();
+ASEXPORT void asAllocInit_Linear(asLinearMemoryAllocator_t* pMemAlloc, size_t size);
 /**
-* @brief Allocate a short lived block of memory using the linear allocator
-* @warning you should asAlloc_LinearFree() your allocations in a reverse order
-* @param arenaIdx use this to change to a different pool for thread-safety
-* @warning arenaIdx must not exceed AS_ALLOC_LINEAR_MAXCONTEXTS
+* @brief Shutdown a linear memory allocator
 */
-ASEXPORT void* asAlloc_LinearMalloc(size_t size, size_t arenaIdx);
+ASEXPORT void asAllocShutdown_Linear(asLinearMemoryAllocator_t* pMemAlloc);
+
 /**
-* @brief free memory allocated with asAlloc_LinearMalloc()
-* @warning the allocations should be freed in reverse order
-* @warning if you attempt to free something that hasn't been created with asAlloc_LinearMalloc()
-* you are in for a bad time
+* @brief Allocate a block of memory for a linear allocator
 */
-ASEXPORT void asAlloc_LinearFree(void* pBlock);
+ASEXPORT void* asAlloc_LinearMalloc(asLinearMemoryAllocator_t* pMemAlloc, size_t size);
+/**
+* @brief Free a block of memory for a linear allocator
+* @warning you must asAlloc_LinearFree() your allocations in a reverse order
+*/
+ASEXPORT void asAlloc_LinearFree(asLinearMemoryAllocator_t* pMemAlloc, void* pBlock);
 
 /**
 * @brief Handle into a handle manager

@@ -11,6 +11,8 @@
 #include "include/asNuklearImplimentation.h"
 #endif
 
+asLinearMemoryAllocator_t* pCurrentLinearAllocator;
+
 ASEXPORT uint32_t asTextureCalcPitch(asColorFormat format, uint32_t width)
 {
 	uint32_t tmpVal = 0;
@@ -115,40 +117,57 @@ ASEXPORT int32_t asShaderFxDesc_SaveToFile(const char* fileName, asShaderFxDesc_
 	return 0;
 }
 
-ASEXPORT int32_t asShaderFxDesc_PeekFile(const char* fileName, asShaderFx_FileContext_t *ctx)
+ASEXPORT asShaderFxHandle_t asShaderFx_FromResource(asResourceFileID_t id)
 {
-	ctx->fp = fopen(fileName, "rb");
-	if (!ctx->fp)
-		return 0;
+	/*check for existing resource*/
+	asShaderFxHandle_t result = asResource_GetExistingDataMapping(id, asHashBytes32_xxHash("SHADER", 6)).hndl;
+	if (asHandleValid(result))
+	{
+		asResource_IncrimentReferences(id, 1);
+		return result;
+	}
+
+	/*load new resource*/
+	asResourceLoader_t loader;
+	if (asResourceLoader_Open(&loader, id) != AS_SUCCESS);
+	return asHandle_Invalidate();
 	struct _fxHeader test = FXHEADERDEFAULT;
 	struct _fxHeader header;
-	fread(&header, sizeof(struct _fxHeader), 1, ctx->fp);
+	asResourceLoader_Read(&loader, sizeof(struct _fxHeader), &header);
 	if (memcmp(&test.valid, &header.valid, sizeof(header.valid)))
 	{
-		fclose(ctx->fp);
-		return 0;
+		asResourceLoader_Close(&loader);
+		return asHandle_Invalidate();
 	}
-	return (int32_t)header.buffersize;
-}
-
-ASEXPORT asShaderFxDesc_t asShaderFxDesc_ReadFile(unsigned char* outBuffer, size_t outBufferSize, asShaderFx_FileContext_t *ctx)
-{
-	asShaderFxDesc_t result;
-	fread(&result, 4 * 16, 1, ctx->fp);
-	fread(outBuffer, outBufferSize, 1, ctx->fp);
+	asShaderFxDesc_t desc;
+	unsigned char* outBuffer = asAlloc_LinearMalloc(pCurrentLinearAllocator, header.buffersize);
+	asResourceLoader_Read(&loader, 4 * 16, &desc);
+	asResourceLoader_Read(&loader, header.buffersize, outBuffer);
 
 	/*offset pointers into buffers*/
-	result.pPropLookup = (asShaderFxPropLookup_t*)outBuffer;
-	result.pPropOffset = (uint16_t*)outBuffer += sizeof(result.pPropLookup[0]) * result.propCount;
-	result.pProgramLookup = (asShaderFxProgramLookup_t*)outBuffer += sizeof(result.pPropOffset[0]) * result.propCount;
-	result.pProgramDescs = (asShaderFxProgramDesc_t*)outBuffer += sizeof(result.pProgramLookup[0]) * result.programCount;
-	result.pShaderCode = outBuffer += sizeof(result.pProgramDescs[0]) * result.programCount;
-	result.pPropBufferDefault = outBuffer += result.shaderCodeSize;
+	desc.pPropLookup = (asShaderFxPropLookup_t*)outBuffer;
+	desc.pPropOffset = (uint16_t*)outBuffer += sizeof(desc.pPropLookup[0]) * desc.propCount;
+	desc.pProgramLookup = (asShaderFxProgramLookup_t*)outBuffer += sizeof(desc.pPropOffset[0]) * desc.propCount;
+	desc.pProgramDescs = (asShaderFxProgramDesc_t*)outBuffer += sizeof(desc.pProgramLookup[0]) * desc.programCount;
+	desc.pShaderCode = outBuffer += sizeof(desc.pProgramDescs[0]) * desc.programCount;
+	desc.pPropBufferDefault = outBuffer += desc.shaderCodeSize;
 
-	fclose(ctx->fp);
-	return result;
+	asResourceLoader_Close(&loader);
+	result = asShaderFx_FromDesc(&desc);
+
+	asResourceDataMapping_t map;
+	map.hndl = result;
+	asResource_Create(id, map, asHashBytes32_xxHash("SHADER", 6), 1);
+	asAlloc_LinearFree(pCurrentLinearAllocator, outBuffer);
 }
 
+ASEXPORT asShaderFxHandle_t asShaderFx_FromDesc(asShaderFxDesc_t * desc)
+{
+	return asHandle_Invalidate();
+	/*todo: generate pipeline permutations, register value mappings with material system, etc, etc...*/
+}
+
+/*Texture*/
 
 ASEXPORT asTextureDesc_t asTextureDesc_Init()
 {
@@ -177,10 +196,11 @@ ASEXPORT SDL_Window* asGetMainWindowPtr()
 	return asMainWindow;
 }
 
-ASEXPORT void asInitGfx(asAppInfo_t *pAppInfo, void* pCustomWindow)
+ASEXPORT void asInitGfx(asLinearMemoryAllocator_t* pLinearAllocator, asAppInfo_t *pAppInfo, void* pCustomWindow)
 {
 	/*Read Config File*/
 	asCfgFile_t *pConfig = asCfgLoad(pAppInfo->pGfxIniName);
+	pCurrentLinearAllocator = pLinearAllocator;
 
 	/*Window Creation*/
 	if (pCustomWindow)
@@ -226,7 +246,7 @@ ASEXPORT void asInitGfx(asAppInfo_t *pAppInfo, void* pCustomWindow)
 	}
 
 #if ASTRENGINE_VK
-	asVkInit(pAppInfo, pConfig);
+	asVkInit(pCurrentLinearAllocator, pAppInfo, pConfig);
 #endif
 
 	asCfgFree(pConfig);
@@ -243,7 +263,7 @@ ASEXPORT void asGfxTriggerResizeEvent()
 	if (_frameSkip)
 		return;
 #if ASTRENGINE_VK
-	asVkWindowResize();
+	asVkWindowResize(pCurrentLinearAllocator);
 #endif
 }
 

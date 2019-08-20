@@ -56,7 +56,7 @@ extern VkDevice asVkDevice;
 * @brief startup vulkan backend
 * creates an instance, device, memory allocator, etc...
 */
-void asVkInit(asAppInfo_t *pAppInfo, asCfgFile_t* pConfig);
+void asVkInit(asLinearMemoryAllocator_t* pLinearAllocator, asAppInfo_t *pAppInfo, asCfgFile_t* pConfig);
 /**
 * @brief shutdown vulkan backend
 * destroys every vulkan resource for a clean shutdown
@@ -71,7 +71,7 @@ void asVkDrawFrame();
 /**
 * @brief resize a window
 */
-void asVkWindowResize();
+void asVkWindowResize(asLinearMemoryAllocator_t* pLinearAllocator);
 
 /**
 * @brief a memory allocation inside the vulkan backend

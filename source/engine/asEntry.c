@@ -8,6 +8,7 @@
 #include <SDL.h>
 
 bool gContinueLoop;
+asLinearMemoryAllocator_t linearAllocator;
 
 ASEXPORT void asShutdown(void)
 {
@@ -17,7 +18,7 @@ ASEXPORT void asShutdown(void)
 	asShutdownGfx();
 	asShutdownResource();
 	SDL_Quit();
-	asAllocShutdown_Linear();
+	asAllocShutdown_Linear(&linearAllocator);
 	asDebugLog("astrengine Quit...");
 }
 
@@ -34,11 +35,11 @@ ASEXPORT int asIgnite(int argc, char *argv[], asAppInfo_t *pAppInfo, void *pCust
 	asDebugLog("astrengine %d.%d.%d\n", ASTRENGINE_VERSION_MAJOR, ASTRENGINE_VERSION_MINOR, ASTRENGINE_VERSION_PATCH);
 
 	/*Memory*/
-	asAllocInit_Linear(100000);
+	asAllocInit_Linear(&linearAllocator, 100000);
 
 	SDL_Init(SDL_INIT_EVENTS | SDL_INIT_VIDEO | SDL_INIT_TIMER);
 	asInitResource("resourceManifest.ini");
-	asInitGfx(pAppInfo, pCustomWindow);
+	asInitGfx(&linearAllocator, pAppInfo, pCustomWindow);
 
 #if ASTRENGINE_NUKLEAR
 	asInitNk();

@@ -23,6 +23,11 @@ ASEXPORT void asShutdownResource();
 typedef uint64_t asResourceFileID_t;
 
 /**
+* @brief a Handle to a resource
+*/
+typedef asHandle_t asResourceHandle_t;
+
+/**
 * @brief a Resource type
 */
 typedef asHash32_t asResourceType_t;
@@ -82,11 +87,8 @@ ASEXPORT asResults asResourceLoader_ReadAll(asResourceLoader_t* loader, size_t s
 */
 typedef struct
 {
-	union
-	{
-		asHandle_t hndl;
-		void* ptr;
-	};
+	asHandle_t hndl;
+	void* ptr;
 } asResourceDataMapping_t;
 
 /**
@@ -101,9 +103,14 @@ ASEXPORT void asResource_Create(asResourceFileID_t id, asResourceDataMapping_t m
 ASEXPORT asResourceDataMapping_t asResource_GetExistingDataMapping(asResourceFileID_t id, asHash32_t requiredType);
 
 /**
-* @brief Set the mapping
+* @brief Incriment the references to a resource
 */
-ASEXPORT void asResource_AdjustReferences(asResourceFileID_t id, int32_t addRefCount);
+ASEXPORT void asResource_IncrimentReferences(asResourceFileID_t id, uint32_t addRefCount);
+
+/**
+* @brief Deincriment the references to a resource
+*/
+ASEXPORT void asResource_DeincrimentReferences(asResourceFileID_t id, uint32_t subRefCount);
 
 /**
 * @brief Register type

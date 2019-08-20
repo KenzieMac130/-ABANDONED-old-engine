@@ -40,7 +40,7 @@ ASEXPORT struct SDL_Window* asGetMainWindowPtr();
 * @brief Initializes the window and renderer
 * @warning The engine ignite should handle this for you
 */
-ASEXPORT void asInitGfx(asAppInfo_t *pAppInfo, void* pCustomWindow);
+ASEXPORT void asInitGfx(asLinearMemoryAllocator_t* pLinearAllocator, asAppInfo_t *pAppInfo, void* pCustomWindow);
 /**
 * @brief Render a single frame
 * @warning The engine update should handle this for you
@@ -414,25 +414,20 @@ ASEXPORT asShaderFxDesc_t asShaderFxDesc_Init();
 */
 ASEXPORT int32_t asShaderFxDesc_SaveToFile(const char* fileName, asShaderFxDesc_t *fx, asGfxAPIs api, uint32_t apiVersion);
 
-/*
-* @brief Read context for the shaderfx file
+/**
+* @brief Hanlde to an internal representation of shaderfx 
 */
-typedef struct
-{
-	FILE* fp;
-} asShaderFx_FileContext_t;
+typedef asHandle_t asShaderFxHandle_t;
 
-/*
-* @brief Open the file and get the number of bytes needed to store it's data buffers (return<=0 if incompatible)
+/**
+* @brief Create the shaderfx from a description
 */
-ASEXPORT int32_t asShaderFxDesc_PeekFile(const char* fileName, asShaderFx_FileContext_t *ctx);
+ASEXPORT asShaderFxHandle_t asShaderFx_FromDesc(asShaderFxDesc_t* desc);
 
-/*
-* @brief Create a asShaderFxDesc_t from the file and place it's resizable data into an output buffer
-* get the size of the required output buffer from the asShaderFxDesc_PeekFile() function
-* @warning do not free/relocate the output buffer before you are done working with the fx contents
+/**
+* @brief Create the shaderfx from a resource
 */
-ASEXPORT asShaderFxDesc_t asShaderFxDesc_ReadFile(unsigned char* outBuffer, size_t outbufferSize, asShaderFx_FileContext_t *ctx);
+ASEXPORT asShaderFxHandle_t asShaderFx_FromResource(asResourceFileID_t file);
 
 /*Material System*/
 

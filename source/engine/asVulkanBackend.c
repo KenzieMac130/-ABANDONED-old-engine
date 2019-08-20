@@ -3,6 +3,8 @@
 #include <SDL_vulkan.h>
 #include "include/asRendererCore.h"
 
+asLinearMemoryAllocator_t* pCurrentLinearAllocator;
+
 struct vScreenResources_t
 {
 	SDL_Window *pWindow;
@@ -68,7 +70,7 @@ bool vValidationLayersAvailible()
 {
 	uint32_t layerCount;
 	vkEnumerateInstanceLayerProperties(&layerCount, NULL);
-	VkLayerProperties *layerProps = (VkLayerProperties*)asAlloc_LinearMalloc(sizeof(VkLayerProperties) * layerCount, 0);
+	VkLayerProperties *layerProps = (VkLayerProperties*)asAlloc_LinearMalloc(pCurrentLinearAllocator, sizeof(VkLayerProperties) * layerCount);
 	vkEnumerateInstanceLayerProperties(&layerCount, layerProps);
 	for (uint32_t i = 0; i < layerCount; i++)
 		asDebugLog("VK Layer: \"%s\" found\n", layerProps[i].layerName);
@@ -86,11 +88,11 @@ bool vValidationLayersAvailible()
 		}
 		if (!found)
 		{
-			asAlloc_LinearFree(layerProps);
+			asAlloc_LinearFree(pCurrentLinearAllocator, layerProps);
 			return false;
 		}
 	}
-	asAlloc_LinearFree(layerProps);
+	asAlloc_LinearFree(pCurrentLinearAllocator, layerProps);
 	return true;
 }
 
@@ -115,7 +117,7 @@ vQueueFamilyIndices_t vFindQueueFamilyIndices(VkPhysicalDevice gpu)
 	vQueueFamilyIndices_t result = (vQueueFamilyIndices_t) { UINT32_MAX, UINT32_MAX, UINT32_MAX };
 	uint32_t queueFamilyCount;
 	vkGetPhysicalDeviceQueueFamilyProperties(gpu, &queueFamilyCount, NULL);
-	VkQueueFamilyProperties *queueFamilyProps = asAlloc_LinearMalloc(sizeof(VkQueueFamilyProperties) * queueFamilyCount, 0);
+	VkQueueFamilyProperties *queueFamilyProps = asAlloc_LinearMalloc(pCurrentLinearAllocator, sizeof(VkQueueFamilyProperties) * queueFamilyCount);
 	vkGetPhysicalDeviceQueueFamilyProperties(gpu, &queueFamilyCount, queueFamilyProps);
 	for (uint32_t i = 0; i < queueFamilyCount; i++)
 	{
@@ -132,7 +134,7 @@ vQueueFamilyIndices_t vFindQueueFamilyIndices(VkPhysicalDevice gpu)
 		if (vIsQueueFamilyComplete(result))
 			break;
 	}
-	asAlloc_LinearFree(queueFamilyProps);
+	asAlloc_LinearFree(pCurrentLinearAllocator, queueFamilyProps);
 	return result;
 }
 
@@ -150,17 +152,17 @@ int32_t vQueryAndRateSwapChainSupport(VkPhysicalDevice gpu, VkSurfaceKHR surf,
 	if (formatCount <= 0){/*No formats availible*/
 		return -1;
 	}
-	VkSurfaceFormatKHR* formats = (VkSurfaceFormatKHR*)asAlloc_LinearMalloc(sizeof(VkSurfaceFormatKHR)*formatCount, 0);
+	VkSurfaceFormatKHR* formats = (VkSurfaceFormatKHR*)asAlloc_LinearMalloc(pCurrentLinearAllocator, sizeof(VkSurfaceFormatKHR)*formatCount);
 	vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surf, &formatCount, formats);
 
 	/*Present Modes*/
 	uint32_t modeCount;
 	vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surf, &modeCount, NULL);
 	if (modeCount <= 0) {/*No modes availible*/
-		asAlloc_LinearFree(formats);
+		asAlloc_LinearFree(pCurrentLinearAllocator, formats);
 		return -1;
 	}
-	VkPresentModeKHR* modes = (VkPresentModeKHR*)asAlloc_LinearMalloc(sizeof(VkPresentModeKHR)*modeCount, 0);
+	VkPresentModeKHR* modes = (VkPresentModeKHR*)asAlloc_LinearMalloc(pCurrentLinearAllocator, sizeof(VkPresentModeKHR)*modeCount);
 	vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surf, &modeCount, modes);
 
 	/*Pick best swapchain format*/
@@ -199,8 +201,8 @@ int32_t vQueryAndRateSwapChainSupport(VkPhysicalDevice gpu, VkSurfaceKHR surf,
 		}
 	}
 
-	asAlloc_LinearFree(modes);
-	asAlloc_LinearFree(formats);
+	asAlloc_LinearFree(pCurrentLinearAllocator, modes);
+	asAlloc_LinearFree(pCurrentLinearAllocator, formats);
 
 	/*Additional benifits*/
 	rating += surfaceCaps.maxImageExtent.width + surfaceCaps.maxImageExtent.height;
@@ -219,7 +221,7 @@ bool vDeviceHasRequiredExtensions(VkPhysicalDevice gpu)
 {
 	uint32_t extCount;
 	vkEnumerateDeviceExtensionProperties(gpu, NULL, &extCount, NULL);
-	VkExtensionProperties* availible = (VkExtensionProperties*)asAlloc_LinearMalloc(sizeof(VkExtensionProperties)*extCount, 0);
+	VkExtensionProperties* availible = (VkExtensionProperties*)asAlloc_LinearMalloc(pCurrentLinearAllocator, sizeof(VkExtensionProperties)*extCount);
 	vkEnumerateDeviceExtensionProperties(gpu, NULL, &extCount, availible);
 
 	bool foundAll = true;
@@ -239,7 +241,7 @@ bool vDeviceHasRequiredExtensions(VkPhysicalDevice gpu)
 			foundAll = false;
 	}
 
-	asAlloc_LinearFree(availible);
+	asAlloc_LinearFree(pCurrentLinearAllocator, availible);
 	return foundAll;
 }
 
@@ -1255,13 +1257,14 @@ void vScreenResourcesDestroy(struct vScreenResources_t *pScreen)
 	vkDestroySurfaceKHR(asVkInstance, pScreen->surface, NULL);
 }
 
-void asVkInit(asAppInfo_t *pAppInfo, asCfgFile_t* pConfig)
+void asVkInit(asLinearMemoryAllocator_t* pLinearAllocator, asAppInfo_t *pAppInfo, asCfgFile_t* pConfig)
 {
 	asDebugLog("Starting Vulkan Backend...\n");
+	pCurrentLinearAllocator = pLinearAllocator;
 	/*Create Instance*/
 	{
 #if AS_VK_VALIDATION
-		if (!vValidationLayersAvailible())
+		if (!vValidationLayersAvailible(pLinearAllocator))
 			asFatalError("Vulkan Validation layers requested but not avalible");
 #endif
 		unsigned int sdlExtCount;
@@ -1269,7 +1272,7 @@ void asVkInit(asAppInfo_t *pAppInfo, asCfgFile_t* pConfig)
 		if (!SDL_Vulkan_GetInstanceExtensions(asGetMainWindowPtr(), &sdlExtCount, NULL)) 
 			asFatalError("SDL_Vulkan_GetInstanceExtensions() Failed to get instance extensions");
 		const char** extensions;
-		extensions = (const char**)asAlloc_LinearMalloc(sizeof(unsigned char*) * (sdlExtCount + extraExtCount), 0);
+		extensions = (const char**)asAlloc_LinearMalloc(pLinearAllocator, sizeof(unsigned char*) * (sdlExtCount + extraExtCount));
 		extensions[0] = VK_EXT_DEBUG_REPORT_EXTENSION_NAME;
 		SDL_Vulkan_GetInstanceExtensions(asGetMainWindowPtr(), &sdlExtCount, &extensions[extraExtCount]);
 		for (uint32_t i = 0; i < sdlExtCount + extraExtCount; i++)
@@ -1296,7 +1299,7 @@ void asVkInit(asAppInfo_t *pAppInfo, asCfgFile_t* pConfig)
 
 		if(vkCreateInstance(&createInfo, AS_VK_MEMCB, &asVkInstance) != VK_SUCCESS)
 			asFatalError("vkCreateInstance() Failed to create vulkan instance");
-		asAlloc_LinearFree((void*)extensions);
+		asAlloc_LinearFree(pLinearAllocator, (void*)extensions);
 	}
 	/*Create Starting Surface*/
 	{
@@ -1310,7 +1313,7 @@ void asVkInit(asAppInfo_t *pAppInfo, asCfgFile_t* pConfig)
 			asFatalError("Failed to find devices with vkEnumeratePhysicalDevices()");
 		if(!gpuCount)
 			asFatalError("No Supported Vulkan Compatible GPU found!");
-		VkPhysicalDevice *gpus = asAlloc_LinearMalloc(gpuCount * sizeof(VkPhysicalDevice), 0);
+		VkPhysicalDevice *gpus = asAlloc_LinearMalloc(pLinearAllocator, gpuCount * sizeof(VkPhysicalDevice));
 		vkEnumeratePhysicalDevices(asVkInstance, &gpuCount, gpus);
 
 		int preferredGPU = (int)asCfgGetNumber(pConfig, "GPUIndex", -1);
@@ -1328,13 +1331,13 @@ void asVkInit(asAppInfo_t *pAppInfo, asCfgFile_t* pConfig)
 		vkGetPhysicalDeviceFeatures(asVkPhysicalDevice, &asVkDeviceFeatures);
 		vkGetPhysicalDeviceMemoryProperties(asVkPhysicalDevice, &asVkDeviceMemProps);
 
-		asAlloc_LinearFree(gpus);
+		asAlloc_LinearFree(pLinearAllocator, gpus);
 	}
 	/*Find Extensions*/
 	{
 		uint32_t extCount;
 		vkEnumerateDeviceExtensionProperties(asVkPhysicalDevice, NULL, &extCount, NULL);
-		VkExtensionProperties* availible = (VkExtensionProperties*)asAlloc_LinearMalloc(sizeof(VkExtensionProperties)*extCount, 0);
+		VkExtensionProperties* availible = (VkExtensionProperties*)asAlloc_LinearMalloc(pLinearAllocator, sizeof(VkExtensionProperties)*extCount);
 		vkEnumerateDeviceExtensionProperties(asVkPhysicalDevice, NULL, &extCount, availible);
 		for (uint32_t i = 0; i < ASARRAYLEN(deviceReqExtensions); i++)
 		{
@@ -1349,7 +1352,7 @@ void asVkInit(asAppInfo_t *pAppInfo, asCfgFile_t* pConfig)
 #endif
 			}
 		}
-		asAlloc_LinearFree(availible);
+		asAlloc_LinearFree(pLinearAllocator, availible);
 	}
 #if AS_VK_VALIDATION
 	/*Setup Validation Debug Callback*/
@@ -1484,7 +1487,7 @@ void asVkInit(asAppInfo_t *pAppInfo, asCfgFile_t* pConfig)
 	}
 }
 
-void asVkWindowResize()
+void asVkWindowResize(asLinearMemoryAllocator_t* pLinearAllocator)
 {
 	vScreenResourcesDestroy(&vMainScreen);
 	vScreenResourcesCreate(&vMainScreen, asGetMainWindowPtr());
@@ -1496,7 +1499,7 @@ void vPresentFrame(struct vScreenResources_t *pScreen)
 	VkResult result = vkAcquireNextImageKHR(asVkDevice, pScreen->swapchain, UINT64_MAX,
 		pScreen->swapImageAvailableSemaphores[asVkCurrentFrame], VK_NULL_HANDLE, &imageIndex);
 	if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-		asVkWindowResize();
+		asVkWindowResize(pCurrentLinearAllocator);
 		return;
 	}
 
@@ -1521,7 +1524,7 @@ void vPresentFrame(struct vScreenResources_t *pScreen)
 	presentInfo.pImageIndices = &imageIndex;
 	result = vkQueuePresentKHR(asVkQueue_Present, &presentInfo);
 	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
-		asVkWindowResize();
+		asVkWindowResize(pCurrentLinearAllocator);
 	}
 }
 

@@ -165,14 +165,24 @@ ASEXPORT void asResource_ClearDeletionQueue(asResourceType_t type)
 	arrdeln(map, 0, arrlen(map));
 }
 
-ASEXPORT void asResource_AdjustReferences(asResourceFileID_t id, int32_t addRefCount)
+ASEXPORT void asResource_IncrimentReferences(asResourceFileID_t id, uint32_t addRefCount)
+{
+	struct _resourceDat* res;
+	if (res = &hmget(resMap, id))
+	{
+		if (res->references >= 0)
+			res->references += addRefCount;
+	}
+}
+
+ASEXPORT void asResource_DeincrimentReferences(asResourceFileID_t id, uint32_t subRefCount)
 {
 	struct _resourceDat* res;
 	if (res = &hmget(resMap, id))
 	{
 		if (res->references >= 0)
 		{
-			if ((res->references += addRefCount) <= 0)
+			if ((res->references -= subRefCount) <= 0)
 			{
 				asResourceDataMapping_t* map;
 				if (map = hmget(resDeleteLists, res->type))
@@ -270,6 +280,12 @@ ASEXPORT void asInitResource(const char * manifestPath)
 		}
 	}
 
+	struct _resourceDat defRes;
+	defRes.mapping.hndl = asHandle_Invalidate();
+	defRes.mapping.ptr = NULL;
+	defRes.references = 0;
+	defRes.type = 0;
+	hmdefault(resMap, defRes);
 	strpool_init(&resourceLookupPool.strPool, &strpool_default_config);
 	_generateResourceEntires(manifestPath);
 }

@@ -80,7 +80,7 @@ int main(int argc, char* argv[])
 	}
 	/*Test texture creation*/
 	{
-		asResourceType_t resourceType_Texture = asResource_RegisterType("TEXTURE", 8);
+		asResourceType_t resourceType_Texture = asResource_RegisterType("TEXTURE", 7);
 		asResourceLoader_t file;
 		asResourceFileID_t resID = asResource_FileIDFromRelativePath("Derp.jpg", 9);
 		asResourceLoader_Open(&file, resID);
@@ -116,11 +116,11 @@ int main(int argc, char* argv[])
 		texture = asCreateTexture(&desc);
 		stbi_image_free(img);
 
-		asResourceDataMapping_t map = { texture };
+		asResourceDataMapping_t map = { .hndl = texture };
 		asResource_Create(resID, map, resourceType_Texture, 3);
-		asResource_AdjustReferences(resID, -1);
-		asResource_AdjustReferences(resID, -1);
-		asResource_AdjustReferences(resID, -3);
+		asResource_DeincrimentReferences(resID, 1);
+		asResource_DeincrimentReferences(resID, 1);
+		asResource_DeincrimentReferences(resID, 3);
 
 		asResourceDataMapping_t* deleteQueue;
 		size_t count = asResource_GetDeletionQueue(resourceType_Texture, &deleteQueue);
@@ -146,13 +146,14 @@ int main(int argc, char* argv[])
 	}
 	/*Test shader loading*/
 	{
-		asShaderFx_FileContext_t ctx;
+		/*asShaderFx_FileContext_t ctx;
 		int size = asShaderFxDesc_PeekFile("ShaderFileMockup.asfx", &ctx);
 		if (size <= 0)
 			asFatalError("Failed to load shader file");
 		void* buff = malloc(size);
 		asShaderFxDesc_t desc = asShaderFxDesc_ReadFile(buff, size, &ctx);
 		free(buff);
+		*/
 	}
 	asLoopDesc_t loopDesc;
 	loopDesc.fpOnUpdate = (asUpdateFunction_t)onUpdate;
