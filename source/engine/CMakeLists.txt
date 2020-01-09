@@ -1,5 +1,7 @@
+#ENFORCE UNICODE
 add_definitions(-DUNICODE -D_UNICODE)
 
+#-----CONFIG FILE-----
 set (ASTRENGINE_VERSION_MAJOR 1)
 set (ASTRENGINE_VERSION_MINOR 0)
 set (ASTRENGINE_VERSION_PATCH 0)
@@ -13,23 +15,37 @@ set (ASTRENGINE_VK 1)
 set (ASTRENGINE_NUKLEAR 1)
 
 configure_file (
-	${PROJECT_SOURCE_DIR}/source/engine/astrengineConfig.h.in
+	${CMAKE_CURRENT_SOURCE_DIR}/astrengineConfig.h.in
 	${PROJECT_BINARY_DIR}/astrengineConfig.h )
+	
+##-----GLOBAL INCLUDE DIRECTORIES#-----
 include_directories(${PROJECT_BINARY_DIR}/include)
 include_directories(${Vulkan_INCLUDE_DIRS})
 include_directories(${SDL2_INCLUDE_DIRS})
-
 include_directories(${PROJECT_SOURCE_DIR}/source/thirdparty)
 
-file(GLOB_RECURSE SRC_FILES ${PROJECT_SOURCE_DIR}/source/engine/*.c)
-file(GLOB_RECURSE HEADER_FILES ${PROJECT_SOURCE_DIR}/source/engine/*.h)
-add_library(astrengine SHARED ${SRC_FILES} ${HEADER_FILES})
-target_link_libraries(astrengine ${SDL2_LIBRARIES})
-target_link_libraries(astrengine ${Vulkan_LIBRARIES})
+#-----LINK GLOBAL LIBRARIES-----
+link_libraries(${SDL2_LIBRARIES})
+if(ASTRENGINE_VK)
+	#Not ideal but some modules might use raw Vulkan
+	link_libraries(${Vulkan_LIBRARIES})
+endif()
 
-set_property(TARGET astrengine PROPERTY C_STANDARD 99)
+#-----ADD SUBPROJECTS (SHOWS A DEPENDENCY HEIRARCHY-----
+#asCore
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/common) 
+	link_libraries(asCommon) #link core to all other libraries
+#asResource
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/resource)
+#asRenderer
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/renderer) 
+#asNuklear
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/nuklear)
+#astrengine
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/engineCore) 
 
+
+#-----INSTALLATION-----
 install (FILES ${PROJECT_BINARY_DIR}/astrengineConfig.h DESTINATION ${PROJECT_BINARY_DIR}/include/engine)
 install(DIRECTORY ${PROJECT_SOURCE_DIR}/source/engine DESTINATION ${PROJECT_BINARY_DIR}/include FILES_MATCHING PATTERN "*.h")
-
 install (FILES ${SDL2_SHARED} DESTINATION ${PROJECT_BINARY_DIR}/bin/${CMAKE_BUILD_TYPE})

@@ -1,9 +1,9 @@
 #include "asEntry.h"
-#include "common/asCommon.h"
+#include "../common/asCommon.h"
 #include "asOsEvents.h"
-#include "renderer/asRendererCore.h"
+#include "../renderer/asRendererCore.h"
 #if ASTRENGINE_NUKLEAR
-#include "nuklear/asNuklearImplimentation.h"
+#include "../nuklear/asNuklearImplimentation.h"
 #endif
 #include <SDL.h>
 

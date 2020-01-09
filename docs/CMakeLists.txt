@@ -9,6 +9,7 @@ if(DOXYGEN_FOUND)
        WORKING_DIRECTORY ${PROJECT_BINARY_DIR}
        COMMENT "Generating API documentation with Doxygen"
        VERBATIM )
+	set_property(TARGET BUILD_DOCS PROPERTY FOLDER "Documentation")
 else(DOXYGEN_FOUND)
 	message("Doxygen not found")
 endif(DOXYGEN_FOUND)

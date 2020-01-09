@@ -2,9 +2,9 @@
 #include <SDL.h>
 
 #include "asEntry.h"
-#include "renderer/asRendererCore.h"
+#include "../renderer/asRendererCore.h"
 #if ASTRENGINE_NUKLEAR
-#include "nuklear/asNuklearImplimentation.h"
+#include "../nuklear/asNuklearImplimentation.h"
 #endif
 
 ASEXPORT void asPollOSEvents()

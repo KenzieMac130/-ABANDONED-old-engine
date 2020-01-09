@@ -1,8 +1,8 @@
-#include "engine/asEntry.h"
-#include "engine/asRendererCore.h"
-#include "engine/asResource.h"
+#include "engine/engineCore/asEntry.h"
+#include "engine/renderer/asRendererCore.h"
+#include "engine/resource/asResource.h"
 
-#include "engine/asNuklearImplimentation.h"
+#include "engine/nuklear/asNuklearImplimentation.h"
 #define NK_IMPLEMENTATION
 #include "../thirdparty/nuklear/nuklear.h"
 

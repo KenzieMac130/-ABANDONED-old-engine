@@ -1,5 +1,5 @@
 #pragma once
-#include "engine/asRendererCore.h"
+#include "engine/renderer/asRendererCore.h"
 #define STRPOOL_U64 uint64_t
 #include "mattias/strpool.h"
 

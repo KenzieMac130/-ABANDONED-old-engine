@@ -2,7 +2,7 @@
 #include "FxAssembler.h"
 
 #include <sstream>
-#include "engine/asRendererCore.h"
+#include "engine/renderer/asRendererCore.h"
 
 class cGlslGenContext {
 public:

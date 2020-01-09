@@ -9,9 +9,10 @@ include_directories(${PROJECT_SOURCE_DIR}/source/thirdparty)
 include_directories (${LIBSHADERC_INCLUDE_DIRS})
 
 #file(GLOB_RECURSE SRC_FILES "${PROJECT_SOURCE_DIR}/source/tools/shadercompiler/*.c")
-file(GLOB_RECURSE SRC_FILES "${PROJECT_SOURCE_DIR}/source/tools/shadercompiler/*.cc")
-file(GLOB_RECURSE HEADER_FILES "${PROJECT_SOURCE_DIR}/source/tools/shadercompiler/*.h")
+file(GLOB_RECURSE SRC_FILES ${PROJECT_SOURCE_DIR}/source/tools/shadercompiler/*.cc)
+file(GLOB_RECURSE HEADER_FILES ${PROJECT_SOURCE_DIR}/source/tools/shadercompiler/*.h)
 add_executable(asShaderCompiler ${SRC_FILES} ${HEADER_FILES})
+set_property(TARGET asShaderCompiler PROPERTY FOLDER "Tools")
 
 #target_link_libraries(asShaderCompiler ${SDL2_LIBRARIES})
 target_link_libraries (asShaderCompiler astrengine)
