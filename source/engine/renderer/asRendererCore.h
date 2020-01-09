@@ -1,7 +1,7 @@
 #pragma once
 
-#include "asCommon.h"
-#include "asResource.h"
+#include "../common/asCommon.h"
+#include "../asResource.h"
 #ifdef __cplusplus
 extern "C" {
 #endif 
@@ -271,6 +271,11 @@ ASEXPORT void asReleaseBuffer(asBufferHandle_t hndl);
 /*Shader FX*/
 
 /**
+* @brief Maximum number of shader fx
+*/
+#define AS_MAX_SHADERFX 64
+
+/**
 * @brief shader stages
 */
 typedef enum {
@@ -288,7 +293,7 @@ typedef enum {
 * @brief shader code lookup
 */
 typedef struct {
-	asHash32_t nameHash;
+	asHash32_t nameHash; /**< Name of the pipeline permutation*/
 	asShaderStage stage; /**< Stage this shader belongs to*/
 } asShaderFxProgramLookup_t;
 
@@ -422,7 +427,7 @@ typedef asHandle_t asShaderFxHandle_t;
 /**
 * @brief Create the shaderfx from a description
 */
-ASEXPORT asShaderFxHandle_t asShaderFx_FromDesc(asShaderFxDesc_t* desc);
+ASEXPORT asShaderFxHandle_t asShaderFx_FromDesc(asShaderFxDesc_t* desc, const char* name, int32_t nameLength);
 
 /**
 * @brief Create the shaderfx from a resource

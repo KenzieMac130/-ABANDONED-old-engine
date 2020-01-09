@@ -146,14 +146,8 @@ int main(int argc, char* argv[])
 	}
 	/*Test shader loading*/
 	{
-		/*asShaderFx_FileContext_t ctx;
-		int size = asShaderFxDesc_PeekFile("ShaderFileMockup.asfx", &ctx);
-		if (size <= 0)
-			asFatalError("Failed to load shader file");
-		void* buff = malloc(size);
-		asShaderFxDesc_t desc = asShaderFxDesc_ReadFile(buff, size, &ctx);
-		free(buff);
-		*/
+		asShaderFxHandle_t fx = asShaderFx_FromResource(asResource_FileIDFromRelativePath("ShaderFileMockup.asfx", 22));
+		
 	}
 	asLoopDesc_t loopDesc;
 	loopDesc.fpOnUpdate = (asUpdateFunction_t)onUpdate;

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "asCommon.h"
+#include "common/asCommon.h"
 #ifdef __cplusplus
 extern "C" {
 #endif 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "asCommon.h"
+#include "common/asCommon.h"
 #ifdef __cplusplus
 extern "C" {
 #endif 
@@ -101,6 +101,12 @@ ASEXPORT void asResource_Create(asResourceFileID_t id, asResourceDataMapping_t m
 * Returns invalid handle if no handle is associated
 */
 ASEXPORT asResourceDataMapping_t asResource_GetExistingDataMapping(asResourceFileID_t id, asHash32_t requiredType);
+
+/**
+* @brief Get the filename as a null terminated string
+* Returns null if no handle is associated
+*/
+ASEXPORT void asResource_GetFileName(asResourceFileID_t id, const char** ppName, int32_t* pNameLength);
 
 /**
 * @brief Incriment the references to a resource

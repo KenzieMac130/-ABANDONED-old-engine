@@ -1,4 +1,4 @@
-#include "include/asResource.h"
+#include "asResource.h"
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -58,11 +58,17 @@ struct
 ASEXPORT asResults asResourceLoader_Open(asResourceLoader_t * loader, asResourceFileID_t id)
 {
 	size_t resourceIndex = hmgeti(resourceLookupPool.fileMap, id);
-	if (resourceIndex < 0)
+	if (resourceIndex == SIZE_MAX)
+	{
 		return AS_FAILURE_FILE_NOT_FOUND;
+	}
 
 	const char* relativeName = strpool_cstr(&resourceLookupPool.strPool,
 		resourceLookupPool.fileMap[resourceIndex].value.nameId);
+	if (!relativeName)
+	{
+		return AS_FAILURE_UNKNOWN;
+	}
 	loader->_buffSize = resourceLookupPool.fileMap[resourceIndex].value.size;
 	loader->_buffOffset = resourceLookupPool.fileMap[resourceIndex].value.start;
 
@@ -134,7 +140,12 @@ ASEXPORT void asResource_Create(asResourceFileID_t id, asResourceDataMapping_t m
 
 ASEXPORT asResourceDataMapping_t asResource_GetExistingDataMapping(asResourceFileID_t id, asHash32_t requiredType)
 {
-	return hmget(resMap, id).mapping;
+	struct _resourceDat resource = hmget(resMap, id);
+	if (resource.type == requiredType)
+	{
+		return resource.mapping;
+	}
+	return (asResourceDataMapping_t){ .hndl = asHandle_Invalidate(), .ptr = NULL };
 }
 
 /*Deletion*/
@@ -163,6 +174,14 @@ ASEXPORT void asResource_ClearDeletionQueue(asResourceType_t type)
 	asResourceDataMapping_t* map = hmget(resDeleteLists, type);
 	ASASSERT(map);
 	arrdeln(map, 0, arrlen(map));
+}
+
+ASEXPORT void asResource_GetFileName(asResourceFileID_t id, const char ** ppName, int32_t * pNameLength)
+{
+	size_t resourceIndex = hmgeti(resourceLookupPool.fileMap, id);
+	*ppName = strpool_cstr(&resourceLookupPool.strPool,
+		resourceLookupPool.fileMap[resourceIndex].value.nameId);
+	*pNameLength = strlen(ppName);
 }
 
 ASEXPORT void asResource_IncrimentReferences(asResourceFileID_t id, uint32_t addRefCount)

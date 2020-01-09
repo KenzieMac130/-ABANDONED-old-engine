@@ -1,4 +1,4 @@
-#include "include/asCommon.h"
+#include "asCommon.h"
 
 #ifdef _WIN32
 #include <Windows.h>

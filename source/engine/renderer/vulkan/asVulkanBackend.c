@@ -1,7 +1,7 @@
-#include "include/lowlevel/asVulkanBackend.h"
+#include "asVulkanBackend.h"
 #if ASTRENGINE_VK
 #include <SDL_vulkan.h>
-#include "include/asRendererCore.h"
+#include "../asRendererCore.h"
 
 asLinearMemoryAllocator_t* pCurrentLinearAllocator;
 
@@ -37,6 +37,7 @@ VkDevice asVkDevice;
 VkQueue asVkQueue_GFX;
 VkQueue asVkQueue_Present;
 VkQueue asVkQueue_Compute;
+/*Todo: transfer queues for resource streaming*/
 
 VkCommandPool asVkGeneralCommandPool;
 uint32_t asVkCurrentFrame = 0;
@@ -359,7 +360,6 @@ void asVkFree(asVkAllocation_t* pMem)
 	pMem->offset = 0;
 }
 
-
 void asVkMapMemory(asVkAllocation_t mem, VkDeviceSize offset, VkDeviceSize size, void** ppData)
 {
 	vkMapMemory(asVkDevice, mem.memHandle, mem.offset + offset, size, 0, ppData);
@@ -582,15 +582,13 @@ ASEXPORT asTextureHandle_t asCreateTexture(asTextureDesc_t *pDesc)
 			vkBindImageMemory(asVkDevice, pTex->image, pTex->alloc.memHandle, pTex->alloc.offset);
 		}
 		else{
-			for (int i = 0; i < AS_MAX_INFLIGHT; i++){
-				if (vkCreateImage(asVkDevice, &createInfo, AS_VK_MEMCB, &pTex->image) != VK_SUCCESS)
-					asFatalError("vkCreateImage() Failed to create an image");
-				VkMemoryRequirements memReq;
-				vkGetImageMemoryRequirements(asVkDevice, pTex->image, &memReq);
-				asVkAlloc(&pTex->alloc, memReq.size, asVkFindMemoryType(memReq.memoryTypeBits,
-					VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT));
-				vkBindImageMemory(asVkDevice, pTex->image, pTex->alloc.memHandle, pTex->alloc.offset);
-			}
+			if (vkCreateImage(asVkDevice, &createInfo, AS_VK_MEMCB, &pTex->image) != VK_SUCCESS)
+				asFatalError("vkCreateImage() Failed to create an image");
+			VkMemoryRequirements memReq;
+			vkGetImageMemoryRequirements(asVkDevice, pTex->image, &memReq);
+			asVkAlloc(&pTex->alloc, memReq.size, asVkFindMemoryType(memReq.memoryTypeBits,
+				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT));
+			vkBindImageMemory(asVkDevice, pTex->image, pTex->alloc.memHandle, pTex->alloc.offset);
 		}
 	}
 	/*View*/
@@ -1027,7 +1025,7 @@ VkCommandBuffer vPrimaryCommandBufferManager_GetNextCommand(struct vPrimaryComma
 {
 	uint32_t slot;
 	slot = pMan->count[asVkCurrentFrame];
-/*Todo: Atomic lock*/
+/*Todo: Atomic lock to retrieve on arbitrary threads*/
 	pMan->count[asVkCurrentFrame]+= 1;
 	return pMan->pBuffers[asVkCurrentFrame][slot];
 }
@@ -1045,21 +1043,173 @@ VkCommandBuffer asVkGetNextComputeCommandBuffer()
 }
 
 /*Shader Fx*/
-uint32_t vFxPermutationCount = 0;
-asHash64_t vFxPermutationNameHashes[AS_VK_MAX_PERMUTATION_ENTRIES];
-asVkFxPermutationRequirements_t vFxPermutationRequirements[AS_VK_MAX_PERMUTATION_ENTRIES];
-asVkFxPermutationEntry_t vFxPermutationEntries[AS_VK_MAX_PERMUTATION_ENTRIES];
-
-void asVkRegisterFxPipelinePermutation(const char* name, size_t nameSize, asVkFxPermutationRequirements_t req, asVkFxPermutationEntry_t desc)
+struct vFxPipelineGroup
 {
-	ASASSERT(vFxPermutationCount >= AS_VK_MAX_PERMUTATION_ENTRIES);
-	vFxPermutationNameHashes[vFxPermutationCount] = asHashBytes64_xxHash(name, nameSize);
-	vFxPermutationRequirements[vFxPermutationCount] = req;
-	vFxPermutationEntries[vFxPermutationCount] = desc;
-	vFxPermutationCount++;
+	VkPipeline pipelinePermutations[AS_VK_MAX_PERMUTATION_ENTRIES];
+};
+
+struct vFxPipelineManager_t
+{
+	uint32_t vFxPermutationCount;
+	asHash32_t vFxPermutationNameHashes[AS_VK_MAX_PERMUTATION_ENTRIES];
+	asVkFxPermutationEntry_t vFxPermutationEntries[AS_VK_MAX_PERMUTATION_ENTRIES];
+
+	asHandleManager_t handleManager;
+	struct vFxPipelineGroup* pPipelineGroups;
+};
+
+struct vFxPipelineManager_t vMainPipelineGroupManager;
+
+void _invalidatePipeline(struct vFxPipelineGroup* pFx)
+{
+	for (int i = 0; i < AS_VK_MAX_PERMUTATION_ENTRIES; i++)
+	{
+		pFx->pipelinePermutations[i] = VK_NULL_HANDLE;
+	}
 }
 
-/*Init and shutdown*/
+void _destroyPipeline(struct vFxPipelineGroup* pFx)
+{
+	for (int i = 0; i < AS_VK_MAX_PERMUTATION_ENTRIES; i++)
+	{
+		if (pFx->pipelinePermutations[i] != VK_NULL_HANDLE)
+			vkDestroyPipeline(asVkDevice, pFx->pipelinePermutations[i], AS_VK_MEMCB);
+	}
+	_invalidatePipeline(pFx);
+}
+
+void vFxPipelineManager_Init(struct vFxPipelineManager_t* pMan)
+{
+	pMan->vFxPermutationCount = 0;
+	memset(pMan->vFxPermutationNameHashes, 0, sizeof(asHash32_t) * AS_VK_MAX_PERMUTATION_ENTRIES);
+
+	asHandleManagerCreate(&pMan->handleManager, AS_MAX_SHADERFX);
+	pMan->pPipelineGroups = (struct vFxPipelineGroup*)asMalloc(sizeof(pMan->pPipelineGroups[0]) * AS_MAX_SHADERFX);
+	for (int i = 0; i < AS_MAX_SHADERFX; i++)
+		_invalidatePipeline(&pMan->pPipelineGroups[i]);
+}
+
+void vFxPipelineManager_Shutdown(struct vFxPipelineManager_t* pMan)
+{
+	asHandleManagerDestroy(&pMan->handleManager);
+	for (int i = 0; i < AS_MAX_SHADERFX; i++)
+	{
+		_destroyPipeline(&pMan->pPipelineGroups[i]);
+	}
+	asFree(pMan->pPipelineGroups);
+}
+
+int32_t asVkRegisterFxPipelinePermutation(const char* name, size_t nameSize, asVkFxPermutationEntry_t desc)
+{
+	int32_t result;
+	ASASSERT(vMainPipelineGroupManager.vFxPermutationCount >= AS_VK_MAX_PERMUTATION_ENTRIES);
+	vMainPipelineGroupManager.vFxPermutationNameHashes[vMainPipelineGroupManager.vFxPermutationCount] = asHashBytes32_xxHash(name, nameSize);
+	vMainPipelineGroupManager.vFxPermutationEntries[vMainPipelineGroupManager.vFxPermutationCount] = desc;
+	result = vMainPipelineGroupManager.vFxPermutationCount;
+	vMainPipelineGroupManager.vFxPermutationCount++;
+	return result;
+}
+
+/*Todo: Compute pipelines, Caching, (fix immediate issues, permutation no-longer direclty indexable)*/
+asShaderFxHandle_t asVkCreateShaderPipelineGroup(asShaderFxDesc_t * desc, const char* pName, int32_t nameLength)
+{
+	asShaderFxHandle_t hndl = (asBufferHandle_t) { 0 };
+	vkDeviceWaitIdle(asVkDevice);
+	hndl = asCreateHandle(&vMainPipelineGroupManager.handleManager);
+	struct vFxPipelineGroup *pGroup = &vMainPipelineGroupManager.pPipelineGroups[hndl._index];
+
+	VkGraphicsPipelineCreateInfo gfxPipelineInfo[AS_VK_MAX_PERMUTATION_ENTRIES];
+	/*Fill out each permutation*/
+	uint32_t foundShaderCount[AS_VK_MAX_PERMUTATION_ENTRIES] = { 0 };
+	uint32_t createdPermutations = 0;
+	VkShaderModule shaderModules[AS_VK_MAX_PERMUTATION_ENTRIES][AS_VK_MAX_PROGRAMS_PER_STAGE];
+	for (uint32_t i = 0; i < vMainPipelineGroupManager.vFxPermutationCount; i++)
+	{
+		/*Check for blank permutation*/
+		if (vMainPipelineGroupManager.vFxPermutationNameHashes[i] == 0)
+			continue;
+		/*Skip permutation if shader doesn't match bucket requirements*/
+		if (vMainPipelineGroupManager.vFxPermutationEntries[i].requiredBucket != UINT32_MAX &&
+			desc->bucket != vMainPipelineGroupManager.vFxPermutationEntries[i].requiredBucket)
+		{
+			continue;
+		}
+
+		/*Get pipeline*/
+		gfxPipelineInfo[createdPermutations] = (VkGraphicsPipelineCreateInfo) { VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
+
+		/*Retrieve shader modules*/
+		if (!vMainPipelineGroupManager.vFxPermutationEntries[i].overrideShaders)
+		{
+			/*Search for shaders to link*/
+			for (uint32_t n = 0; n < AS_VK_MAX_PROGRAMS_PER_STAGE; n++)
+			{
+				/*Exceeded number of programs*/
+				if (foundShaderCount[i] >= desc->programCount)
+					break;
+				/*Found shader matching permutation*/
+				if (memcmp(&desc->pProgramLookup[foundShaderCount[i]],
+					&vMainPipelineGroupManager.vFxPermutationEntries[i].requestedPrograms[n],
+					sizeof(asShaderFxProgramLookup_t)) == 0);
+				{
+					VkShaderModuleCreateInfo moduleInfo = { VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
+					moduleInfo.codeSize = desc->pProgramDescs[n].programByteCount;
+					moduleInfo.pCode = (const uint32_t*)&desc->pShaderCode[desc->pProgramDescs[n].programByteStart];
+					VkResult res;
+					/*Attempt to transpile shader bytecode*/
+					if (res = vkCreateShaderModule(asVkDevice, &moduleInfo, AS_VK_MEMCB, &shaderModules[i][foundShaderCount[i]]) != VK_SUCCESS)
+					{
+						/*Display error information*/
+						char errCode[256];
+						snprintf(errCode, 256, "vkCreateShaderModule() Failed to create shader:"
+							"Name:%.*s, ErrCode:%d, VarHash:%d, Length:%d, Start%d\n",
+							(int)nameLength,
+							pName,
+							res,
+							desc->pProgramLookup->nameHash,
+							desc->pProgramDescs[n].programByteCount,
+							desc->pProgramDescs[n].programByteStart);
+						asFatalError(errCode);
+					}
+					foundShaderCount[i]++;
+				}
+			}
+			gfxPipelineInfo[createdPermutations].stageCount = foundShaderCount[i];
+
+			/*Fill out graphics pipeline, apply other high level settings acording to special requirements*/
+			ASASSERT(vMainPipelineGroupManager.vFxPermutationEntries[i].fpOverrideGfxPipeline);
+			vMainPipelineGroupManager.vFxPermutationEntries[i].fpOverrideGfxPipeline(&gfxPipelineInfo[i], desc);
+		}
+	}
+
+	/*Create all pipelines*/
+	vkCreateGraphicsPipelines(asVkDevice, VK_NULL_HANDLE, createdPermutations,
+		gfxPipelineInfo, AS_VK_MEMCB, pGroup->pipelinePermutations);
+
+	/*Cleanup leftover shader module data*/
+	for (uint32_t i = 0; i < createdPermutations; i++)
+	{
+		for (uint32_t n = 0; n < foundShaderCount[i]; n++)
+		{
+			vkDestroyShaderModule(asVkDevice, shaderModules[i][n], AS_VK_MEMCB);
+		}
+	}
+	return hndl;
+}
+
+void asVkReleasePipelineGroup(asShaderFxHandle_t hndl)
+{
+	vkDeviceWaitIdle(asVkDevice);
+	_destroyPipeline(&vMainPipelineGroupManager.pPipelineGroups[hndl._index]);
+	asDestroyHandle(&vMainPipelineGroupManager.handleManager, hndl);
+}
+
+VkPipeline asVkGetPipelineFromFx(asShaderFxHandle_t hndl, int32_t permutationId)
+{
+	return vMainPipelineGroupManager.pPipelineGroups[hndl._index].pipelinePermutations[permutationId];
+}
+
+/*Init and Shutdown*/
 
 void vScreenResourcesCreate(struct vScreenResources_t *pScreen, SDL_Window* pWindow)
 {
@@ -1476,10 +1626,11 @@ void asVkInit(asLinearMemoryAllocator_t* pLinearAllocator, asAppInfo_t *pAppInfo
 	{
 		vMemoryAllocator_Init(&vMainAllocator);
 	}
-	/*Texture and Buffers*/
+	/*Texture, Buffers and Shaders*/
 	{
 		vTextureManager_Init(&vMainTextureManager);
 		vBufferManager_Init(&vMainBufferManager);
+		vFxPipelineManager_Init(&vMainPipelineGroupManager);
 	}
 	/*Screen Resources*/
 	{
@@ -1548,6 +1699,7 @@ void asVkShutdown()
 		vkDeviceWaitIdle(asVkDevice);
 
 	vScreenResourcesDestroy(&vMainScreen);
+	vFxPipelineManager_Shutdown(&vMainPipelineGroupManager);
 	vBufferManager_Shutdown(&vMainBufferManager);
 	vTextureManager_Shutdown(&vMainTextureManager);
 	vMemoryAllocator_Shutdown(&vMainAllocator);

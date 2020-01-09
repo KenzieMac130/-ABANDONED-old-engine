@@ -1,14 +1,14 @@
-#include "include/asRendererCore.h"
+#include "asRendererCore.h"
 
 #include <SDL_video.h>
 
 #if ASTRENGINE_VK
-#include "include/lowlevel/asVulkanBackend.h"
+#include "vulkan/asVulkanBackend.h"
 #include <SDL_vulkan.h>
 #endif
 
 #if ASTRENGINE_NUKLEAR
-#include "include/asNuklearImplimentation.h"
+#include "../nuklear/asNuklearImplimentation.h"
 #endif
 
 asLinearMemoryAllocator_t* pCurrentLinearAllocator;
@@ -129,8 +129,10 @@ ASEXPORT asShaderFxHandle_t asShaderFx_FromResource(asResourceFileID_t id)
 
 	/*load new resource*/
 	asResourceLoader_t loader;
-	if (asResourceLoader_Open(&loader, id) != AS_SUCCESS);
-	return asHandle_Invalidate();
+	if (asResourceLoader_Open(&loader, id) != AS_SUCCESS)
+	{
+		return asHandle_Invalidate();
+	}
 	struct _fxHeader test = FXHEADERDEFAULT;
 	struct _fxHeader header;
 	asResourceLoader_Read(&loader, sizeof(struct _fxHeader), &header);
@@ -141,7 +143,7 @@ ASEXPORT asShaderFxHandle_t asShaderFx_FromResource(asResourceFileID_t id)
 	}
 	asShaderFxDesc_t desc;
 	unsigned char* outBuffer = asAlloc_LinearMalloc(pCurrentLinearAllocator, header.buffersize);
-	asResourceLoader_Read(&loader, 4 * 16, &desc);
+	asResourceLoader_Read(&loader, sizeof(uint32_t) * 16, &desc);
 	asResourceLoader_Read(&loader, header.buffersize, outBuffer);
 
 	/*offset pointers into buffers*/
@@ -153,18 +155,27 @@ ASEXPORT asShaderFxHandle_t asShaderFx_FromResource(asResourceFileID_t id)
 	desc.pPropBufferDefault = outBuffer += desc.shaderCodeSize;
 
 	asResourceLoader_Close(&loader);
-	result = asShaderFx_FromDesc(&desc);
+
+	const char* name;
+	int32_t nameLength;
+	asResource_GetFileName(id, &name, &nameLength);
+	result = asShaderFx_FromDesc(&desc, name, nameLength);
 
 	asResourceDataMapping_t map;
 	map.hndl = result;
 	asResource_Create(id, map, asHashBytes32_xxHash("SHADER", 6), 1);
 	asAlloc_LinearFree(pCurrentLinearAllocator, outBuffer);
+
+	return result;
 }
 
-ASEXPORT asShaderFxHandle_t asShaderFx_FromDesc(asShaderFxDesc_t * desc)
+ASEXPORT asShaderFxHandle_t asShaderFx_FromDesc(asShaderFxDesc_t * desc, const char* name, int32_t nameLength)
 {
-	return asHandle_Invalidate();
-	/*todo: generate pipeline permutations, register value mappings with material system, etc, etc...*/
+	asShaderFxHandle_t hndl;
+#if ASTRENGINE_VK
+	hndl = asVkCreateShaderPipelineGroup(desc, name, nameLength);
+#endif 
+	/*todo: register value mappings with material system*/
 }
 
 /*Texture*/

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "asCommon.h"
+#include "common/asCommon.h"
 #ifdef __cplusplus
 extern "C" {
 #endif 
@@ -22,7 +22,7 @@ ASEXPORT int asIgnite(int argc, char *argv[], asAppInfo_t *pAppInfo, void *pCust
 /**
 * @brief A type for an update function that passes time as an input
 */
-typedef (*asUpdateFunction_t)(double);
+typedef void (*asUpdateFunction_t)(double);
 /**
 * @brief Description for entering a loop (callbacks)
 */

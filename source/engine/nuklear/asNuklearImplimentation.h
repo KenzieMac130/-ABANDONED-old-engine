@@ -1,8 +1,8 @@
 #pragma once
 
-#include "asCommon.h"
+#include "../common/asCommon.h"
 #if ASTRENGINE_NUKLEAR
-#include "asRendererCore.h"
+#include "../renderer/asRendererCore.h"
 #ifdef __cplusplus
 extern "C" {
 #endif 

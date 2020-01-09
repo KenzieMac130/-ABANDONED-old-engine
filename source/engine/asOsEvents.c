@@ -1,10 +1,10 @@
-#include "include/asOsEvents.h"
+#include "asOsEvents.h"
 #include <SDL.h>
 
-#include "include/asEntry.h"
-#include "include/asRendererCore.h"
+#include "asEntry.h"
+#include "renderer/asRendererCore.h"
 #if ASTRENGINE_NUKLEAR
-#include "include/asNuklearImplimentation.h"
+#include "nuklear/asNuklearImplimentation.h"
 #endif
 
 ASEXPORT void asPollOSEvents()

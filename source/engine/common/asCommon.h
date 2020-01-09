@@ -4,7 +4,7 @@
 extern "C" {
 #endif 
 
-#include "astrengineConfig.h"
+#include "../astrengineConfig.h"
 
 #define __STDC_FORMAT_MACROS
 #include <inttypes.h>

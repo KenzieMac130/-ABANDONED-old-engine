@@ -1,4 +1,4 @@
-#include "include/asNuklearImplimentation.h"
+#include "asNuklearImplimentation.h"
 
 #if ASTRENGINE_NUKLEAR
 #define NK_IMPLEMENTATION
@@ -7,7 +7,7 @@
 #include "SDL_events.h"
 
 #if ASTRENGINE_VK
-#include "include/lowlevel/asVulkanBackend.h"
+#include "../renderer/vulkan/asVulkanBackend.h"
 #include <SDL_vulkan.h>
 #endif
 
