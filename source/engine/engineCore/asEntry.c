@@ -2,6 +2,7 @@
 #include "../common/asCommon.h"
 #include "asOsEvents.h"
 #include "../renderer/asRendererCore.h"
+#include "../resource/asUserFiles.h"
 #if ASTRENGINE_NUKLEAR
 #include "../nuklear/asNuklearImplimentation.h"
 #endif
@@ -17,6 +18,7 @@ ASEXPORT void asShutdown(void)
 #endif
 	asShutdownGfx();
 	asShutdownResource();
+	asShutdownUserFiles();
 	SDL_Quit();
 	asAllocShutdown_Linear(&linearAllocator);
 	asDebugLog("astrengine Quit...");
@@ -24,21 +26,17 @@ ASEXPORT void asShutdown(void)
 
 ASEXPORT int asIgnite(int argc, char *argv[], asAppInfo_t *pAppInfo, void *pCustomWindow)
 {
-	/*Defaults*/
-	if (!pAppInfo->pAppName)
-		pAppInfo->pAppName = "UNTITLED";
-	if(!pAppInfo->pGfxIniName)
-		pAppInfo->pGfxIniName = "graphics.ini";
-
 	/*Info*/
-	asDebugLog("%s %d.%d.%d\n", pAppInfo->pAppName, pAppInfo->appVersion.major, pAppInfo->appVersion.minor, pAppInfo->appVersion.patch);
-	asDebugLog("astrengine %d.%d.%d\n", ASTRENGINE_VERSION_MAJOR, ASTRENGINE_VERSION_MINOR, ASTRENGINE_VERSION_PATCH);
+	asDebugLog("%s %d.%d.%d", pAppInfo->pAppName, pAppInfo->appVersion.major, pAppInfo->appVersion.minor, pAppInfo->appVersion.patch);
+	asDebugLog("astrengine %d.%d.%d", ASTRENGINE_VERSION_MAJOR, ASTRENGINE_VERSION_MINOR, ASTRENGINE_VERSION_PATCH);
 
 	/*Memory*/
 	asAllocInit_Linear(&linearAllocator, 100000);
 
+	/*Init All Systems*/
 	SDL_Init(SDL_INIT_EVENTS | SDL_INIT_VIDEO | SDL_INIT_TIMER);
-	asInitResource("resourceManifest.ini");
+	asInitUserFiles(pAppInfo->pDevName, pAppInfo->pAppName);
+	asInitResource();
 	asInitGfx(&linearAllocator, pAppInfo, pCustomWindow);
 
 #if ASTRENGINE_NUKLEAR

@@ -9,7 +9,7 @@ extern "C" {
 * @brief Initializes the resource manager
 * @warning The engine ignite should handle this for you
 */
-ASEXPORT void asInitResource(const char * manifest);
+ASEXPORT void asInitResource();
 
 /**
 * @brief Shutdown the resource manager
@@ -18,7 +18,7 @@ ASEXPORT void asInitResource(const char * manifest);
 ASEXPORT void asShutdownResource();
 
 /**
-* @brief a Resource File ID
+* @brief a Resource File ID (a hash of a file path, used to retrieve a handle)
 */
 typedef uint64_t asResourceFileID_t;
 
@@ -38,6 +38,18 @@ typedef asHash32_t asResourceType_t;
 ASEXPORT asResourceFileID_t asResource_FileIDFromRelativePath(const char* pPath, size_t size);
 
 /**
+* @brief Get resource folder path 
+* assumes: exe: .../bin/___.exe
+* assumes: resource: bin/.../resource/
+*/
+ASEXPORT const char* asResource_GetResourceFolderPath();
+/**
+* @brief Get resource folder path
+* assumes: exe: .../bin/___.exe
+*/
+ASEXPORT const char* asResource_GetBinFolderPath();
+
+/**
 * @brief an opaque Resource File Loader Context (read only)
 */
 typedef struct
@@ -51,6 +63,11 @@ typedef struct
 * @brief Open a resource file for reading (abstacts into the package system)
 */
 ASEXPORT asResults asResourceLoader_Open(asResourceLoader_t* loader, asResourceFileID_t id);
+
+/**
+* @brief Open a resource file for reading by name (abstacts into the package system)
+*/
+ASEXPORT asResults asResourceLoader_OpenByPath(asResourceLoader_t* loader, asResourceFileID_t* pId, char* path, size_t pathLength);
 
 /**
 * @brief Release the file

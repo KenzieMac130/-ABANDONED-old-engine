@@ -83,100 +83,100 @@ struct _fxHeader
 	uint32_t buffersize;
 };
 
-#define FXHEADERDEFAULT {"ASFX", AS_ENDIAN, AS_GFXAPI, AS_GFXAPI_VERSION, AS_SHADERFX_VERSION}
+// #define FXHEADERDEFAULT {"ASFX", AS_ENDIAN, AS_GFXAPI, AS_GFXAPI_VERSION, AS_SHADERFX_VERSION}
 
-ASEXPORT int32_t asShaderFxDesc_SaveToFile(const char* fileName, asShaderFxDesc_t *fx, asGfxAPIs api, uint32_t apiVersion)
-{
-	FILE* fp = fopen(fileName, "wb");
-	if (!fp)
-		return -1;
+// ASEXPORT int32_t asShaderFxDesc_SaveToFile(const char* fileName, asShaderFxDesc_t *fx, asGfxAPIs api, uint32_t apiVersion)
+// {
+	// FILE* fp = fopen(fileName, "wb");
+	// if (!fp)
+		// return -1;
 
-	struct _fxHeader header = FXHEADERDEFAULT;
-	header.valid.api = api;
-	header.valid.apiVersion = apiVersion;
-	header.buffersize =
-		sizeof(asShaderFxPropLookup_t) * fx->propCount +
-		sizeof(uint16_t) * fx->propCount +
-		sizeof(asShaderFxProgramLookup_t) * fx->programCount +
-		sizeof(asShaderFxProgramDesc_t) * fx->programCount +
-		fx->shaderCodeSize + fx->propBufferSize;
+	// struct _fxHeader header = FXHEADERDEFAULT;
+	// header.valid.api = api;
+	// header.valid.apiVersion = apiVersion;
+	// header.buffersize =
+		// sizeof(asShaderFxPropLookup_t) * fx->propCount +
+		// sizeof(uint16_t) * fx->propCount +
+		// sizeof(asShaderFxProgramLookup_t) * fx->programCount +
+		// sizeof(asShaderFxProgramDesc_t) * fx->programCount +
+		// fx->shaderCodeSize + fx->propBufferSize;
 
-	fwrite(&header, sizeof(struct _fxHeader), 1, fp);
-	fwrite(fx, 4 * 16, 1, fp);
+	// fwrite(&header, sizeof(struct _fxHeader), 1, fp);
+	// fwrite(fx, 4 * 16, 1, fp);
 
-	fwrite(fx->pPropLookup, sizeof(asShaderFxPropLookup_t) * fx->propCount, 1, fp);
-	fwrite(fx->pPropOffset, sizeof(uint16_t) * fx->propCount, 1, fp);
+	// fwrite(fx->pPropLookup, sizeof(asShaderFxPropLookup_t) * fx->propCount, 1, fp);
+	// fwrite(fx->pPropOffset, sizeof(uint16_t) * fx->propCount, 1, fp);
 
-	fwrite(fx->pProgramLookup, sizeof(asShaderFxProgramLookup_t) * fx->programCount, 1, fp);
-	fwrite(fx->pProgramDescs, sizeof(asShaderFxProgramDesc_t) * fx->programCount, 1, fp);
+	// fwrite(fx->pProgramLookup, sizeof(asShaderFxProgramLookup_t) * fx->programCount, 1, fp);
+	// fwrite(fx->pProgramDescs, sizeof(asShaderFxProgramDesc_t) * fx->programCount, 1, fp);
 
-	fwrite(fx->pShaderCode, fx->shaderCodeSize, 1, fp);
-	fwrite(fx->pPropBufferDefault, fx->propBufferSize, 1, fp);
+	// fwrite(fx->pShaderCode, fx->shaderCodeSize, 1, fp);
+	// fwrite(fx->pPropBufferDefault, fx->propBufferSize, 1, fp);
 
-	fclose(fp);
-	return 0;
-}
+	// fclose(fp);
+	// return 0;
+// }
 
-ASEXPORT asShaderFxHandle_t asShaderFx_FromResource(asResourceFileID_t id)
-{
-	/*check for existing resource*/
-	asShaderFxHandle_t result = asResource_GetExistingDataMapping(id, asHashBytes32_xxHash("SHADER", 6)).hndl;
-	if (asHandleValid(result))
-	{
-		asResource_IncrimentReferences(id, 1);
-		return result;
-	}
+// ASEXPORT asShaderFxHandle_t asShaderFx_FromResource(asResourceFileID_t id)
+// {
+	// /*check for existing resource*/
+	// asShaderFxHandle_t result = asResource_GetExistingDataMapping(id, asHashBytes32_xxHash("SHADER", 6)).hndl;
+	// if (asHandleValid(result))
+	// {
+		// asResource_IncrimentReferences(id, 1);
+		// return result;
+	// }
 
-	/*load new resource*/
-	asResourceLoader_t loader;
-	if (asResourceLoader_Open(&loader, id) != AS_SUCCESS)
-	{
-		return asHandle_Invalidate();
-	}
-	struct _fxHeader test = FXHEADERDEFAULT;
-	struct _fxHeader header;
-	asResourceLoader_Read(&loader, sizeof(struct _fxHeader), &header);
-	if (memcmp(&test.valid, &header.valid, sizeof(header.valid)))
-	{
-		asResourceLoader_Close(&loader);
-		return asHandle_Invalidate();
-	}
-	asShaderFxDesc_t desc;
-	unsigned char* outBuffer = asAlloc_LinearMalloc(pCurrentLinearAllocator, header.buffersize);
-	asResourceLoader_Read(&loader, sizeof(uint32_t) * 16, &desc);
-	asResourceLoader_Read(&loader, header.buffersize, outBuffer);
+	// /*load new resource*/
+	// asResourceLoader_t loader;
+	// if (asResourceLoader_Open(&loader, id) != AS_SUCCESS)
+	// {
+		// return asHandle_Invalidate();
+	// }
+	// struct _fxHeader test = FXHEADERDEFAULT;
+	// struct _fxHeader header;
+	// asResourceLoader_Read(&loader, sizeof(struct _fxHeader), &header);
+	// if (memcmp(&test.valid, &header.valid, sizeof(header.valid)))
+	// {
+		// asResourceLoader_Close(&loader);
+		// return asHandle_Invalidate();
+	// }
+	// asShaderFxDesc_t desc;
+	// unsigned char* outBuffer = asAlloc_LinearMalloc(pCurrentLinearAllocator, header.buffersize);
+	// asResourceLoader_Read(&loader, sizeof(uint32_t) * 16, &desc);
+	// asResourceLoader_Read(&loader, header.buffersize, outBuffer);
 
-	/*offset pointers into buffers*/
-	desc.pPropLookup = (asShaderFxPropLookup_t*)outBuffer;
-	desc.pPropOffset = (uint16_t*)outBuffer += sizeof(desc.pPropLookup[0]) * desc.propCount;
-	desc.pProgramLookup = (asShaderFxProgramLookup_t*)outBuffer += sizeof(desc.pPropOffset[0]) * desc.propCount;
-	desc.pProgramDescs = (asShaderFxProgramDesc_t*)outBuffer += sizeof(desc.pProgramLookup[0]) * desc.programCount;
-	desc.pShaderCode = outBuffer += sizeof(desc.pProgramDescs[0]) * desc.programCount;
-	desc.pPropBufferDefault = outBuffer += desc.shaderCodeSize;
+	// /*offset pointers into buffers*/
+	// desc.pPropLookup = (asShaderFxPropLookup_t*)outBuffer;
+	// desc.pPropOffset = (uint16_t*)outBuffer += sizeof(desc.pPropLookup[0]) * desc.propCount;
+	// desc.pProgramLookup = (asShaderFxProgramLookup_t*)outBuffer += sizeof(desc.pPropOffset[0]) * desc.propCount;
+	// desc.pProgramDescs = (asShaderFxProgramDesc_t*)outBuffer += sizeof(desc.pProgramLookup[0]) * desc.programCount;
+	// desc.pShaderCode = outBuffer += sizeof(desc.pProgramDescs[0]) * desc.programCount;
+	// desc.pPropBufferDefault = outBuffer += desc.shaderCodeSize;
 
-	asResourceLoader_Close(&loader);
+	// asResourceLoader_Close(&loader);
 
-	const char* name;
-	int32_t nameLength;
-	asResource_GetFileName(id, &name, &nameLength);
-	result = asShaderFx_FromDesc(&desc, name, nameLength);
+	// const char* name;
+	// int32_t nameLength;
+	// asResource_GetFileName(id, &name, &nameLength);
+	// result = asShaderFx_FromDesc(&desc, name, nameLength);
 
-	asResourceDataMapping_t map;
-	map.hndl = result;
-	asResource_Create(id, map, asHashBytes32_xxHash("SHADER", 6), 1);
-	asAlloc_LinearFree(pCurrentLinearAllocator, outBuffer);
+	// asResourceDataMapping_t map;
+	// map.hndl = result;
+	// asResource_Create(id, map, asHashBytes32_xxHash("SHADER", 6), 1);
+	// asAlloc_LinearFree(pCurrentLinearAllocator, outBuffer);
 
-	return result;
-}
+	// return result;
+// }
 
-ASEXPORT asShaderFxHandle_t asShaderFx_FromDesc(asShaderFxDesc_t * desc, const char* name, int32_t nameLength)
-{
-	asShaderFxHandle_t hndl;
-#if ASTRENGINE_VK
-	hndl = asVkCreateShaderPipelineGroup(desc, name, nameLength);
-#endif 
-	/*todo: register value mappings with material system*/
-}
+// ASEXPORT asShaderFxHandle_t asShaderFx_FromDesc(asShaderFxDesc_t * desc, const char* name, int32_t nameLength)
+// {
+	// asShaderFxHandle_t hndl;
+// #if ASTRENGINE_VK
+	// hndl = asVkCreateShaderPipelineGroup(desc, name, nameLength);
+// #endif 
+	// /*todo: register value mappings with material system*/
+// }
 
 /*Texture*/
 
@@ -210,7 +210,7 @@ ASEXPORT SDL_Window* asGetMainWindowPtr()
 ASEXPORT void asInitGfx(asLinearMemoryAllocator_t* pLinearAllocator, asAppInfo_t *pAppInfo, void* pCustomWindow)
 {
 	/*Read Config File*/
-	asCfgFile_t *pConfig = asCfgLoad(pAppInfo->pGfxIniName);
+	asCfgFile_t *pConfig = asCfgLoadUserFile("graphics.ini");
 	pCurrentLinearAllocator = pLinearAllocator;
 
 	/*Window Creation*/

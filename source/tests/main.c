@@ -1,6 +1,7 @@
 #include "engine/engineCore/asEntry.h"
 #include "engine/renderer/asRendererCore.h"
 #include "engine/resource/asResource.h"
+#include "engine/common/asHandleManager.h"
 
 #include "engine/nuklear/asNuklearImplimentation.h"
 #define NK_IMPLEMENTATION
@@ -8,6 +9,8 @@
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "../thirdparty/stb/stb_image.h"
+
+#include "reflectTest.h"
 
 void onUpdate(double time)
 {
@@ -56,10 +59,16 @@ void onExit()
 	asShutdown();
 }
 
+typedef struct {
+	const uint32_t* data;
+} dInitList;
+dInitList dInK = { .data = (uint32_t []){0,9,2,} };
+
 int main(int argc, char* argv[])
 {
 	asAppInfo_t appInfo = (asAppInfo_t){0};
 	appInfo.pAppName = "astrengine_Testbed";
+	appInfo.pDevName = "Alex Strand";
 	appInfo.appVersion.major = 1; appInfo.appVersion.minor = 0; appInfo.appVersion.patch = 0;
 	atexit(asShutdown);
 	asIgnite(argc, argv, &appInfo, NULL);
@@ -82,8 +91,12 @@ int main(int argc, char* argv[])
 	{
 		asResourceType_t resourceType_Texture = asResource_RegisterType("TEXTURE", 7);
 		asResourceLoader_t file;
-		asResourceFileID_t resID = asResource_FileIDFromRelativePath("Derp.jpg", 9);
-		asResourceLoader_Open(&file, resID);
+		asResourceFileID_t resID;
+		if (asResourceLoader_OpenByPath(&file, &resID, "TEST_IMAGE", 11) != AS_SUCCESS)
+		{
+			asFatalError("Failed to open image");
+		}
+		
 		size_t fSize = asResourceLoader_GetContentSize(&file);
 		unsigned char* fContents = asMalloc(fSize);
 		asResourceLoader_ReadAll(&file, fSize, fContents);
@@ -93,14 +106,16 @@ int main(int argc, char* argv[])
 		unsigned char* img = stbi_load_from_memory(fContents, (int)fSize, &x, &y, &channels, 4);
 		asFree(fContents);
 		if (!img)
+		{
 			asFatalError("Failed to load image");
+		}
 		asTextureDesc_t desc = asTextureDesc_Init();
 		desc.usageFlags = AS_TEXTUREUSAGE_SAMPLED;
 		desc.cpuAccess = AS_GPURESOURCEACCESS_DEVICE;
 		desc.format = AS_COLORFORMAT_RGBA8_UNORM;
 		desc.width = x;
 		desc.height = y;
-		desc.initialContentsBufferSize = x * y * 4;
+		desc.initialContentsBufferSize = (size_t)(x * y * 4);
 		desc.initialContentsRegionCount = 1;
 		asTextureContentRegion_t region = (asTextureContentRegion_t) { 0 };
 		region.bufferStart = 0;
@@ -146,9 +161,12 @@ int main(int argc, char* argv[])
 	}
 	/*Test shader loading*/
 	{
-		asShaderFxHandle_t fx = asShaderFx_FromResource(asResource_FileIDFromRelativePath("ShaderFileMockup.asfx", 22));
+		/*asShaderFxHandle_t fx = asShaderFx_FromResource(asResource_FileIDFromRelativePath("ShaderFileMockup.asfx", 22));*/
 		
 	}
+
+	reflectTest();
+
 	asLoopDesc_t loopDesc;
 	loopDesc.fpOnUpdate = (asUpdateFunction_t)onUpdate;
 	loopDesc.fpOnTick = (asUpdateFunction_t)NULL;

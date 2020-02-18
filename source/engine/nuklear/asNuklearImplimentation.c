@@ -1,5 +1,7 @@
 #include "asNuklearImplimentation.h"
 
+/*Todo: Replace in favor of IMGUI... Nuklear Development has stopped*/
+
 #if ASTRENGINE_NUKLEAR
 #define NK_IMPLEMENTATION
 #include "nuklear/nuklear.h"
@@ -177,7 +179,7 @@ void asNkDraw()
 	{
 		if (!nkCmd->elem_count) continue;
 #if ASTRENGINE_VK
-		/*Bind material*/
+		/*Bind shader pipeline*/
 		/*Todo...*/
 		/*Set scissors*/
 		VkRect2D scissor;

@@ -45,6 +45,46 @@ ASEXPORT asResourceFileID_t asResource_FileIDFromRelativePath(const char* pPath,
 	return (asResourceFileID_t)asHashBytes64_xxHash(buffStart, strlen(buffStart));
 }
 
+ASEXPORT const char* asResource_GetResourceFolderPath()
+{
+	if (resourceDir[0] == '\0')
+	{
+		char* binDir = SDL_GetBasePath();
+		if (!binDir)
+		{
+			asFatalError("SDL Base Path is Null?!!?");
+		}
+
+		asDebugLog("Base Path: %s", binDir);
+		if (strlen(binDir) > 756)
+		{
+			asFatalError("Executable path exceeds 756 bytes, Please change install directory...");
+		}
+		memset(resourceDir, 0, 1024);
+		memcpy(resourceDir, binDir, strlen(binDir));
+		SDL_free(binDir);
+		if (strstr(resourceDir, "bin") == NULL)
+		{
+			asFatalError("Please Relocate Executable to A \"bin\" Directory...");
+		}
+		const char* tmp;
+		while ((tmp = strstr(resourceDir, "bin")) != NULL)
+			resourceDir[tmp - resourceDir] = '\0';
+		strncat(resourceDir, RESOURCE_DIR_START, 100);
+		for (size_t i = 0; i < strlen(resourceDir); i++)
+		{
+			if (resourceDir[i] == '\\')
+				resourceDir[i] = '/';
+		}
+	}
+	return resourceDir;
+}
+
+ASEXPORT const char* asResource_GetBinFolderPath()
+{
+	return SDL_GetBasePath();
+}
+
 /*Loader*/
 
 /*Resource Lookup*/
@@ -60,6 +100,7 @@ ASEXPORT asResults asResourceLoader_Open(asResourceLoader_t * loader, asResource
 	size_t resourceIndex = hmgeti(resourceLookupPool.fileMap, id);
 	if (resourceIndex == SIZE_MAX)
 	{
+		asDebugWarning("Unknown Resource ID: %llx (Not registered in Manifest?)", id);
 		return AS_FAILURE_FILE_NOT_FOUND;
 	}
 
@@ -79,15 +120,22 @@ ASEXPORT asResults asResourceLoader_Open(asResourceLoader_t * loader, asResource
 	loader->_fileHndl = fopen(fileName, "rb");
 	if (!loader->_fileHndl)
 		return AS_FAILURE_FILE_INACCESSIBLE;
-#ifndef FSIZE_PREFETCH
 	if (loader->_buffSize < 0)
 	{
 		fseek(loader->_fileHndl, 0, SEEK_END);
 		loader->_buffSize = ftell(loader->_fileHndl);
 	}
-#endif
+
 	fseek(loader->_fileHndl, (long)loader->_buffOffset, SEEK_SET);
 	return AS_SUCCESS;
+}
+
+ASEXPORT asResults asResourceLoader_OpenByPath(asResourceLoader_t* loader, asResourceFileID_t* pId, char* path, size_t pathLength)
+{
+	asDebugLog("Opening Named Resource: %.*s", (int)pathLength, path);
+	asResourceFileID_t resID = asResource_FileIDFromRelativePath(path, pathLength);
+	*pId = resID;
+	return asResourceLoader_Open(loader, resID);
 }
 
 ASEXPORT void asResourceLoader_Close(asResourceLoader_t* loader)
@@ -181,7 +229,7 @@ ASEXPORT void asResource_GetFileName(asResourceFileID_t id, const char ** ppName
 	size_t resourceIndex = hmgeti(resourceLookupPool.fileMap, id);
 	*ppName = strpool_cstr(&resourceLookupPool.strPool,
 		resourceLookupPool.fileMap[resourceIndex].value.nameId);
-	*pNameLength = strlen(ppName);
+	*pNameLength = (int32_t)strlen(*ppName);
 }
 
 ASEXPORT void asResource_IncrimentReferences(asResourceFileID_t id, uint32_t addRefCount)
@@ -219,86 +267,67 @@ void _generateResourceEntires(const char* manifestPath)
 	asCfgFile_t* manifest = asCfgLoad(manifestPath);
 	{
 		struct fInfo fileInfo;
-		char* unused = NULL;
+		char* override = NULL;
+		size_t overrideSize;
 		char* name = NULL;
 		size_t nameSize;
 		asResourceFileID_t id;
 		/*files*/
 		asCfgOpenSection(manifest, "files");
-		while (asCfgGetNextProp(manifest, &unused, &name))
+		while (!asCfgGetNextProp(manifest, &override, &name))
 		{
 			nameSize = strlen(name);
+			overrideSize = strlen(override);
 			if (nameSize > 256)
 				continue;
 			char fullPath[1024];
-			strncpy(fullPath, resourceDir, 1024);
+			memset(fullPath, 0, 1024);
+			strncpy(fullPath, resourceDir, 1023);
 			strncat(fullPath, name, nameSize);
-#ifdef _WIN32
-#define FSIZE_PREFETCH
-			/*windows get file size*/
-			wchar_t longFileName[2048];
-			memset(longFileName, 0, 2048 * sizeof(wchar_t));
-			MultiByteToWideChar(CP_UTF8, 0, fullPath, 1024, longFileName, 2048 * sizeof(wchar_t));
-			HANDLE winFile = CreateFileW(longFileName,
-				GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-			if (winFile == INVALID_HANDLE_VALUE)
-				continue;
-			LARGE_INTEGER size;
-			if (!GetFileSizeEx(winFile, &size))
-			{
-				CloseHandle(winFile);
-				continue;
-			}
-			CloseHandle(winFile);
-			fileInfo.size = size.QuadPart;
-#elif defined(unix) || defined(__unix__) || defined(__unix)
-#define FSIZE_PREFETCH
-			/*Unix get file size*/
-			struct stat st;
-			stat(fullPath, &st);
-			if (st.st_size <= 0)
-				continue;
-			fileInfo.size = st.st_size;
-#else
 			fileInfo.size = -1; /*Undefined size, determined using ftell*/
-#endif
+
+			/*Add Name Override*/
+			char* finalName = name;
+			size_t finalNameSize = nameSize;
+			if (strncmp(override, "_PATH_", overrideSize))
+			{
+				finalName = override;
+				finalNameSize = overrideSize;
+				asDebugLog("RESOURCE OVERRIDE! %s = %s", override, name);
+			}
+
 			fileInfo.nameId = strpool_inject(&resourceLookupPool.strPool, name, (int)nameSize);
 			fileInfo.start = 0; /*Stray files always start at byte 0*/
-			id = asResource_FileIDFromRelativePath(name, strlen(name));
+			id = asResource_FileIDFromRelativePath(finalName, finalNameSize);
 			hmput(resourceLookupPool.fileMap, id, fileInfo);
 		}
 		/*packages*/
-		asCfgOpenSection(manifest, "aspak");
-		while (asCfgGetNextProp(manifest, unused, name))
-		{
-			/*todo: package system*/
-		}
+		//asCfgOpenSection(manifest, "aspak");
+		//while (asCfgGetNextProp(manifest, override, name))
+		//{
+		//	/*Todo: Future package system*/
+		//}
 	}
 }
 
 /*Manager*/
 
-ASEXPORT void asInitResource(const char * manifestPath)
+ASEXPORT void asInitResource()
 {
 	/*Get Resource Path*/
 	{
-		char* binDir = SDL_GetBasePath();
-		if (strlen(binDir) > 756)
-			asFatalError("Executable path exceeds 756 bytes, please change install directory.");
-		memset(resourceDir, 0, 1024);
-		memcpy(resourceDir, binDir, strlen(binDir));
-		SDL_free(binDir);
-		const char* tmp;
-		while ((tmp = strstr(resourceDir, "bin")) != NULL)
-			resourceDir[tmp - resourceDir] = '\0';
-		strncat(resourceDir, RESOURCE_DIR_START, 1024);
-		for (size_t i = 0; i < strlen(resourceDir); i++)
-		{
-			if (resourceDir[i] == '\\')
-				resourceDir[i] = '/';
-		}
+		asResource_GetResourceFolderPath();
+		asDebugLog("Resource Path: %s", resourceDir);
 	}
 
+	/*Get Manifest Path*/
+	char manifestPath[1024];
+	memset(manifestPath, 0, 1024);
+	strncpy(manifestPath, resourceDir, 1024-14);
+	strncat(manifestPath, "resources.cfg", 14);
+	asDebugLog("Resource Manifest: %s", manifestPath);
+
+	/*Initialize Manager*/
 	struct _resourceDat defRes;
 	defRes.mapping.hndl = asHandle_Invalidate();
 	defRes.mapping.ptr = NULL;

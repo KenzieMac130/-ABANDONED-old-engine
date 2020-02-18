@@ -35,6 +35,7 @@
 
 		cf_dir_close(&dir);
 */
+/*ALTERED: Non recursive option*/
 
 #if !defined(CUTE_FILES_H)
 
@@ -231,6 +232,22 @@ const char* cf_get_ext(cf_file_t* file)
 	if (period) cf_safe_strcpy(file->ext, period, 0, CUTE_FILES_MAX_EXT);
 	else file->ext[0] = 0;
 	return file->ext;
+}
+
+void cf_traverse_norecursive(const char* path, cf_callback_t* cb, void* udata)
+{
+	cf_dir_t dir;
+	cf_dir_open(&dir, path);
+
+	while (dir.has_next)
+	{
+		cf_file_t file;
+		cf_read_file(&dir, &file);
+		if (file.is_reg) cb(&file, udata);
+		cf_dir_next(&dir);
+	}
+
+	cf_dir_close(&dir);
 }
 
 void cf_traverse(const char* path, cf_callback_t* cb, void* udata)

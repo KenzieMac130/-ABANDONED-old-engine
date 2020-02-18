@@ -1,0 +1,26 @@
+
+PHASE 1: (COOK)
+-Input:
+A series of directorories containing package configuration files and resources
+
+-Run file processors on data in the files if out of date (relative to last cache run)
+-If the state is unpackaged: output to a mirror of that path in the build resource directory
+-If the state is packaged: output to a mirror of that path in the build resource directory inside a _ASPAK_CACHE_ 
+and an PAKNAME.ASRC_PAKCFG file with the "packageOut" value as name with '/' turned into '@'
+-If the file is overridden write a ORIGINALNAME.EXTENSION.ASRC_OVERRIDE with the file names '/' turned into '@'
+ 
+PHASE 2: (MANIFEST)
+Dive through the folders of the asset folders
+
+Collect each file name
+Check if there is an ASRC_OVERRIDE version of the file: open that set contents as the overridden name, else use "_PATH_"
+Then delete the ASRC_OVERRIDE file
+
+If the folder is NOT an _ASPAK_CACHE_: reserve in to write in the "files" section
+If the folder is an _ASPAK_CACHE_: reserve in to write in the "aspak" section
+
+PHASE 3: (PACK)
+Future
+
+-Output:
+A series of processed resource files in the project directory (with potential for zipping)

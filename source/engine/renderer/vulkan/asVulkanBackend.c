@@ -3,6 +3,7 @@
 #include <SDL_vulkan.h>
 #include "../asRendererCore.h"
 
+/*Todo: Get rid of linear allocator usage, gain is negligable, and code is subject to future breakage*/
 asLinearMemoryAllocator_t* pCurrentLinearAllocator;
 
 struct vScreenResources_t
@@ -37,7 +38,7 @@ VkDevice asVkDevice;
 VkQueue asVkQueue_GFX;
 VkQueue asVkQueue_Present;
 VkQueue asVkQueue_Compute;
-/*Todo: transfer queues for resource streaming*/
+VkQueue asVkQueue_Transfer;
 
 VkCommandPool asVkGeneralCommandPool;
 uint32_t asVkCurrentFrame = 0;
@@ -48,12 +49,16 @@ typedef struct
 	uint32_t graphicsIdx;
 	uint32_t presentIdx;
 	uint32_t computeIdx;
+	uint32_t transferIdx;
 } vQueueFamilyIndices_t;
 vQueueFamilyIndices_t asVkQueueFamilyIndices;
 
 bool vIsQueueFamilyComplete(vQueueFamilyIndices_t indices)
 {
-	return (indices.graphicsIdx != UINT32_MAX && indices.presentIdx != UINT32_MAX && indices.computeIdx != UINT32_MAX);
+	return (indices.graphicsIdx != UINT32_MAX &&
+		indices.transferIdx != UINT32_MAX &&
+		indices.presentIdx != UINT32_MAX &&
+		indices.computeIdx != UINT32_MAX);
 }
 
 const char* deviceReqExtensions[] = {
@@ -74,7 +79,7 @@ bool vValidationLayersAvailible()
 	VkLayerProperties *layerProps = (VkLayerProperties*)asAlloc_LinearMalloc(pCurrentLinearAllocator, sizeof(VkLayerProperties) * layerCount);
 	vkEnumerateInstanceLayerProperties(&layerCount, layerProps);
 	for (uint32_t i = 0; i < layerCount; i++)
-		asDebugLog("VK Layer: \"%s\" found\n", layerProps[i].layerName);
+		asDebugLog("VK Layer: \"%s\" found", layerProps[i].layerName);
 	bool found;
 	for (uint32_t i = 0; i < ASARRAYLEN(validationLayers); i++)
 	{
@@ -107,7 +112,7 @@ const char* pLayerPrefix,
 const char* pMsg,
 void* pUserData) 
 {
-	asDebugLog("VK Validation Layer: [%s] Code %u : %s\n", pLayerPrefix, msgCode, pMsg);
+	asDebugLog("VK Validation Layer: [%s] Code %u : %s", pLayerPrefix, msgCode, pMsg);
 	return VK_FALSE;
 }
 VkDebugReportCallbackEXT vDbgCallback;
@@ -126,6 +131,8 @@ vQueueFamilyIndices_t vFindQueueFamilyIndices(VkPhysicalDevice gpu)
 			result.graphicsIdx = i;
 		if (queueFamilyProps[i].queueCount > 0 && queueFamilyProps[i].queueFlags & VK_QUEUE_COMPUTE_BIT)
 			result.computeIdx = i;
+		if (queueFamilyProps[i].queueCount > 0 && queueFamilyProps[i].queueFlags & VK_QUEUE_TRANSFER_BIT)
+			result.transferIdx = i;
 
 		VkBool32 present = VK_FALSE;
 		vkGetPhysicalDeviceSurfaceSupportKHR(gpu, i, vMainScreen.surface, &present);
@@ -508,11 +515,11 @@ VkImageViewType vConvertTextureTypeToViewType(asTextureType type)
 	case AS_TEXTURETYPE_2D:
 		return VK_IMAGE_VIEW_TYPE_2D;
 	case AS_TEXTURETYPE_2DARRAY:
-		return AS_TEXTURETYPE_2DARRAY;
+		return VK_IMAGE_VIEW_TYPE_2D_ARRAY;
 	case AS_TEXTURETYPE_CUBE:
-		return AS_TEXTURETYPE_CUBE;
+		return VK_IMAGE_VIEW_TYPE_CUBE;
 	case AS_TEXTURETYPE_CUBEARRAY:
-		return AS_TEXTURETYPE_CUBEARRAY;
+		return VK_IMAGE_VIEW_TYPE_CUBE_ARRAY ;
 	case AS_TEXTURETYPE_3D:
 		return VK_IMAGE_VIEW_TYPE_3D;
 	default:
@@ -693,7 +700,7 @@ ASEXPORT asTextureHandle_t asCreateTexture(asTextureDesc_t *pDesc)
 					VkSubmitInfo submitInfo = (VkSubmitInfo){ VK_STRUCTURE_TYPE_SUBMIT_INFO };
 					submitInfo.commandBufferCount = 1;
 					submitInfo.pCommandBuffers = &tmpCmd;
-					vkQueueSubmit(asVkQueue_GFX, 1, &submitInfo, VK_NULL_HANDLE);
+					vkQueueSubmit(asVkQueue_GFX, 1, &submitInfo, VK_NULL_HANDLE); /*TODO: Transfer Queue*/
 					vkQueueWaitIdle(asVkQueue_GFX);
 					vkFreeCommandBuffers(asVkDevice, asVkGeneralCommandPool, 1, &tmpCmd);
 				}
@@ -926,7 +933,7 @@ ASEXPORT asBufferHandle_t asCreateBuffer(asBufferDesc_t *pDesc)
 					VkSubmitInfo submitInfo = (VkSubmitInfo) { VK_STRUCTURE_TYPE_SUBMIT_INFO };
 					submitInfo.commandBufferCount = 1;
 					submitInfo.pCommandBuffers = &tmpCmd;
-					vkQueueSubmit(asVkQueue_GFX, 1, &submitInfo, VK_NULL_HANDLE);
+					vkQueueSubmit(asVkQueue_GFX, 1, &submitInfo, VK_NULL_HANDLE); /*TODO: Transfer Queue*/
 					vkQueueWaitIdle(asVkQueue_GFX);
 					vkFreeCommandBuffers(asVkDevice, asVkGeneralCommandPool, 1, &tmpCmd);
 				}
@@ -1025,7 +1032,7 @@ VkCommandBuffer vPrimaryCommandBufferManager_GetNextCommand(struct vPrimaryComma
 {
 	uint32_t slot;
 	slot = pMan->count[asVkCurrentFrame];
-/*Todo: Atomic lock to retrieve on arbitrary threads*/
+/*NOT THREADSAFE TO RETRIEVE ON MULTIPLE THREADS!*/
 	pMan->count[asVkCurrentFrame]+= 1;
 	return pMan->pBuffers[asVkCurrentFrame][slot];
 }
@@ -1043,171 +1050,6 @@ VkCommandBuffer asVkGetNextComputeCommandBuffer()
 }
 
 /*Shader Fx*/
-struct vFxPipelineGroup
-{
-	VkPipeline pipelinePermutations[AS_VK_MAX_PERMUTATION_ENTRIES];
-};
-
-struct vFxPipelineManager_t
-{
-	uint32_t vFxPermutationCount;
-	asHash32_t vFxPermutationNameHashes[AS_VK_MAX_PERMUTATION_ENTRIES];
-	asVkFxPermutationEntry_t vFxPermutationEntries[AS_VK_MAX_PERMUTATION_ENTRIES];
-
-	asHandleManager_t handleManager;
-	struct vFxPipelineGroup* pPipelineGroups;
-};
-
-struct vFxPipelineManager_t vMainPipelineGroupManager;
-
-void _invalidatePipeline(struct vFxPipelineGroup* pFx)
-{
-	for (int i = 0; i < AS_VK_MAX_PERMUTATION_ENTRIES; i++)
-	{
-		pFx->pipelinePermutations[i] = VK_NULL_HANDLE;
-	}
-}
-
-void _destroyPipeline(struct vFxPipelineGroup* pFx)
-{
-	for (int i = 0; i < AS_VK_MAX_PERMUTATION_ENTRIES; i++)
-	{
-		if (pFx->pipelinePermutations[i] != VK_NULL_HANDLE)
-			vkDestroyPipeline(asVkDevice, pFx->pipelinePermutations[i], AS_VK_MEMCB);
-	}
-	_invalidatePipeline(pFx);
-}
-
-void vFxPipelineManager_Init(struct vFxPipelineManager_t* pMan)
-{
-	pMan->vFxPermutationCount = 0;
-	memset(pMan->vFxPermutationNameHashes, 0, sizeof(asHash32_t) * AS_VK_MAX_PERMUTATION_ENTRIES);
-
-	asHandleManagerCreate(&pMan->handleManager, AS_MAX_SHADERFX);
-	pMan->pPipelineGroups = (struct vFxPipelineGroup*)asMalloc(sizeof(pMan->pPipelineGroups[0]) * AS_MAX_SHADERFX);
-	for (int i = 0; i < AS_MAX_SHADERFX; i++)
-		_invalidatePipeline(&pMan->pPipelineGroups[i]);
-}
-
-void vFxPipelineManager_Shutdown(struct vFxPipelineManager_t* pMan)
-{
-	asHandleManagerDestroy(&pMan->handleManager);
-	for (int i = 0; i < AS_MAX_SHADERFX; i++)
-	{
-		_destroyPipeline(&pMan->pPipelineGroups[i]);
-	}
-	asFree(pMan->pPipelineGroups);
-}
-
-int32_t asVkRegisterFxPipelinePermutation(const char* name, size_t nameSize, asVkFxPermutationEntry_t desc)
-{
-	int32_t result;
-	ASASSERT(vMainPipelineGroupManager.vFxPermutationCount >= AS_VK_MAX_PERMUTATION_ENTRIES);
-	vMainPipelineGroupManager.vFxPermutationNameHashes[vMainPipelineGroupManager.vFxPermutationCount] = asHashBytes32_xxHash(name, nameSize);
-	vMainPipelineGroupManager.vFxPermutationEntries[vMainPipelineGroupManager.vFxPermutationCount] = desc;
-	result = vMainPipelineGroupManager.vFxPermutationCount;
-	vMainPipelineGroupManager.vFxPermutationCount++;
-	return result;
-}
-
-/*Todo: Compute pipelines, Caching, (fix immediate issues, permutation no-longer direclty indexable)*/
-asShaderFxHandle_t asVkCreateShaderPipelineGroup(asShaderFxDesc_t * desc, const char* pName, int32_t nameLength)
-{
-	asShaderFxHandle_t hndl = (asBufferHandle_t) { 0 };
-	vkDeviceWaitIdle(asVkDevice);
-	hndl = asCreateHandle(&vMainPipelineGroupManager.handleManager);
-	struct vFxPipelineGroup *pGroup = &vMainPipelineGroupManager.pPipelineGroups[hndl._index];
-
-	VkGraphicsPipelineCreateInfo gfxPipelineInfo[AS_VK_MAX_PERMUTATION_ENTRIES];
-	/*Fill out each permutation*/
-	uint32_t foundShaderCount[AS_VK_MAX_PERMUTATION_ENTRIES] = { 0 };
-	uint32_t createdPermutations = 0;
-	VkShaderModule shaderModules[AS_VK_MAX_PERMUTATION_ENTRIES][AS_VK_MAX_PROGRAMS_PER_STAGE];
-	for (uint32_t i = 0; i < vMainPipelineGroupManager.vFxPermutationCount; i++)
-	{
-		/*Check for blank permutation*/
-		if (vMainPipelineGroupManager.vFxPermutationNameHashes[i] == 0)
-			continue;
-		/*Skip permutation if shader doesn't match bucket requirements*/
-		if (vMainPipelineGroupManager.vFxPermutationEntries[i].requiredBucket != UINT32_MAX &&
-			desc->bucket != vMainPipelineGroupManager.vFxPermutationEntries[i].requiredBucket)
-		{
-			continue;
-		}
-
-		/*Get pipeline*/
-		gfxPipelineInfo[createdPermutations] = (VkGraphicsPipelineCreateInfo) { VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
-
-		/*Retrieve shader modules*/
-		if (!vMainPipelineGroupManager.vFxPermutationEntries[i].overrideShaders)
-		{
-			/*Search for shaders to link*/
-			for (uint32_t n = 0; n < AS_VK_MAX_PROGRAMS_PER_STAGE; n++)
-			{
-				/*Exceeded number of programs*/
-				if (foundShaderCount[i] >= desc->programCount)
-					break;
-				/*Found shader matching permutation*/
-				if (memcmp(&desc->pProgramLookup[foundShaderCount[i]],
-					&vMainPipelineGroupManager.vFxPermutationEntries[i].requestedPrograms[n],
-					sizeof(asShaderFxProgramLookup_t)) == 0);
-				{
-					VkShaderModuleCreateInfo moduleInfo = { VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
-					moduleInfo.codeSize = desc->pProgramDescs[n].programByteCount;
-					moduleInfo.pCode = (const uint32_t*)&desc->pShaderCode[desc->pProgramDescs[n].programByteStart];
-					VkResult res;
-					/*Attempt to transpile shader bytecode*/
-					if (res = vkCreateShaderModule(asVkDevice, &moduleInfo, AS_VK_MEMCB, &shaderModules[i][foundShaderCount[i]]) != VK_SUCCESS)
-					{
-						/*Display error information*/
-						char errCode[256];
-						snprintf(errCode, 256, "vkCreateShaderModule() Failed to create shader:"
-							"Name:%.*s, ErrCode:%d, VarHash:%d, Length:%d, Start%d\n",
-							(int)nameLength,
-							pName,
-							res,
-							desc->pProgramLookup->nameHash,
-							desc->pProgramDescs[n].programByteCount,
-							desc->pProgramDescs[n].programByteStart);
-						asFatalError(errCode);
-					}
-					foundShaderCount[i]++;
-				}
-			}
-			gfxPipelineInfo[createdPermutations].stageCount = foundShaderCount[i];
-
-			/*Fill out graphics pipeline, apply other high level settings acording to special requirements*/
-			ASASSERT(vMainPipelineGroupManager.vFxPermutationEntries[i].fpOverrideGfxPipeline);
-			vMainPipelineGroupManager.vFxPermutationEntries[i].fpOverrideGfxPipeline(&gfxPipelineInfo[i], desc);
-		}
-	}
-
-	/*Create all pipelines*/
-	vkCreateGraphicsPipelines(asVkDevice, VK_NULL_HANDLE, createdPermutations,
-		gfxPipelineInfo, AS_VK_MEMCB, pGroup->pipelinePermutations);
-
-	/*Cleanup leftover shader module data*/
-	for (uint32_t i = 0; i < createdPermutations; i++)
-	{
-		for (uint32_t n = 0; n < foundShaderCount[i]; n++)
-		{
-			vkDestroyShaderModule(asVkDevice, shaderModules[i][n], AS_VK_MEMCB);
-		}
-	}
-	return hndl;
-}
-
-void asVkReleasePipelineGroup(asShaderFxHandle_t hndl)
-{
-	vkDeviceWaitIdle(asVkDevice);
-	_destroyPipeline(&vMainPipelineGroupManager.pPipelineGroups[hndl._index]);
-	asDestroyHandle(&vMainPipelineGroupManager.handleManager, hndl);
-}
-
-VkPipeline asVkGetPipelineFromFx(asShaderFxHandle_t hndl, int32_t permutationId)
-{
-	return vMainPipelineGroupManager.pPipelineGroups[hndl._index].pipelinePermutations[permutationId];
-}
 
 /*Init and Shutdown*/
 
@@ -1409,12 +1251,12 @@ void vScreenResourcesDestroy(struct vScreenResources_t *pScreen)
 
 void asVkInit(asLinearMemoryAllocator_t* pLinearAllocator, asAppInfo_t *pAppInfo, asCfgFile_t* pConfig)
 {
-	asDebugLog("Starting Vulkan Backend...\n");
+	asDebugLog("Starting Vulkan Backend...");
 	pCurrentLinearAllocator = pLinearAllocator;
 	/*Create Instance*/
 	{
 #if AS_VK_VALIDATION
-		if (!vValidationLayersAvailible(pLinearAllocator))
+		if (!vValidationLayersAvailible())
 			asFatalError("Vulkan Validation layers requested but not avalible");
 #endif
 		unsigned int sdlExtCount;
@@ -1426,7 +1268,7 @@ void asVkInit(asLinearMemoryAllocator_t* pLinearAllocator, asAppInfo_t *pAppInfo
 		extensions[0] = VK_EXT_DEBUG_REPORT_EXTENSION_NAME;
 		SDL_Vulkan_GetInstanceExtensions(asGetMainWindowPtr(), &sdlExtCount, &extensions[extraExtCount]);
 		for (uint32_t i = 0; i < sdlExtCount + extraExtCount; i++)
-			asDebugLog("VK Extension: \"%s\" found\n", extensions[i]);
+			asDebugLog("VK Extension: \"%s\" found", extensions[i]);
 
 		VkApplicationInfo appInfo = { VK_STRUCTURE_TYPE_APPLICATION_INFO };
 		appInfo.pEngineName = "astrengine";
@@ -1599,6 +1441,7 @@ void asVkInit(asLinearMemoryAllocator_t* pLinearAllocator, asAppInfo_t *pAppInfo
 		vkGetDeviceQueue(asVkDevice, asVkQueueFamilyIndices.graphicsIdx, 0, &asVkQueue_GFX);
 		vkGetDeviceQueue(asVkDevice, asVkQueueFamilyIndices.presentIdx, 0, &asVkQueue_Present);
 		vkGetDeviceQueue(asVkDevice, asVkQueueFamilyIndices.computeIdx, 0, &asVkQueue_Compute);
+		vkGetDeviceQueue(asVkDevice, asVkQueueFamilyIndices.transferIdx, 0, &asVkQueue_Transfer);
 	}
 	/*Render Loop Synchronization*/
 	{
@@ -1630,7 +1473,6 @@ void asVkInit(asLinearMemoryAllocator_t* pLinearAllocator, asAppInfo_t *pAppInfo
 	{
 		vTextureManager_Init(&vMainTextureManager);
 		vBufferManager_Init(&vMainBufferManager);
-		vFxPipelineManager_Init(&vMainPipelineGroupManager);
 	}
 	/*Screen Resources*/
 	{
@@ -1699,7 +1541,6 @@ void asVkShutdown()
 		vkDeviceWaitIdle(asVkDevice);
 
 	vScreenResourcesDestroy(&vMainScreen);
-	vFxPipelineManager_Shutdown(&vMainPipelineGroupManager);
 	vBufferManager_Shutdown(&vMainBufferManager);
 	vTextureManager_Shutdown(&vMainTextureManager);
 	vMemoryAllocator_Shutdown(&vMainAllocator);

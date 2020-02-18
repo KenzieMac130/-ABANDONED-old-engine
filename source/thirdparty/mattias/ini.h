@@ -517,7 +517,7 @@ ini_t* ini_load( char const* data, void* memctx )
             if( !*ptr ) break;
 
             /* comment */
-            else if( *ptr == ';' )
+            else if( *ptr == ';' || *ptr == '#')
                 {
                 while( *ptr && *ptr !='\n' )
                     ++ptr;
@@ -540,10 +540,10 @@ ini_t* ini_load( char const* data, void* memctx )
             else
                 {
                 start = ptr;
-                while( *ptr && *ptr !='=' && *ptr != '\n' )
+                while( *ptr && *ptr !='=' && *ptr != ':' && *ptr != '\n' )
                     ++ptr;
 
-                if( *ptr == '=' )
+                if( *ptr == '=' || *ptr == ':')
                     {
                     l = (int)( ptr - start);
                     ++ptr;

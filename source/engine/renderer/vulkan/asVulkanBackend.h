@@ -152,38 +152,7 @@ asVkAllocation_t asVkGetAllocFromBuffer(asBufferHandle_t hndl);
 
 #endif
 
-/*Shader Fx*/
-
-#define AS_VK_MAX_PROGRAMS_PER_STAGE 6
-/*
-* @brief a description for a pipeline permutation to be used with the fx system
-*/
-typedef struct
-{
-	asShaderFxProgramLookup_t requestedPrograms[AS_VK_MAX_PROGRAMS_PER_STAGE]; /**< Requested program lookups, parse until capacity or 0 is reached*/
-	VkPipelineBindPoint pipelineType; /**< What type of pipeline is this*/
-	asHash32_t requiredBucket; /**< Required bucket hash (UINT32_MAX is no requirements)*/
-	void(*fpOverrideGfxPipeline)(VkGraphicsPipelineCreateInfo*, const asShaderFxDesc_t*); /**< Called to override the gfx pipeline*/
-	bool overrideShaders;
-} asVkFxPermutationEntry_t;
-
-#define AS_VK_MAX_PERMUTATION_ENTRIES 16
-/**
-* @brief Register a pipeline permutation with the fx system
-* @warning There are a limmited amount of permutation slots at the moment, going over will cause assert
-* returns the slot that will be occupied for an effect
-*/
-int32_t asVkRegisterFxPipelinePermutation(const char* name, size_t nameSize, asVkFxPermutationEntry_t desc);
-
-/**
-* @brief Create a pipeline permutation group from a shader description
-*/
-asShaderFxHandle_t asVkCreateShaderPipelineGroup(asShaderFxDesc_t * desc, const char* pName, int32_t nameLength);
-
-/**
-* @brief Get a VkPipeline permutation from a ShaderFx at a slot
-*/
-VkPipeline asVkGetPipelineFromFx(asShaderFxHandle_t hndl, int32_t permutationId);
+/*Todo: GET RID OF*/
 
 #ifdef __cplusplus
 }

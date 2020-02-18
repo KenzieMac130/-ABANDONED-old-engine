@@ -211,7 +211,7 @@ ASEXPORT void asReleaseTexture(asTextureHandle_t hndl);
 /**
 * @brief Maximum number of textures
 */
-#define AS_MAX_TEXTURES 512
+#define AS_MAX_TEXTURES 1024
 
 /*Buffers*/
 
@@ -266,9 +266,18 @@ ASEXPORT void asReleaseBuffer(asBufferHandle_t hndl);
 /**
 * @brief Maximum number of buffers
 */
-#define AS_MAX_BUFFERS 1024
+#define AS_MAX_BUFFERS 2048
+
+/*Draw Commands*/
+/*command buffer/drawing abstraction*/
+
+/*Backbuffer Draw*/
+/*todo: setup simple backbuffer drawing (gizmos/ui)*/
 
 /*Shader FX*/
+
+/*REDO! New system should be simplified
+*/
 
 /**
 * @brief Maximum number of shader fx
@@ -290,53 +299,21 @@ typedef enum {
 } asShaderStage;
 
 /**
-* @brief shader code lookup
-*/
-typedef struct {
-	asHash32_t nameHash; /**< Name of the pipeline permutation*/
-	asShaderStage stage; /**< Stage this shader belongs to*/
-} asShaderFxProgramLookup_t;
-
-/**
 * @brief Describes a shader program
-* main is always assumed to be the entry point of the code
+* Technically could be described as series of generic shader properties...
+* but it was decided against to avoid overgeneralization and creating a meaningless structure
+* Plus if the material system completely patched over any of these values it would not be good...
 */
 typedef struct {
+	asGfxAPIs api; /**< API Associated with the shader*/
+	asHash32_t defGroupNameHash; /**< Identifies what define group the compiler took when generating (zprepass/gbuffer/forward/etc)*/
+	int32_t quality; /**< Internal quality level associated with shader (must not affect inputs/outputs interface only instructions)*/
+	asShaderStage stage; /**< Stage this shader belongs to*/
+
 	uint32_t programByteStart; /**< Shader code/bytecode for the current API (Vulkan: SPIR-V, OpenGL: GLSL, DirectX: HLSL, ect...)*/
-	uint32_t programByteCount; /**< Amount of bytes in asShaderCodeDesc_t::pProgramBytes*/
+	uint32_t programByteCount; /**< Amount of bytes for the shader code/bytecode*/
+	char entryName[32]; /**< Name of the shader's entry point*/
 } asShaderFxProgramDesc_t;
-
-/**
-* @brief Fill modes
-*/
-typedef enum {
-	AS_FILL_FULL,
-	AS_FILL_WIRE,
-	AS_FILL_POINTS,
-	AS_FILL_COUNT,
-	AS_FILL_MAX = UINT32_MAX
-} asFillMode;
-
-/**
-* @brief Cull modes
-*/
-typedef enum {
-	AS_CULL_BACK,
-	AS_CULL_FRONT,
-	AS_CULL_NONE,
-	AS_CULL_COUNT,
-	AS_CULL_MAX = UINT32_MAX
-} asCullMode;
-
-/**
-* @brief High level blend modes
-*/
-typedef enum {
-	AS_BLEND_NONE,
-	AS_BLEND_MIX,
-	AS_BLEND_ADD,
-	AS_BLEND_MAX = UINT32_MAX
-} asBlendMode;
 
 /**
 * @brief shader fx property types
@@ -344,69 +321,45 @@ typedef enum {
 typedef enum {
 	AS_SHADERFXPROP_SCALAR,
 	AS_SHADERFXPROP_VECTOR4,
-	AS_SHADERFXPROP_INTEGER,
-	AS_SHADERFXPROP_TEX2D,
-	AS_SHADERFXPROP_TEX2DARRAY,
-	AS_SHADERFXPROP_TEXCUBE,
-	AS_SHADERFXPROP_TEXCUBEARRAY,
-	AS_SHADERFXPROP_TEX3D,
-	AS_SHADERFXPROP_MAX = UINT8_MAX
+	AS_SHADERFXPROP_MAT4,
+	AS_SHADERFXPROP_STRING,
+	AS_SHADERFXPROP_MAX = UINT32_MAX
 } asShaderFxPropType;
 
 /**
-* @brief shader material property lookup
+* @brief generic name/value pair generated from parsing the original shader
+* Since the system doesn't contain any reflection system, this will be the main method of data driven communication
+* Properties are expected to be in the same order as parsed, this allows you to define structures with the data
 */
 typedef struct {
-	asHash32_t nameHash;
-	asShaderFxPropType type;
-} asShaderFxPropLookup_t;
+	asShaderFxPropType type; /**< Value type*/
+	char name[64]; /**< Name of the value*/
+	union {
+		float valueScalar; /**< Value as Scalar*/
+		float valueVector[4]; /**< Value as Vector4*/
+		float valueMatrix[4][4]; /**< Value as Mat4x4*/
+		struct{
+		uint32_t valueStrByteOffset; /**< String value Mat4x4*/
+		uint32_t valueStrByteLength;
+		};
+	};
+} asShaderFxProp_t;
+
+#define AS_SHADERFX_VERSION 201
 
 /**
-* @brief shader material property defaults
+* @brief Description for a shader effect/pipeline
 */
 typedef struct {
-	float values[4];
-} asShaderFxTextureDefault_t;
-
-typedef enum {
-	AS_SHADERFXTEXDEFAULT_BLACK,
-	AS_SHADERFXTEXDEFAULT_WHITE,
-	AS_SHADERFXTEXDEFAULT_GREY,
-	AS_SHADERFXTEXDEFAULT_NORMAL,
-	AS_SHADERFXTEXDEFAULT_ALPHA,
-	AS_SHADERFXTEXDEFAULT_MAX = UINT8_MAX
-} asShaderFxTextureDefault;
-
-#define AS_MATERIAL_BUFFER_SIZE 256
-
-#define AS_SHADERFX_VERSION 1
-
-/**
-* @brief Description for a shader effect
-*/
-typedef struct {
-	uint32_t flags; /**< Flags for future use*/
-	asHash32_t bucket; /**< Requested rendering bucket for special rendering inputs (eg, transparent surfaces)*/
-	uint32_t tessCtrlPoints; /**< Tessellation control points*/
-	float fillSize; /**< Width for non-solid lines and points*/
-	asFillMode fillMode; /**< Polygon fill modes*/
-	asCullMode cullMode; /**< Which side of the face if any is culled*/
-	asBlendMode blendMode; /**< High level blend modes for the surface*/
-	uint32_t reserved[5]; /**< Reserved for future use*/
-
-	uint32_t propCount; /**< Amount of asShaderDesc_t::pFxProps*/
+	asHash32_t nameHash; /**< Registers with a callback to create complete pipeline(s)*/
+	uint32_t propCount; /**< Amount of asShaderDesc_t::pProps*/
 	uint32_t programCount; /**< Amount of asShaderDesc_t::pProgramDescs*/
-	uint32_t shaderCodeSize; /**< Size of asShaderFxDesc_t::pShaderCode*/
-	uint32_t propBufferSize; /**< The size of the buffer data required for fx properties*/
+	uint32_t dataSize; /**< Size of asShaderFxDesc_t::pData*/
 
-	asShaderFxPropLookup_t *pPropLookup; /**< Lookup value for a property*/
-	uint16_t *pPropOffset; /**< This is the byte offset for the propbuffer*/
-
-	asShaderFxProgramLookup_t *pProgramLookup; /**< Lookup value of each shader program*/
-	asShaderFxProgramDesc_t *pProgramDescs; /**< Programm contents offsets*/
-	unsigned char* pShaderCode; /**<  Shader code/bytecode for the current API (Vulkan: SPIR-V, OpenGL: GLSL, DirectX: HLSL, ect...)*/
-
-	unsigned char* pPropBufferDefault; /**< Default fx prop buffer (material values)*/
+	asHash32_t *pPropLookups; /**< Generic property name lookup hash*/
+	asShaderFxProp_t *pProps; /**< Generic properties*/
+	asShaderFxProgramDesc_t *pProgramDescs; /**< Lookup for of each shader program*/
+	unsigned char* pData; /**< Data chunk where property strings and shader stages are contained*/
 } asShaderFxDesc_t;
 
 /**
@@ -440,16 +393,8 @@ ASEXPORT asShaderFxHandle_t asShaderFx_FromResource(asResourceFileID_t file);
 * @brief Description for a material
 */
 typedef struct {
-	asResourceFileID_t fxFile; /**< ID for the fx associated with this material*/
-	uint32_t propCount; /**< Amount of asMaterialDesc_t::pProps*/
-	uint32_t textureFileCount; /**< Amount of asMaterialDesc_t::pProps*/
-	uint32_t propBufferSize; /**< The size of asMaterialDesc_t::pPropBuffer*/
-
-	asResourceFileID_t *pTextureFiles; /**< IDs for the texture files associated with the material*/
-	asShaderFxPropLookup_t *pPropLookup; /**< Lookup value for a property*/
-	uint16_t *pPropOffset; /**< This is the byte offset for the propbuffer*/
-
-	unsigned char* pPropBuffer; /**< Contains the material values*/
+	uint32_t propCount; /**< Amount of asShaderDesc_t::asMaterialDesc_t*/
+	asShaderFxProp_t *pProps; /**< Value for a property*/
 } asMaterialDesc_t;
 
 #ifdef __cplusplus

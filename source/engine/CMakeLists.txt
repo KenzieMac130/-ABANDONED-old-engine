@@ -14,8 +14,16 @@ set (ASTRENGINE_VERSION_PATCH 0)
 set (ASTRENGINE_VK 1)
 set (ASTRENGINE_NUKLEAR 1)
 
+include (TestBigEndian)
+TEST_BIG_ENDIAN(IS_BIG_ENDIAN)
+if(IS_BIG_ENDIAN)
+	set (AS_ENDIAN 0xFF)
+else()
+	set (AS_ENDIAN 0x00)
+endif()
+
 configure_file (
-	${CMAKE_CURRENT_SOURCE_DIR}/astrengineConfig.h.in
+	${PROJECT_SOURCE_DIR}/source/engine/astrengineConfig.h.in
 	${PROJECT_BINARY_DIR}/astrengineConfig.h )
 	
 ##-----GLOBAL INCLUDE DIRECTORIES#-----
@@ -48,4 +56,4 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/engineCore)
 #-----INSTALLATION-----
 install (FILES ${PROJECT_BINARY_DIR}/astrengineConfig.h DESTINATION ${PROJECT_BINARY_DIR}/include/engine)
 install(DIRECTORY ${PROJECT_SOURCE_DIR}/source/engine DESTINATION ${PROJECT_BINARY_DIR}/include FILES_MATCHING PATTERN "*.h")
-install (FILES ${SDL2_SHARED} DESTINATION ${PROJECT_BINARY_DIR}/bin/${CMAKE_BUILD_TYPE})
+#install (FILES ${SDL2_SHARED} DESTINATION ${PROJECT_BINARY_DIR}/bin/${CMAKE_BUILD_TYPE})
