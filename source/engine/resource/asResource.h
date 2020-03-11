@@ -1,4 +1,5 @@
-#pragma once
+#ifndef _ASRESOURCE_H_
+#define _ASRESOURCE_H_
 
 #include "../common/asCommon.h"
 #ifdef __cplusplus
@@ -151,4 +152,5 @@ ASEXPORT void asResource_ClearDeletionQueue(asResourceType_t type);
 
 #ifdef __cplusplus
 }
+#endif
 #endif

@@ -39,7 +39,7 @@ typedef enum {
 	AS_REFLECT_ENTRY_SINGLE(GameObject_test, asHandle_t, renderMeshHandle, AS_REFLECT_FORMAT_NONE) \
 	/*Custom Gameplay Data*/\
 	AS_REFLECT_ENTRY_SINGLE(GameObject_test, GameObjectClassesIndex_t, objTypeIdx, AS_REFLECT_FORMAT_NONE) \
-	AS_REFLECT_ENTRY_NOLOAD_SINGLE(GameObject_test, void*, pGameplayData) \
+	AS_REFLECT_ENTRY_NOLOAD_SINGLE(GameObject_test, void*, pGameplayData, AS_REFLECT_FORMAT_NONE) \
 	/*Doot*/\
 	AS_REFLECT_ENTRY_SINGLE(GameObject_test, int32_t, myInteger, AS_REFLECT_FORMAT_NONE) \
 	AS_REFLECT_ENTRY_SINGLE(GameObject_test, float, myFloat, AS_REFLECT_FORMAT_NONE) \

@@ -1,4 +1,5 @@
-#pragma once
+#ifndef _ASOSEVENTS_H_
+#define _ASOSEVENTS_H_
 
 #include "../common/asCommon.h"
 #ifdef __cplusplus
@@ -17,4 +18,5 @@ ASEXPORT void asPollOSEvents();
 
 #ifdef __cplusplus
 }
+#endif
 #endif

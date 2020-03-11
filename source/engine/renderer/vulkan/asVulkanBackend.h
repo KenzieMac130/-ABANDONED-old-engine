@@ -1,4 +1,5 @@
-#pragma once
+#ifndef _ASVULKANBACKEND_H_
+#define _ASVULKANBACKEND_H_
 
 #include "../../common/asCommon.h"
 #include "../asRendererCore.h"
@@ -152,8 +153,7 @@ asVkAllocation_t asVkGetAllocFromBuffer(asBufferHandle_t hndl);
 
 #endif
 
-/*Todo: GET RID OF*/
-
 #ifdef __cplusplus
 }
+#endif
 #endif

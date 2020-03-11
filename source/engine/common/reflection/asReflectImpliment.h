@@ -1,9 +1,10 @@
-#pragma once
+/*Intentionally No Include Guard Here*/
 
 #ifdef __cplusplus
 #if __cplusplus < 201703L /*C++ 2020+ should be compatible*/
 #error astrengine Reflection System Implimentation Requires 1999 ISO C Designated Initializers!
-#endif
+#endif 
+extern "C" {
 #endif
 
 /**
@@ -16,19 +17,25 @@
 
 #include "../asCommon.h"
 
+#ifndef _ASREFLECTIMPLIMENT_H_
+#define _ASREFLECTIMPLIMENT_H_
 typedef struct {
-	const uint16_t dataSize;
-	const uint16_t dataOffset;
-	const char typeName[30];
-	const char varName[30];
+	uint16_t dataSize;
+	uint16_t dataOffset;
+	char typeName[30];
+	char varName[30];
 } asReflectEntry;
 
 typedef struct {
 	const char name[48];
-	const uint16_t binarySize;
+	uint16_t binarySize;
 	uint16_t entryCount;
-	const asReflectEntry* data;
+	asReflectEntry* data;
 } asReflectContainer;
+
+/*Get amount of struct members*/
+ASEXPORT int asReflectContainerMemberCount(const asReflectContainer* pContainer);
+#endif
 
 #ifdef AS_REFLECT_STRUCT
 #undef AS_REFLECT_STRUCT
@@ -51,12 +58,12 @@ typedef struct {
 #ifdef AS_REFLECT_ENTRY_NOLOAD_SINGLE
 #undef AS_REFLECT_ENTRY_NOLOAD_SINGLE
 #endif
-#define AS_REFLECT_ENTRY_NOLOAD_SINGLE(_structName, _type, _name)
+#define AS_REFLECT_ENTRY_NOLOAD_SINGLE(_structName, _type, _name, _formatOptions)
 
 #ifdef AS_REFLECT_ENTRY_NOLOAD_ARRAY
 #undef AS_REFLECT_ENTRY_NOLOAD_ARRAY
 #endif
-#define AS_REFLECT_ENTRY_NOLOAD_ARRAY(_structName, _type, _name, _count)
+#define AS_REFLECT_ENTRY_NOLOAD_ARRAY(_structName, _type, _name, _count, _formatOptions)
 
 #ifdef AS_REFLECT_ENTRY_UNION
 #undef AS_REFLECT_ENTRY_UNION
@@ -68,5 +75,6 @@ typedef struct {
 #endif
 #define AS_REFLECT_ENTRY_COMPOUND(_content)
 
-/*Get amount of struct members*/
-ASEXPORT int asReflectContainerMemberCount(const asReflectContainer* pContainer);
+#ifdef __cplusplus
+}
+#endif

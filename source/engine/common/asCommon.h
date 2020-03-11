@@ -1,4 +1,5 @@
-#pragma once
+#ifndef _ASCOMMON_H_
+#define _ASCOMMON_H_
 
 #ifdef __cplusplus 
 extern "C" { 
@@ -37,7 +38,9 @@ typedef enum
 	AS_FAILURE_PARSE_ERROR = 7,
 	AS_FAILURE_DECOMPRESSION_ERROR = 8,
 	AS_FAILURE_FILE_NOT_FOUND = 9,
-	AS_FAILURE_FILE_INACCESSIBLE = 10
+	AS_FAILURE_FILE_INACCESSIBLE = 10,
+	AS_FAILURE_DATA_DOES_NOT_EXIST = 11,
+	AS_FAILURE_DUPLICATE_ENTRY = 12
 } asResults;
 
 /*Assert*/
@@ -51,6 +54,29 @@ typedef enum
 * @warning do not use this for memory created with custom allocators!
 */
 #define ASARRAYLEN(arr) sizeof(arr)/sizeof(arr[0])
+
+/**
+* @brief better syntax than "strncmp() == 0"
+*/
+#define asIsStringEqual(str1, str2) !strcmp(str1, str2)
+
+/**
+* @brief better syntax than "strcmp() == 0"
+*/
+#define asIsSizedStringEqual(str1, str2, n) !strncmp(str1, str2, n)
+
+/**
+* @brief quality level
+*/
+typedef enum {
+	AS_QUALITY_LOW, /**< Low*/
+	AS_QUALITY_MEDIUM, /**< Meduim*/
+	AS_QUALITY_HIGH, /**< High*/
+	AS_QUALITY_ULTRA, /**< Ultra*/
+	AS_QUALITY_CINEMATIC, /**< Cinematic (For Offline)*/
+	AS_QUALITY_COUNT,
+	AS_QUALITY_MAX = UINT32_MAX
+} asQualityLevel;
 
 typedef struct {
 	int major; /**< Major version of the app or game */
@@ -109,6 +135,9 @@ ASEXPORT void asFatalError(const char* msg);
 #include "asHashing.h"
 #include "asTime.h"
 
+#include "../thirdparty/tiny-regex/re.h"
+
 #ifdef __cplusplus
 }
+#endif
 #endif

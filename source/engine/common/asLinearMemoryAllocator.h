@@ -1,4 +1,5 @@
-#pragma once
+#ifndef _ASLINEARMEMORYALLOCATOR_H_
+#define _ASLINEARMEMORYALLOCATOR_H_
 
 #ifdef __cplusplus 
 extern "C" { 
@@ -40,4 +41,5 @@ ASEXPORT void asAlloc_LinearFree(asLinearMemoryAllocator_t* pMemAlloc, void* pBl
 
 #ifdef __cplusplus
 }
+#endif
 #endif

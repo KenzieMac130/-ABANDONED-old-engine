@@ -4,6 +4,9 @@
 asReflectContainer GameObjectReflectData = REFLECT_MACRO_GameObject_test;
 
 #include "engine/common/reflection/asReflectIOBinary.h"
+#include "engine/common/reflection/asManualSerialList.h"
+
+#include "engine/common/asBin.h"
 
 /*Extra Gameplay Specific Data (we chose not to expose this via reflection)*/
 typedef struct {
@@ -28,7 +31,8 @@ GameObject_test PlayerOne = {
 	.pGameplayData = &mainPlayerState,
 };
 
-GameObject_test Ghosts[] = { 
+#define GHOST_COUNT 4
+GameObject_test Ghosts[GHOST_COUNT] = {
 	{
 	.name = "Inky",
 
@@ -109,10 +113,35 @@ void reflectTest()
 			GameObjectReflectData.data[i].dataSize);
 	}
 
+	/*File Saving*/
+	asBinWriter writer;
+	asBinWriterOpen(&writer, "ECS", "testFile.asbin", 4);
+
 	/*Dump the Structure*/
-	size_t binSize = asReflectGetBinarySize(&GameObjectReflectData, 4);
+	size_t binSize = asReflectGetBinarySize(&GameObjectReflectData, GHOST_COUNT);
 	unsigned char* binDump = asMalloc(binSize);
-	asReflectSaveToBinary(binDump, binSize, &GameObjectReflectData, Ghosts, 4);
+	asReflectSaveToBinary(binDump, binSize, &GameObjectReflectData, Ghosts, GHOST_COUNT);
+	asBinWriterAddSection(&writer, (asBinSectionIdentifier) { "GHOSTS", 0 }, binDump, binSize);
+	asFree(binDump);
+
+	/*Save asbin*/
+	asBinWriterClose(&writer);
+	/*Load asbin*/
+	FILE* fp = fopen("testFile.asbin", "rb");
+	ASASSERT(fp);
+	fseek(fp, 0, SEEK_END);
+	size_t fileSize = ftell(fp);
+	fseek(fp, 0, SEEK_SET);
+	void* fileContent = asMalloc(fileSize);
+	ASASSERT(fileContent);
+	fread(fileContent, fileSize, 1, fp);
+	fclose(fp);
+
+	/*Fetch Serialization Data from asbin*/
+	asBinReader reader;
+	binDump = NULL;
+	asBinReaderOpenMemory(&reader, "ECS", fileContent, fileSize);
+	asBinReaderGetSection(&reader, (asBinSectionIdentifier) { "GHOSTS", 0 }, &binDump, &binSize);
 
 	/*Load Test*/
 	GameObject_test loadObjects[7];
@@ -120,9 +149,25 @@ void reflectTest()
 	strcat(loadObjects[6].name, "Boo");
 	uint32_t count;
 	asReflectLoadFromBinary(loadObjects, sizeof(GameObject_test), 7, &GameObjectReflectData, binDump, binSize, &count, NULL);
+
+	asFree(fileContent);
+
+	/*Manual content saving*/
+	asManualSerialList manualList;
+	asManualSerialListCreate(&manualList, "GameObject_test", 2, sizeof(GameObject_test), 1);
+	asManualSerialListAddProperty(&manualList, "char[]", "name", "NewName", 8);
+
+	binSize = asReflectGetBinarySize(&manualList.reflectContainer, 4);
+	binDump = asMalloc(binSize);
+	asReflectSaveToBinary(binDump, binSize, &manualList.reflectContainer, manualList.pData, 1);
+	asManualSerialListFree(&manualList);
+
+	asReflectLoadFromBinary(loadObjects+4, sizeof(GameObject_test), 1, &GameObjectReflectData, binDump, binSize, NULL, NULL);
+	asFree(binDump);
+
+	/*Print Ghosts*/
 	for (int i = 0; i < 7; i++)
 	{
 		asDebugLog("Ghost: %s", loadObjects[i].name);
 	}
-	asFree(binDump);
 }

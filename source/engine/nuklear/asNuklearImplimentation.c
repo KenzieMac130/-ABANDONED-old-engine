@@ -41,6 +41,15 @@ ASEXPORT struct nk_context* asGetNuklearContextPtr()
 }
 
 #if ASTRENGINE_VK
+asGfxPipelineHandle _asGenerateGfxPipeline_Nuklear(asBinReader* pShaderAsBin,
+	asShaderTypeCodePath* pCodePaths,
+	size_t codePathCount,
+	const char* pipelineName,
+	void* pUserData)
+{
+	//return vkCreateGraphicsPipelines(asVkDevice, )
+}
+
 /*Vulkan allows mappings to stay persistant*/
 void* vVertexBufferBindings[AS_MAX_INFLIGHT];
 void* vIndexBufferBindings[AS_MAX_INFLIGHT];

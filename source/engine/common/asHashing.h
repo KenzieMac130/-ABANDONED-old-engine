@@ -1,4 +1,5 @@
-#pragma once
+#ifndef _ASHASHING_H_
+#define _ASHASHING_H_
 
 #ifdef __cplusplus 
 extern "C" { 
@@ -30,4 +31,5 @@ ASEXPORT asHash32_t asHashBytes32_xxHash(const void *pBytes, size_t size);
 
 #ifdef __cplusplus
 }
+#endif
 #endif

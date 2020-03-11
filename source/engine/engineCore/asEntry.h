@@ -1,4 +1,5 @@
-#pragma once
+#ifndef _ASENTRY_H_
+#define _ASENTRY_H_
 
 #include "../common/asCommon.h"
 #ifdef __cplusplus
@@ -51,4 +52,5 @@ ASEXPORT void asShutdown(void);
 
 #ifdef __cplusplus
 }
+#endif
 #endif

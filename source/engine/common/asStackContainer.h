@@ -1,4 +1,5 @@
-#pragma once
+#ifndef _ASSTACKCONTAINER_H_
+#define _ASSTACKCONTAINER_H_
 
 #ifdef __cplusplus 
 extern "C" { 
@@ -97,4 +98,5 @@ extern "C" {
 
 #ifdef __cplusplus
 }
+#endif
 #endif

@@ -70,114 +70,6 @@ ASEXPORT uint32_t asTextureCalcPitch(asColorFormat format, uint32_t width)
 	return 0;
 }
 
-struct _fxHeader
-{
-	struct validation
-	{
-		char name[4];
-		uint8_t endian;
-		uint8_t api;
-		uint16_t apiVersion;
-		uint32_t version;
-	} valid;
-	uint32_t buffersize;
-};
-
-// #define FXHEADERDEFAULT {"ASFX", AS_ENDIAN, AS_GFXAPI, AS_GFXAPI_VERSION, AS_SHADERFX_VERSION}
-
-// ASEXPORT int32_t asShaderFxDesc_SaveToFile(const char* fileName, asShaderFxDesc_t *fx, asGfxAPIs api, uint32_t apiVersion)
-// {
-	// FILE* fp = fopen(fileName, "wb");
-	// if (!fp)
-		// return -1;
-
-	// struct _fxHeader header = FXHEADERDEFAULT;
-	// header.valid.api = api;
-	// header.valid.apiVersion = apiVersion;
-	// header.buffersize =
-		// sizeof(asShaderFxPropLookup_t) * fx->propCount +
-		// sizeof(uint16_t) * fx->propCount +
-		// sizeof(asShaderFxProgramLookup_t) * fx->programCount +
-		// sizeof(asShaderFxProgramDesc_t) * fx->programCount +
-		// fx->shaderCodeSize + fx->propBufferSize;
-
-	// fwrite(&header, sizeof(struct _fxHeader), 1, fp);
-	// fwrite(fx, 4 * 16, 1, fp);
-
-	// fwrite(fx->pPropLookup, sizeof(asShaderFxPropLookup_t) * fx->propCount, 1, fp);
-	// fwrite(fx->pPropOffset, sizeof(uint16_t) * fx->propCount, 1, fp);
-
-	// fwrite(fx->pProgramLookup, sizeof(asShaderFxProgramLookup_t) * fx->programCount, 1, fp);
-	// fwrite(fx->pProgramDescs, sizeof(asShaderFxProgramDesc_t) * fx->programCount, 1, fp);
-
-	// fwrite(fx->pShaderCode, fx->shaderCodeSize, 1, fp);
-	// fwrite(fx->pPropBufferDefault, fx->propBufferSize, 1, fp);
-
-	// fclose(fp);
-	// return 0;
-// }
-
-// ASEXPORT asShaderFxHandle_t asShaderFx_FromResource(asResourceFileID_t id)
-// {
-	// /*check for existing resource*/
-	// asShaderFxHandle_t result = asResource_GetExistingDataMapping(id, asHashBytes32_xxHash("SHADER", 6)).hndl;
-	// if (asHandleValid(result))
-	// {
-		// asResource_IncrimentReferences(id, 1);
-		// return result;
-	// }
-
-	// /*load new resource*/
-	// asResourceLoader_t loader;
-	// if (asResourceLoader_Open(&loader, id) != AS_SUCCESS)
-	// {
-		// return asHandle_Invalidate();
-	// }
-	// struct _fxHeader test = FXHEADERDEFAULT;
-	// struct _fxHeader header;
-	// asResourceLoader_Read(&loader, sizeof(struct _fxHeader), &header);
-	// if (memcmp(&test.valid, &header.valid, sizeof(header.valid)))
-	// {
-		// asResourceLoader_Close(&loader);
-		// return asHandle_Invalidate();
-	// }
-	// asShaderFxDesc_t desc;
-	// unsigned char* outBuffer = asAlloc_LinearMalloc(pCurrentLinearAllocator, header.buffersize);
-	// asResourceLoader_Read(&loader, sizeof(uint32_t) * 16, &desc);
-	// asResourceLoader_Read(&loader, header.buffersize, outBuffer);
-
-	// /*offset pointers into buffers*/
-	// desc.pPropLookup = (asShaderFxPropLookup_t*)outBuffer;
-	// desc.pPropOffset = (uint16_t*)outBuffer += sizeof(desc.pPropLookup[0]) * desc.propCount;
-	// desc.pProgramLookup = (asShaderFxProgramLookup_t*)outBuffer += sizeof(desc.pPropOffset[0]) * desc.propCount;
-	// desc.pProgramDescs = (asShaderFxProgramDesc_t*)outBuffer += sizeof(desc.pProgramLookup[0]) * desc.programCount;
-	// desc.pShaderCode = outBuffer += sizeof(desc.pProgramDescs[0]) * desc.programCount;
-	// desc.pPropBufferDefault = outBuffer += desc.shaderCodeSize;
-
-	// asResourceLoader_Close(&loader);
-
-	// const char* name;
-	// int32_t nameLength;
-	// asResource_GetFileName(id, &name, &nameLength);
-	// result = asShaderFx_FromDesc(&desc, name, nameLength);
-
-	// asResourceDataMapping_t map;
-	// map.hndl = result;
-	// asResource_Create(id, map, asHashBytes32_xxHash("SHADER", 6), 1);
-	// asAlloc_LinearFree(pCurrentLinearAllocator, outBuffer);
-
-	// return result;
-// }
-
-// ASEXPORT asShaderFxHandle_t asShaderFx_FromDesc(asShaderFxDesc_t * desc, const char* name, int32_t nameLength)
-// {
-	// asShaderFxHandle_t hndl;
-// #if ASTRENGINE_VK
-	// hndl = asVkCreateShaderPipelineGroup(desc, name, nameLength);
-// #endif 
-	// /*todo: register value mappings with material system*/
-// }
-
 /*Texture*/
 
 ASEXPORT asTextureDesc_t asTextureDesc_Init()
@@ -192,12 +84,6 @@ ASEXPORT asTextureDesc_t asTextureDesc_Init()
 ASEXPORT asBufferDesc_t asBufferDesc_Init()
 {
 	asBufferDesc_t result = (asBufferDesc_t) { 0 };
-	return result;
-}
-
-ASEXPORT asShaderFxDesc_t asShaderFxDesc_Init()
-{
-	asShaderFxDesc_t result = (asShaderFxDesc_t) { 0 };
 	return result;
 }
 
@@ -228,14 +114,14 @@ ASEXPORT void asInitGfx(asLinearMemoryAllocator_t* pLinearAllocator, asAppInfo_t
 		windowFlags |= SDL_WINDOW_VULKAN;
 #endif
 		const char* windowModeStr = asCfgGetString(pConfig, "WindowMode", "windowed");
-		if ((strcmp(windowModeStr, "fullscreen") != 0)) /*Windowed*/
+		if ((asIsStringEqual(windowModeStr, "fullscreen"))) /*Windowed*/
 		{
 			windowDim.x = SDL_WINDOWPOS_CENTERED_DISPLAY(monitor);
 			windowDim.y = SDL_WINDOWPOS_CENTERED_DISPLAY(monitor);
 			windowDim.w = (int)asCfgGetNumber(pConfig, "Width", 640);
 			windowDim.h = (int)asCfgGetNumber(pConfig, "Height", 480);
 			
-			if(strcmp(windowModeStr, "resizable") == 0)
+			if(asIsStringEqual(windowModeStr, "resizable"))
 				windowFlags |= SDL_WINDOW_RESIZABLE;
 		}
 		else /*Borderless Fullscreen*/

@@ -1,4 +1,5 @@
-#pragma once
+#ifndef _ASRESOURCE_H_
+#define _ASRESOURCE_H_
 
 #include "../common/asCommon.h"
 #ifdef __cplusplus
@@ -26,4 +27,5 @@ ASEXPORT void asUserFileClose(asUserFile* pUserFile);
 
 #ifdef __cplusplus
 }
+#endif
 #endif

@@ -1,7 +1,8 @@
-#pragma once
+#ifndef _ASINSTANCERENDERER_H_
+#define _ASINSTANCERENDERER_H_
 
-#include "asCommon.h"
-#include "asRendererCore.h"
+#include "../engine/common/asCommon.h"
+#include "../engine/renderer/asRendererCore.h"
 #ifdef __cplusplus
 extern "C" {
 #endif 
@@ -30,4 +31,5 @@ typedef struct {
 
 #ifdef __cplusplus
 }
+#endif
 #endif

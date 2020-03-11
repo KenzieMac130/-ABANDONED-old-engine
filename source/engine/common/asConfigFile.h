@@ -1,4 +1,5 @@
-#pragma once
+#ifndef _ASCONFIGFILE_H_
+#define _ASCONFIGFILE_H_
 
 #ifdef __cplusplus 
 extern "C" { 
@@ -88,4 +89,5 @@ ASEXPORT int asCfgGetNextProp(asCfgFile_t* pCfg, const char** ppName, const char
 
 #ifdef __cplusplus
 }
+#endif
 #endif

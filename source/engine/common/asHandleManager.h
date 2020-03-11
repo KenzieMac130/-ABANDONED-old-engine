@@ -1,4 +1,5 @@
-#pragma once
+#ifndef _ASHANDLEMANAGER_H_
+#define _ASHANDLEMANAGER_H_
 
 #ifdef __cplusplus 
 extern "C" { 
@@ -71,4 +72,5 @@ ASEXPORT bool asHandleValid(asHandle_t hndl);
 
 #ifdef __cplusplus
 }
+#endif
 #endif

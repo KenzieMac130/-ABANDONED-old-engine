@@ -1,8 +1,9 @@
-#pragma once
+#ifndef _ASNUKLEARIMPLIMENTATION_H_
+#define _ASNUKLEARIMPLIMENTATION_H_
 
 #include "../common/asCommon.h"
+#include "../renderer/asShaderVariants.h"
 #if ASTRENGINE_NUKLEAR
-#include "../renderer/asRendererCore.h"
 #ifdef __cplusplus
 extern "C" {
 #endif 
@@ -62,8 +63,19 @@ void asNkEndInput();
 * @warning The engine shutdown should handle this for you
 */
 void asShutdownNk();
+
+/**
+* @For internal use by shader system
+*/
+asGfxPipelineHandle _asGenerateGfxPipeline_Nuklear(asBinReader* pShaderAsBin,
+	asShaderTypeCodePath* pCodePaths,
+	size_t codePathCount,
+	const char* pipelineName,
+	void* pUserData);
+
 #endif
 
 #ifdef __cplusplus
 }
+#endif
 #endif

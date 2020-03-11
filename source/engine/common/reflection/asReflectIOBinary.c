@@ -55,26 +55,17 @@ ASEXPORT asResults asReflectLoadFromBinary(
 	uint32_t* pSrcCount,
 	struct asReflectContainer** ppOutSrcReflectData)
 {
+	if (!pSrc)
+	{
+		return AS_FAILURE_INVALID_PARAM;
+	}
+
 	/*Load Container*/
 	if (srcSize < sizeof(asReflectContainer))
 	{
 		return AS_FAILURE_OUT_OF_BOUNDS;
 	}
 	asReflectContainer* pSrcReflectData = &pSrc[0];
-	if (!pSrcReflectData->entryCount) /*Valid Count (null terminated not accepted)*/
-	{
-		return AS_FAILURE_INVALID_PARAM;
-	}
-
-	/*Reflection Data Bounds Check*/
-	if (srcSize < sizeof(asReflectContainer) + (sizeof(asReflectEntry) * pSrcReflectData->entryCount) + sizeof(uint32_t))
-	{
-		return AS_FAILURE_OUT_OF_BOUNDS;
-	}
-	if (ppOutSrcReflectData)
-	{
-		*ppOutSrcReflectData = &pSrcReflectData;
-	}
 
 	/*Fix Entries Pointer*/
 	pSrcReflectData->data = (asReflectEntry*)&pSrc[sizeof(asReflectContainer)];
@@ -86,10 +77,30 @@ ASEXPORT asResults asReflectLoadFromBinary(
 	{
 		*pSrcCount = srcCount;
 	}
+
+	/*Get Size*/
+	const size_t entryCount = asReflectContainerMemberCount(pReflectData);
+
+	/*Reflection Data Bounds Check*/
+	if (srcSize < sizeof(asReflectContainer) + (sizeof(asReflectEntry) * pSrcReflectData->entryCount) + sizeof(uint32_t))
+	{
+		return AS_FAILURE_OUT_OF_BOUNDS;
+	}
+	if (ppOutSrcReflectData)
+	{
+		*ppOutSrcReflectData = &pSrcReflectData;
+	}
+
 	/*Return if Nothing to Load (just get the count)*/
 	if (!pDest)
 	{
-		return;
+		return AS_SUCCESS;
+	}
+
+	/*Compare Names*/
+	if (strncmp(pSrcReflectData->name, pReflectData->name, 48))
+	{
+		return AS_FAILURE_PARSE_ERROR;
 	}
 
 	/*Find base of Source blob*/
@@ -100,7 +111,7 @@ ASEXPORT asResults asReflectLoadFromBinary(
 
 	/*For each Source Entry*/
 	const uint32_t actualDestEntryCount = asReflectContainerMemberCount(pReflectData);
-	for (int i = 0; i < pSrcReflectData->entryCount; i++)
+	for (int i = 0; i < entryCount; i++)
 	{
 		/*For each Destination Entry*/
 		for (int j = 0; j < actualDestEntryCount; j++)

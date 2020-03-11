@@ -1,4 +1,5 @@
-#pragma once
+#ifndef _ASINDIRECTIONTABLE_H_
+#define _ASINDIRECTIONTABLE_H_
 
 #ifdef __cplusplus 
 extern "C" { 
@@ -41,7 +42,7 @@ ASEXPORT void asIdxTableSetIdx(asIdxIndirectionTable_t *pTable, uint32_t fixedId
 ASEXPORT uint32_t asIdxTableAt(asIdxIndirectionTable_t *pTable, uint32_t fixedIdx);
 
 /**
-* @brief Deactivate an index
+* @brief Deactivate an index (freeing it?)
 */
 ASEXPORT void asIdxTableDeactivateIdx(asIdxIndirectionTable_t *pTable, uint32_t fixedIdx);
 
@@ -64,4 +65,5 @@ ASEXPORT void asIdxTableSwap(asIdxIndirectionTable_t *pTable, uint32_t idxA, int
 
 #ifdef __cplusplus
 }
+#endif
 #endif
