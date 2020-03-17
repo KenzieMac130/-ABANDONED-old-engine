@@ -4,10 +4,14 @@
 
 #define SECTION_CAPACITY 512
 
-asResults FxCreator_Create(FxCreator* pCreator, const char* path)
+asResults FxCreator_Create(FxCreator* pCreator, const char* path, const char* shaderType)
 {
 	memset(pCreator, 0, sizeof(FxCreator));
-	return asBinWriterOpen(&pCreator->_binWriter, "ASFX", path, SECTION_CAPACITY);
+	asResults results = asBinWriterOpen(&pCreator->_binWriter, "ASFX", path, SECTION_CAPACITY);
+	if (results != AS_SUCCESS) { return results; }
+
+	asBinWriterAddSection(&pCreator->_binWriter,
+		(asBinSectionIdentifier) {"VARIANT", 0}, shaderType, strlen(shaderType)+1);
 }
 
 asResults FxCreator_StartDataSection(FxCreator* pCreator, const char* name)

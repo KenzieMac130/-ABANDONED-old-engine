@@ -2,7 +2,7 @@
 #define _ASNUKLEARIMPLIMENTATION_H_
 
 #include "../common/asCommon.h"
-#include "../renderer/asShaderVariants.h"
+#include "../renderer/asRenderFx.h"
 #if ASTRENGINE_NUKLEAR
 #ifdef __cplusplus
 extern "C" {
@@ -27,49 +27,51 @@ ASEXPORT struct nk_context* asGetNuklearContextPtr();
 * @brief Initializes the nuklear backend
 * @warning The engine ignite should handle this for you
 */
-void asInitNk();
+ASEXPORT void asInitNk();
 /**
 * @brief Draw the nuklear user interface
 * @warning The engine update should handle this for you
 */
-void asNkDraw();
+ASEXPORT void asNkDraw();
 
 /**
 * @brief Reset nuklear for next frame
 * @warning The engine update should handle this for you
 */
-void asNkReset();
+ASEXPORT void asNkReset();
 
 /**
 * @brief Push an event into nuklear
 * @warning The engine update should handle this for you
 * @warning this should be fed a pointer to an SDL_Event
 */
-void asNkPushEvent(void *pEvent);
+ASEXPORT void asNkPushEvent(void *pEvent);
 
 /**
 * @brief begin nuklear input (events)
 * @warning The engine update should handle this for you
 */
-void asNkBeginInput();
+ASEXPORT void asNkBeginInput();
 /**
 * @brief end nuklear input (events)
 * @warning The engine update should handle this for you
 */
-void asNkEndInput();
+ASEXPORT void asNkEndInput();
 
 /**
 * @brief Shutdown the nuklear backend
 * @warning The engine shutdown should handle this for you
 */
-void asShutdownNk();
+ASEXPORT void asShutdownNk();
 
 /**
 * @For internal use by shader system
 */
-asGfxPipelineHandle _asGenerateGfxPipeline_Nuklear(asBinReader* pShaderAsBin,
-	asShaderTypeCodePath* pCodePaths,
-	size_t codePathCount,
+ASEXPORT asResults _asFillGfxPipeline_Nuklear(
+	asBinReader* pShaderAsBin,
+	asGfxAPIs api,
+	asPipelineType pipelineType,
+	void* pDesc,
 	const char* pipelineName,
 	void* pUserData);
 

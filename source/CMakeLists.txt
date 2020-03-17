@@ -1,4 +1,6 @@
-find_package(SDL2 REQUIRED)
+find_package(SDL2 
+NAMES sdl2
+HINTS ${PROJECT_SOURCE_DIR}/../libs/SDL2-2.0.9 REQUIRED)
 find_package(Vulkan REQUIRED)
 find_package(OpenMP)
 if (OPENMP_FOUND)

@@ -1,5 +1,7 @@
 #include "asShaderVariants.h"
 
+#include "engine/nuklear/asNuklearImplimentation.h"
+
 asShaderTypeRegistration shaderTypes[] =
 {
 	{ /*2D GUI*/
@@ -7,7 +9,8 @@ asShaderTypeRegistration shaderTypes[] =
 		.pipelineCount = 1,
 		.pipelines = { /*Standard Pipeline*/
 			"standard",
-			NULL, /*Callback Function*/
+			AS_PIPELINETYPE_GRAPHICS,
+			_asFillGfxPipeline_Nuklear, /*Callback Function*/
 			NULL, /*Callback Data*/
 			2, {
 				{ /*Vertex*/

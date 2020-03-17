@@ -9,6 +9,7 @@ extern "C" {
 #include "engine/renderer/asRendererCore.h"
 
 #include "engine/common/asBin.h"
+#include "engine/renderer/asRenderFx.h"
 
 /**
 * @file
@@ -17,8 +18,8 @@ extern "C" {
 
 /*Todo: Ditch MSVC and use flexible array member*/
 #define AS_SHADER_MAX_MACROS 8
-#define AS_SHADER_MAX_CODEPATHS 16
-#define AS_SHADER_MAX_PIPELINES 12
+#define AS_SHADER_MAX_CODEPATHS 10
+#define AS_SHADER_MAX_PIPELINES 8
 
 typedef struct {
 	const char* name;
@@ -34,18 +35,29 @@ typedef struct {
 } asShaderTypeCodePath;
 
 /**
-* @brief Must return a proper graphics pipeline handle for target API/Backend
+* @brief Must alter a proper graphics pipeline description for target API/Backend
+*
+* @usage fill out the pipeline description for blend/rasterizer states, inputs as needed.
+* retrie reflection data. Don't fill out the shader descriptions, its done automatically.
+*
+* @param pShaderAsBin asbin to read from
+* @param asGfxAPIs target graphics api to generate description for 
+* @param pDesc description to output to 
+* (cast pointer to description struct for API, shaders are already filled out)
+* @param pipelineName name of target pipeline
 */
-typedef asGfxPipelineHandle(*asGfxPipelineCreateCb)(
+typedef asResults (*asGfxPipelineFillCb)(
 	asBinReader* pShaderAsBin,
-	asShaderTypeCodePath* pCodePaths,
-	size_t codePathCount,
+	asGfxAPIs api,
+	asPipelineType type,
+	void* pDesc,
 	const char* pipelineName,
 	void* pUserData);
 
 typedef struct {
 	const char* name;
-	asGfxPipelineCreateCb fpCreatePipelineCallback;
+	asPipelineType type;
+	asGfxPipelineFillCb fpCreatePipelineCallback;
 	void* pUserData;
 	size_t codePathCount;
 	asShaderTypeCodePath codePaths[AS_SHADER_MAX_CODEPATHS];

@@ -151,6 +151,143 @@ VkBuffer asVkGetBufferFromBuffer(asBufferHandle_t hndl);
 */
 asVkAllocation_t asVkGetAllocFromBuffer(asBufferHandle_t hndl);
 
+/**
+* @brief Renderpass for simple drawing (guizmos, UI, early renderer)
+*/
+VkRenderPass asVkGetSimpleDrawingRenderpass();
+/**
+* @brief Framebuffer for simple drawing (guizmos, UI, early renderer)
+*/
+VkFramebuffer asVkGetSimpleDrawingFramebuffer();
+
+/*Pipeline Creation Helpers (Because Vulkan has a lot of paperwork)*/
+
+/*Fill out color blend state*/
+#define AS_VK_INIT_HELPER_PIPE_COLOR_BLEND_STATE(_attachmentCount, _pAttachments)\
+(VkPipelineColorBlendStateCreateInfo){\
+.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,\
+.logicOpEnable = VK_FALSE,\
+.logicOp = VK_LOGIC_OP_COPY,\
+.blendConstants = {0.0f,0.0f,0.0f,0.0f},\
+.attachmentCount = _attachmentCount,\
+.pAttachments = _pAttachments\
+}
+
+/*Fill out color blend attachment state with basic blending*/
+#define AS_VK_INIT_HELPER_ATTACHMENT_BLEND_MIX(_vkbEnable)\
+(VkPipelineColorBlendAttachmentState){\
+.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,\
+.blendEnable = _vkbEnable,\
+.srcColorBlendFactor = VK_BLEND_FACTOR_ONE,\
+.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO,\
+.colorBlendOp  = VK_BLEND_OP_ADD,\
+.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,\
+.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,\
+.alphaBlendOp  = VK_BLEND_OP_ADD,\
+}
+
+/*Fill out depth stencil state*/
+#define AS_VK_INIT_HELPER_PIPE_DEPTH_STENCIL_STATE(_vkbDepthTest, _vkbDepthWrite, _depthCompareOp, _vkbDepthBound, _minDepthBound, _maxDepthBound)\
+(VkPipelineDepthStencilStateCreateInfo){\
+.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,\
+.depthTestEnable = _vkbDepthTest,\
+.depthWriteEnable = _vkbDepthWrite,\
+.depthCompareOp = _depthCompareOp,\
+.depthBoundsTestEnable = _vkbDepthBound,\
+.stencilTestEnable = VK_FALSE,\
+.minDepthBounds = _minDepthBound,\
+.maxDepthBounds = _maxDepthBound\
+}
+
+/*Fill out rasterizer state*/
+#define AS_VK_INIT_HELPER_PIPE_RASTERIZATION_STATE(_polygonMode, _cullMode, _fontFace, _vkbDepthBiasEnable, _depthBiasConstant, _depthBiasSlope, _depthBiasClamp, _lineWidth)\
+(VkPipelineRasterizationStateCreateInfo){\
+.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,\
+.rasterizerDiscardEnable = VK_FALSE,\
+.polygonMode = _polygonMode,\
+.cullMode = _cullMode,\
+.frontFace = _fontFace,\
+.depthBiasEnable = _vkbDepthBiasEnable,\
+.depthBiasConstantFactor = _depthBiasConstant,\
+.depthBiasSlopeFactor = _depthBiasSlope,\
+.depthBiasClamp = _depthBiasClamp,\
+.lineWidth = _lineWidth,\
+}
+
+/*Fill out input assembler state*/
+#define AS_VK_INIT_HELPER_PIPE_INPUT_ASSEMBLER_STATE(_topology, _vkbRestart)\
+(VkPipelineInputAssemblyStateCreateInfo){\
+.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,\
+.primitiveRestartEnable = _vkbRestart,\
+.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST\
+}
+
+/*Fill out MSAA state as disabled*/
+#define AS_VK_INIT_HELPER_PIPE_MSAA_STATE_NONE()\
+(VkPipelineMultisampleStateCreateInfo){\
+.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,\
+.sampleShadingEnable  = VK_FALSE,\
+.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,\
+}
+
+/*Fill out tessellation state*/
+#define AS_VK_INIT_HELPER_PIPE_TESS_STATE(_points)\
+(VkPipelineTessellationStateCreateInfo){\
+.sType = VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO,\
+.patchControlPoints = _points\
+}
+
+/*Fill out Viewport/Scissors state to include everyhing (will be dynamic anyways)*/
+#define AS_VK_INIT_HELPER_PIPE_VIEWPORT_STATE_EVERYTHING(_viewX, _viewY)\
+(VkPipelineViewportStateCreateInfo){\
+.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,\
+.viewportCount = 1,\
+.pViewports = &(VkViewport){\
+	.x = 0.0f, .y = 0.0f,\
+	.width = (float)_viewX, .height = (float)_viewY,\
+	.minDepth = 0.0f, .maxDepth = 1.0f},\
+.scissorCount = 1,\
+.pScissors = &(VkRect2D){\
+	.offset = {0,0},\
+	.extent = {_viewX, _viewY}}\
+}
+
+/*Fill out dynamics state*/
+#define AS_VK_INIT_HELPER_PIPE_DYNAMIC_STATE(_dynamicCount, _pDynamics)\
+(VkPipelineDynamicStateCreateInfo){\
+.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,\
+.dynamicStateCount = _dynamicCount,\
+.pDynamicStates = _pDynamics\
+}
+
+/*Fill out dynamics state to default settings*/
+#define AS_VK_INIT_HELPER_PIPE_VERTEX_STATE(_bindingCount, _pBindings, _attributeCount, _pAttributes)\
+(VkPipelineVertexInputStateCreateInfo){\
+.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,\
+.vertexBindingDescriptionCount = _bindingCount,\
+.pVertexBindingDescriptions = _pBindings,\
+.vertexAttributeDescriptionCount = _attributeCount,\
+.pVertexAttributeDescriptions = _pAttributes,\
+}
+
+/*Fill out vertex binding*/
+#define AS_VK_INIT_HELPER_VERTEX_BINDING(_binding, _stride, _inputRate)\
+(VkVertexInputBindingDescription) {\
+.binding = _binding,\
+.stride = _stride,\
+.inputRate = _inputRate\
+}
+
+/*Fill out vertex attributes*/
+#define AS_VK_INIT_HELPER_VERTEX_ATTRIBUTE(_location, _binding, _format, _offset)\
+(VkVertexInputAttributeDescription) {\
+.location = _location,\
+.binding = _binding,\
+.format = _format,\
+.offset = _offset\
+}
+
+
 #endif
 
 #ifdef __cplusplus

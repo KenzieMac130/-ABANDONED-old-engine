@@ -2,6 +2,7 @@
 
 asResults processMacros(FxCreator* pCreator, const char* content, size_t contentSize, const char* fileName)
 {
+	return AS_SUCCESS;
 	if (re_match("#pragma asIgnoreMacroParser", content) >= 0) { return AS_SUCCESS; }
 	int dataSectionDepth = 0;
 

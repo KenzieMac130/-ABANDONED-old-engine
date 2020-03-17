@@ -28,6 +28,10 @@ struct nk_buffer nkCommands;
 asBufferHandle_t nkVertexBuffer[AS_MAX_INFLIGHT];
 asBufferHandle_t nkIndexBuffer[AS_MAX_INFLIGHT];
 
+#if ASTRENGINE_VK
+VkPipelineLayout vkNuklearPipelineLayout;
+#endif
+
 struct nkVertex
 {
 	float pos[2];
@@ -41,20 +45,72 @@ ASEXPORT struct nk_context* asGetNuklearContextPtr()
 }
 
 #if ASTRENGINE_VK
-asGfxPipelineHandle _asGenerateGfxPipeline_Nuklear(asBinReader* pShaderAsBin,
-	asShaderTypeCodePath* pCodePaths,
-	size_t codePathCount,
+ASEXPORT asResults _asFillGfxPipeline_Nuklear(
+	asBinReader* pShaderAsBin,
+	asGfxAPIs api,
+	asPipelineType pipelineType,
+	void* pDesc,
 	const char* pipelineName,
 	void* pUserData)
 {
-	//return vkCreateGraphicsPipelines(asVkDevice, )
+	if (api != AS_GFXAPI_VULKAN || pipelineType != AS_PIPELINETYPE_GRAPHICS) { return AS_FAILURE_UNKNOWN_FORMAT; }
+	VkGraphicsPipelineCreateInfo* pGraphicsPipelineDesc = (VkGraphicsPipelineCreateInfo*)pDesc;
+	pGraphicsPipelineDesc->basePipelineHandle = VK_NULL_HANDLE;
+	pGraphicsPipelineDesc->basePipelineIndex = 0;
+
+	/*Color Blending*/
+	VkPipelineColorBlendAttachmentState attachmentBlends[] = { 
+		AS_VK_INIT_HELPER_ATTACHMENT_BLEND_MIX(VK_FALSE)
+	};
+	pGraphicsPipelineDesc->pColorBlendState = &AS_VK_INIT_HELPER_PIPE_COLOR_BLEND_STATE(ASARRAYLEN(attachmentBlends), attachmentBlends);
+	/*Depth Stencil*/
+	pGraphicsPipelineDesc->pDepthStencilState = &AS_VK_INIT_HELPER_PIPE_DEPTH_STENCIL_STATE(
+		VK_FALSE, VK_FALSE, VK_COMPARE_OP_ALWAYS, VK_FALSE, 0.0f, 1.0f);
+	/*Rasterizer*/
+	pGraphicsPipelineDesc->pRasterizationState = &AS_VK_INIT_HELPER_PIPE_RASTERIZATION_STATE(
+		VK_POLYGON_MODE_FILL,
+		VK_CULL_MODE_BACK_BIT,
+		VK_FRONT_FACE_CLOCKWISE,
+		VK_FALSE,
+		0.0f, 0.0f, 0.0f, 0.0f);
+	/*Input Assembler*/
+	pGraphicsPipelineDesc->pInputAssemblyState = &AS_VK_INIT_HELPER_PIPE_INPUT_ASSEMBLER_STATE(
+		VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_FALSE);
+	/*MSAA*/
+	pGraphicsPipelineDesc->pMultisampleState = &AS_VK_INIT_HELPER_PIPE_MSAA_STATE_NONE();
+	/*Tess*/
+	pGraphicsPipelineDesc->pTessellationState = NULL;
+	/*Viewport*/
+	pGraphicsPipelineDesc->pViewportState = &AS_VK_INIT_HELPER_PIPE_VIEWPORT_STATE_EVERYTHING(0, 0);
+	/*Dynamic States*/
+	VkDynamicState dynamicStates[] = {
+		VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR, VK_DYNAMIC_STATE_DEPTH_BIAS, VK_DYNAMIC_STATE_DEPTH_BOUNDS
+	};
+	pGraphicsPipelineDesc->pDynamicState = &AS_VK_INIT_HELPER_PIPE_DYNAMIC_STATE(ASARRAYLEN(dynamicStates), dynamicStates);
+	/*Vertex Inputs*/
+	VkVertexInputBindingDescription vertexBindings[] = { 
+		AS_VK_INIT_HELPER_VERTEX_BINDING(0, sizeof(struct nkVertex), VK_VERTEX_INPUT_RATE_VERTEX)
+	};
+	VkVertexInputAttributeDescription vertexAttributes[] = { 
+		AS_VK_INIT_HELPER_VERTEX_ATTRIBUTE(0, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(struct nkVertex, pos)),
+		AS_VK_INIT_HELPER_VERTEX_ATTRIBUTE(1, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(struct nkVertex, uv)),
+		AS_VK_INIT_HELPER_VERTEX_ATTRIBUTE(2, 0, VK_FORMAT_R8G8B8A8_SRGB, offsetof(struct nkVertex, rgba))
+	};
+	pGraphicsPipelineDesc->pVertexInputState = &AS_VK_INIT_HELPER_PIPE_VERTEX_STATE(
+		ASARRAYLEN(vertexBindings), vertexBindings,
+		ASARRAYLEN(vertexAttributes), vertexAttributes);
+
+	pGraphicsPipelineDesc->renderPass = asVkGetSimpleDrawingRenderpass();
+	pGraphicsPipelineDesc->subpass = 0;
+	pGraphicsPipelineDesc->layout = vkNuklearPipelineLayout;
+	return AS_SUCCESS;
 }
 
 /*Vulkan allows mappings to stay persistant*/
 void* vVertexBufferBindings[AS_MAX_INFLIGHT];
 void* vIndexBufferBindings[AS_MAX_INFLIGHT];
 #endif
-void asInitNk()
+ASEXPORT void asInitNk()
 {
 	/*Font*/
 	const void* img;
@@ -106,11 +162,6 @@ void asInitNk()
 		for (int i = 0; i < AS_MAX_INFLIGHT; i++)
 			nkIndexBuffer[i] = asCreateBuffer(&desc);
 	}
-	/*Create material*/
-	{
-		/*Todo...*/
-	}
-
 #if ASTRENGINE_VK
 	/*Map persistent memory*/
 	for (int i = 0; i < AS_MAX_INFLIGHT; i++)
@@ -120,9 +171,19 @@ void asInitNk()
 		asVkMapMemory(vertAlloc, 0, vertAlloc.size, &vVertexBufferBindings[i]);
 		asVkMapMemory(idxAlloc, 0, idxAlloc.size, &vIndexBufferBindings[i]);
 	}
+	/*Setup Pipeline Layout*/
+	{
+		VkPipelineLayoutCreateInfo createInfo = (VkPipelineLayoutCreateInfo){ VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
+		if (vkCreatePipelineLayout(asVkDevice, &createInfo, AS_VK_MEMCB, &vkNuklearPipelineLayout) != VK_SUCCESS)
+			asFatalError("vkCreatePipelineLayout() Failed to create vkNuklearPipelineLayout");
+	}
 #endif
+	/*Load shader*/
+	{
+		/*Todo...*/
+	}
 
-	nk_font_atlas_end(&nkFontAtlas, nk_handle_id(nkFontTexture._index) /*Todo: Replace with Material Handle*/, &nkNullDraw);
+	nk_font_atlas_end(&nkFontAtlas, nk_handle_id(nkFontTexture._index), &nkNullDraw);
 
 	/*Context*/
 	nkMemory = asMalloc(AS_NK_MAX_MEMORY);
@@ -132,7 +193,7 @@ void asInitNk()
 	nk_buffer_init_default(&nkCommands);
 }
 
-void asNkDraw()
+ASEXPORT void asNkDraw()
 {
 	const struct nk_draw_command* nkCmd;
 	nk_draw_index nkOffset = 0;
@@ -159,8 +220,8 @@ void asNkDraw()
 		config.curve_segment_count = 22;
 		config.arc_segment_count = 22;
 		config.global_alpha = 1.0f;
-		config.shape_AA = NK_ANTI_ALIASING_OFF;
-		config.line_AA = NK_ANTI_ALIASING_OFF;
+		config.shape_AA = NK_ANTI_ALIASING_ON;
+		config.line_AA = NK_ANTI_ALIASING_ON;
 		nk_buffer_init_fixed(&nkVerts, vVertexBufferBindings[asVkCurrentFrame], AS_NK_MAX_VERTS * sizeof(struct nkVertex));
 		nk_buffer_init_fixed(&nkElements, vIndexBufferBindings[asVkCurrentFrame], AS_NK_MAX_INDICES * sizeof(uint16_t));
 		nk_convert(&nkContext, &nkCommands, &nkVerts, &nkElements, &config);
@@ -171,8 +232,8 @@ void asNkDraw()
 		asVkFlushMemory(idxAlloc);
 #endif
 	}
-	/*Render all draws*/
 
+	/*Render all draws*/
 #if ASTRENGINE_VK
 	/*Bind vertex/index buffers*/
 	VkCommandBuffer vCmd = asVkGetNextGraphicsCommandBuffer();
@@ -216,12 +277,12 @@ void asNkDraw()
 	nk_clear(&nkContext);
 }
 
-void asNkReset()
+ASEXPORT void asNkReset()
 {
 	nk_clear(&nkContext);
 }
 
-void asNkPushEvent(void *pEvent)
+ASEXPORT void asNkPushEvent(void *pEvent)
 {
 	/*Yes... I lifted this straight off of the demos... Not recreating this mess*/
 	SDL_Event *evt = (SDL_Event*)pEvent;
@@ -332,16 +393,16 @@ void asNkPushEvent(void *pEvent)
 	}
 }
 
-void asNkBeginInput()
+ASEXPORT void asNkBeginInput()
 {
 	nk_input_begin(&nkContext);
 }
-void asNkEndInput()
+ASEXPORT void asNkEndInput()
 {
 	nk_input_end(&nkContext);
 }
 
-void asShutdownNk()
+ASEXPORT void asShutdownNk()
 {
 	nk_buffer_free(&nkCommands);
 #if ASTRENGINE_VK

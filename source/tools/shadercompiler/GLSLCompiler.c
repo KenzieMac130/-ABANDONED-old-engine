@@ -101,7 +101,24 @@ asResults glslToSpirv(FxCreator* pFxCreator, const char* contents, size_t conten
 	struct IncludeFileData includeData = { pFxCreator };
 	shaderc_compile_options_set_include_callbacks(compileOptions, includeFile, releaseIncludeResult, &includeData);
 
-	/*Add Macros*/
+	/*Add Stage Macro*/
+	const char* stageName = "AS_SHADER_STAGE_UNKNOWN";
+	switch (codePath->stage){
+	case AS_SHADERSTAGE_VERTEX: stageName = "AS_STAGE_VERTEX"; break;
+	case AS_SHADERSTAGE_FRAGMENT: stageName = "AS_STAGE_FRAGMENT"; break;
+	case AS_SHADERSTAGE_TESS_CONTROL: stageName = "AS_STAGE_TESS_CONTROL"; break;
+	case AS_SHADERSTAGE_TESS_EVALUATION: stageName = "AS_STAGE_TESS_EVALUATION"; break;
+	case AS_SHADERSTAGE_GEOMETRY: stageName = "AS_STAGE_GEOMETRY"; break;
+	case AS_SHADERSTAGE_COMPUTE: stageName = "AS_STAGE_COMPUTE"; break;}
+	shaderc_compile_options_add_macro_definition(compileOptions, stageName, strlen(stageName), "", 0);
+
+	/*Add Quality Macro*/
+	char qualityInt[8];
+	memset(qualityInt, 0, 8);
+	snprintf(qualityInt, 7, "%i", codePath->minQuality);
+	shaderc_compile_options_add_macro_definition(compileOptions, "AS_MIN_QUALITY", 14, qualityInt, strlen(qualityInt));
+
+	/*Add Extra Macros*/
 	for (int i = 0; i < codePath->macroCount; i++)
 	{
 		shaderc_compile_options_add_macro_definition(compileOptions,

@@ -1,6 +1,13 @@
-find_library(LIBSHADERC_LIBRARIES REQUIRED)
-find_path(LIBSHADERC_INCLUDE_DIRS REQUIRED)
-find_file(LIBSHADERC_DLL REQUIRED)
+find_library(LIBSHADERC_LIBRARIES 
+NAMES shaderc_shared.lib
+HINTS ${PROJECT_SOURCE_DIR}/../libs/shaderc/lib/ REQUIRED)
+find_path(LIBSHADERC_INCLUDE_DIRS 
+NAMES include
+HINTS ${PROJECT_SOURCE_DIR}/../libs/shaderc/ REQUIRED)
+find_file(LIBSHADERC_DLL 
+NAMES shaderc_shared.dll
+HINTS ${PROJECT_SOURCE_DIR}/../libs/shaderc/bin/ REQUIRED)
+
 
 add_definitions(-DUNICODE -D_UNICODE)
 

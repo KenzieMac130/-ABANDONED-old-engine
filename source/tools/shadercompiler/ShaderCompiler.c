@@ -85,7 +85,7 @@ int main(int argc, char* argv[])
 
 	/*Create FX file*/
 	FxCreator fxCreator;
-	if (FxCreator_Create(&fxCreator, outputPath) != AS_SUCCESS)
+	if (FxCreator_Create(&fxCreator, outputPath, shaderType) != AS_SUCCESS)
 	{
 		asDebugLog("[ERROR]> Could not create file: %s", outputPath);
 		return 2;

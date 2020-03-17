@@ -17,7 +17,7 @@ typedef struct {
 	asShaderFxProgramDesc _codeSections[AS_MAX_CODE_SECTIONS];
 } FxCreator;
 
-asResults FxCreator_Create(FxCreator* pCreator, const char* path);
+asResults FxCreator_Create(FxCreator* pCreator, const char* path, const char* shadertype);
 
 asResults FxCreator_StartDataSection(FxCreator* creator, const char* name);
 
