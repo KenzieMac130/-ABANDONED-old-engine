@@ -56,14 +56,71 @@ typedef void* asPipelineHandle; /*Vulkan Impliments as Pointer*/
 
 #define AS_SHADERFX_VERSION 203
 
-#include "engine/renderer/asShaderVariants.h"
+/*Todo: Ditch MSVC and use flexible array member*/
+#define AS_SHADER_MAX_MACROS 8
+#define AS_SHADER_MAX_CODEPATHS 10
+#define AS_SHADER_MAX_PIPELINES 8
+
+typedef struct {
+	const char* name;
+	const char* value;
+} asShaderTypeMacroPair;
+
+typedef struct {
+	const char* entry;
+	asShaderStage stage;
+	asQualityLevel minQuality;
+	size_t macroCount;
+	asShaderTypeMacroPair macros[AS_SHADER_MAX_MACROS];
+} asShaderTypeCodePath;
+
+/**
+* @brief Must alter a proper graphics pipeline description for target API/Backend and return a handle result
+*
+* @usage fill out the pipeline description for blend/rasterizer states, inputs as needed.
+* retrieve reflection data. Don't fill out the shader descriptions, its already populated.
+*
+* @param pShaderAsBin asbin to read from
+* @param asGfxAPIs target graphics api to generate description for
+* @param pDesc description to output to
+* (cast pointer to description struct for API, shaders are already filled out)
+* @param pipelineName name of target pipeline
+* @param pOutPipeline the pipeline handle to write back
+* @param pUserData custom data for the callback
+*/
+typedef asResults(*asGfxPipelineFillCb)(
+	asBinReader* pShaderAsBin,
+	asGfxAPIs api,
+	asPipelineType type,
+	void* pDesc,
+	const char* pipelineName,
+	asPipelineHandle* pOutPipeline,
+	void* pUserData);
+
+typedef struct {
+	const char* name;
+	asPipelineType type;
+	asGfxPipelineFillCb fpCreatePipelineCallback;
+	void* pUserData;
+	size_t codePathCount;
+	asShaderTypeCodePath codePaths[AS_SHADER_MAX_CODEPATHS];
+} asShaderTypePipelineVar;
+
+typedef struct {
+	const char* name;
+	size_t pipelineCount;
+	asShaderTypePipelineVar pipelines[AS_SHADER_MAX_PIPELINES];
+} asShaderTypeRegistration;
+
+ASEXPORT const asShaderTypeRegistration* asShaderFindTypeRegistrationByName(const char* name);
 
 typedef struct {
 	const char* shaderTypeName;
+	asShaderTypeRegistration* registration;
 	asPipelineHandle pipelines[AS_SHADER_MAX_PIPELINES]; /*Must match as defined in variants*/
 } asShaderFx;
 
-ASEXPORT asResults asCreateShaderFx(asBinReader* pAsbin, asShaderFx* pShaderfx, asQualityLevel quality);
+ASEXPORT asResults asCreateShaderFx(asBinReader* pAsbin, asShaderFx* pShaderfx, asQualityLevel minQuality);
 
 ASEXPORT void asFreeShaderFx(asShaderFx* pShaderfx);
 

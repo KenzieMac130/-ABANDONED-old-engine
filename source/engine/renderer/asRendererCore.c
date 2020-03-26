@@ -143,7 +143,7 @@ ASEXPORT void asInitGfx(asLinearMemoryAllocator_t* pLinearAllocator, asAppInfo_t
 	}
 
 #if ASTRENGINE_VK
-	asVkInit(pCurrentLinearAllocator, pAppInfo, pConfig);
+	asVkInit(pAppInfo, pConfig);
 #endif
 
 	asCfgFree(pConfig);
@@ -171,8 +171,11 @@ ASEXPORT void asGfxRenderFrame()
 		asNkReset();
 		return;
 	}
+#if ASTRENGINE_VK
+	asVkInitFrame();
+#endif
 #if ASTRENGINE_NUKLEAR
-	asNkDraw();
+	asNkDraw(0);
 #endif
 #if ASTRENGINE_VK
 	asVkDrawFrame();
@@ -182,7 +185,11 @@ ASEXPORT void asGfxRenderFrame()
 ASEXPORT void asShutdownGfx()
 {
 #if ASTRENGINE_VK
-	asVkShutdown();
+	asVkInitShutdown();
+#if ASTRENGINE_NUKLEAR
+	asShutdownGfxNk();
+#endif
+	asVkFinalShutdown();
 #endif
 	SDL_DestroyWindow(asMainWindow);
 }

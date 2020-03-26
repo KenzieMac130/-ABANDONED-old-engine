@@ -269,6 +269,19 @@ ASEXPORT void asReleaseBuffer(asBufferHandle_t hndl);
 */
 #define AS_MAX_BUFFERS 2048
 
+/*Screen Management*/
+
+/**
+* @brief Get render dimensions for a viewport 
+*/
+ASEXPORT asResults asGetRenderDimensions(int viewportId, bool dynamicRes, int32_t* pWidth, int32_t* pHeight);
+
+/*Global Shader Properties*/
+#define AS_MAX_GLOBAL_CUSTOM_PARAMS 8
+ASEXPORT asResults asSetGlobalCustomShaderParam(int slot, float values[4]);
+ASEXPORT asResults asSetGlobalShaderDebugMode(int mode);
+ASEXPORT asResults asSetGlobalShaderTime(double time);
+
 /*Draw Commands*/
 /*command buffer/drawing abstraction*/
 

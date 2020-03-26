@@ -6,6 +6,12 @@
 /*Todo: Get rid of linear allocator usage, gain is negligable, and code is subject to future breakage*/
 asLinearMemoryAllocator_t* pCurrentLinearAllocator;
 
+typedef struct{
+	float customParams[AS_MAX_GLOBAL_CUSTOM_PARAMS][4];
+	double timeElapsed;
+	int debugMode;
+} asUboGlobal;
+
 struct vScreenResources_t
 {
 	SDL_Window *pWindow;
@@ -289,8 +295,6 @@ VkPhysicalDevice vPickBestDevice(VkPhysicalDevice* pGpus, uint32_t count)
 		/*Benifits*/
 		if (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) /*Not an integrated GPU*/
 			currentGPUScore += 10000;
-		if (deviceFeatures.samplerAnisotropy)
-			currentGPUScore += 100;
 		vSwapchainScore += vSwapchainScore; /*How good is the swapchain support (Resolution, color, etc...)*/
 
 		/*Set as GPU if its the best*/
@@ -443,7 +447,7 @@ void vTextureManager_Shutdown(struct vTextureManager_t* pMan)
 	asFree(pMan->textures);
 }
 
-VkFormat vConvertToNativeFormat(asColorFormat format)
+VkFormat asVkConvertToNativePixelFormat(asColorFormat format)
 {
 	switch (format)
 	{
@@ -494,9 +498,24 @@ VkFormat vConvertToNativeFormat(asColorFormat format)
 	}
 }
 
+VkShaderStageFlagBits asVkConvertToNativeStage(asShaderStage stage)
+{
+	switch (stage)
+	{
+	case AS_SHADERSTAGE_COMPUTE: return VK_SHADER_STAGE_COMPUTE_BIT;
+	case AS_SHADERSTAGE_VERTEX: return VK_SHADER_STAGE_VERTEX_BIT;
+	case AS_SHADERSTAGE_FRAGMENT: return VK_SHADER_STAGE_FRAGMENT_BIT;
+	case AS_SHADERSTAGE_TESS_CONTROL: return VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;
+	case AS_SHADERSTAGE_TESS_EVALUATION: return VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
+	case AS_SHADERSTAGE_GEOMETRY: return VK_SHADER_STAGE_GEOMETRY_BIT;
+	default: return VK_SHADER_STAGE_ALL;
+	};
+}
+
 ASEXPORT uint32_t asGetDepthFormatSize(asColorFormat preference)
 {
-	return 4; /*Most commonly supported depth format (D32, D24S8) size*/
+	if (preference == AS_COLORFORMAT_DEPTH_LP) { return 2; }
+	else { return 4; } /*Most commonly supported depth format (D32, D24S8) size*/
 }
 
 VkImageType vConvertTextureTypeToImageType(asTextureType type)
@@ -557,7 +576,7 @@ ASEXPORT asTextureHandle_t asCreateTexture(asTextureDesc_t *pDesc)
 	{
 		VkImageCreateInfo createInfo = (VkImageCreateInfo) { VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
 		createInfo.imageType = vConvertTextureTypeToImageType(pDesc->type);
-		createInfo.format = vConvertToNativeFormat(pDesc->format);
+		createInfo.format = asVkConvertToNativePixelFormat(pDesc->format);
 		createInfo.extent.height = pDesc->height;
 		createInfo.extent.width = pDesc->width;
 		if (pDesc->type == AS_TEXTURETYPE_3D){
@@ -605,7 +624,7 @@ ASEXPORT asTextureHandle_t asCreateTexture(asTextureDesc_t *pDesc)
 		VkImageViewCreateInfo createInfo = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
 		createInfo.image = pTex->image;
 		createInfo.viewType = vConvertTextureTypeToViewType(pDesc->type);
-		createInfo.format = vConvertToNativeFormat(pDesc->format);
+		createInfo.format = asVkConvertToNativePixelFormat(pDesc->format);
 		createInfo.subresourceRange.aspectMask =
 			pDesc->format == AS_COLORFORMAT_DEPTH ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
 		createInfo.subresourceRange.baseArrayLayer = 0;
@@ -702,8 +721,8 @@ ASEXPORT asTextureHandle_t asCreateTexture(asTextureDesc_t *pDesc)
 					VkSubmitInfo submitInfo = (VkSubmitInfo){ VK_STRUCTURE_TYPE_SUBMIT_INFO };
 					submitInfo.commandBufferCount = 1;
 					submitInfo.pCommandBuffers = &tmpCmd;
-					vkQueueSubmit(asVkQueue_GFX, 1, &submitInfo, VK_NULL_HANDLE); /*TODO: Transfer Queue*/
-					vkQueueWaitIdle(asVkQueue_GFX);
+					vkQueueSubmit(asVkQueue_Transfer, 1, &submitInfo, VK_NULL_HANDLE); 
+					vkQueueWaitIdle(asVkQueue_Transfer); /*TODO: Resource Synchonization*/
 					vkFreeCommandBuffers(asVkDevice, asVkGeneralCommandPool, 1, &tmpCmd);
 				}
 				/*Free staging data*/
@@ -764,7 +783,6 @@ asVkAllocation_t asVkGetAllocFromTexture(asTextureHandle_t hndl)
 }
 
 /*Buffer stuff*/
-/*Todo: Break up vBuffer_t into multiple arrays*/
 
 struct vBuffer_t
 {
@@ -935,8 +953,8 @@ ASEXPORT asBufferHandle_t asCreateBuffer(asBufferDesc_t *pDesc)
 					VkSubmitInfo submitInfo = (VkSubmitInfo) { VK_STRUCTURE_TYPE_SUBMIT_INFO };
 					submitInfo.commandBufferCount = 1;
 					submitInfo.pCommandBuffers = &tmpCmd;
-					vkQueueSubmit(asVkQueue_GFX, 1, &submitInfo, VK_NULL_HANDLE); /*TODO: Transfer Queue*/
-					vkQueueWaitIdle(asVkQueue_GFX);
+					vkQueueSubmit(asVkQueue_Transfer, 1, &submitInfo, VK_NULL_HANDLE);
+					vkQueueWaitIdle(asVkQueue_Transfer); /*Todo: Proper Synchonization*/
 					vkFreeCommandBuffers(asVkDevice, asVkGeneralCommandPool, 1, &tmpCmd);
 				}
 				/*Free staging data*/
@@ -996,6 +1014,13 @@ VkFramebuffer asVkGetSimpleDrawingFramebuffer()
 	return vMainScreen.simpleFrameBuffer;
 }
 
+VkSampler _vSamplerInterpolate;
+VkSampler _vSamplerNoInterpolate;
+VkSampler* asVkGetSimpleSamplerPtr(bool interpolate)
+{
+	return interpolate ? &_vSamplerInterpolate : &_vSamplerNoInterpolate;
+}
+
 /*Command Buffers*/
 struct vPrimaryCommandBufferManager_t
 {
@@ -1016,6 +1041,7 @@ void vPrimaryCommandBufferManager_Init(struct vPrimaryCommandBufferManager_t *pM
 		pMan->pBuffers[i] = asMalloc(sizeof(VkCommandBuffer) * count);
 		pMan->maxBuffs = count;
 		pMan->count[i] = 0;
+
 		VkCommandBufferAllocateInfo allocInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
 		allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 		allocInfo.commandPool = pMan->pools[i];
@@ -1034,7 +1060,7 @@ void vPrimaryCommandBufferManager_Shutdown(struct vPrimaryCommandBufferManager_t
 	}
 }
 
-void vPrimaryCommandBufferManager_ReleaseFrame(struct vPrimaryCommandBufferManager_t *pMan, uint32_t frame)
+void vPrimaryCommandBufferManager_SecureFrame(struct vPrimaryCommandBufferManager_t *pMan, uint32_t frame)
 {
 	vkResetCommandPool(asVkDevice, pMan->pools[frame], 0);
 	pMan->count[frame] = 0;
@@ -1049,6 +1075,25 @@ VkCommandBuffer vPrimaryCommandBufferManager_GetNextCommand(struct vPrimaryComma
 	return pMan->pBuffers[asVkCurrentFrame][slot];
 }
 
+VkSubmitInfo vPrimaryCommandBufferManager_GenSubmitInfo(struct vPrimaryCommandBufferManager_t* pMan,
+	uint32_t frame,
+	VkPipelineStageFlags* pWaitStageMask,
+	int32_t waitSemaphoreCount,
+	VkSemaphore* pWaitSemaphores,
+	int32_t signalSemaphoreCount,
+	VkSemaphore* pSignalSemaphores)
+{
+	VkSubmitInfo submitInfo = (VkSubmitInfo){ VK_STRUCTURE_TYPE_SUBMIT_INFO };
+	submitInfo.commandBufferCount = pMan->count[frame];
+	submitInfo.pCommandBuffers = pMan->pBuffers[frame];
+	submitInfo.pWaitDstStageMask = pWaitStageMask;
+	submitInfo.waitSemaphoreCount = waitSemaphoreCount;
+	submitInfo.pWaitSemaphores = pWaitSemaphores;
+	submitInfo.signalSemaphoreCount = signalSemaphoreCount;
+	submitInfo.pSignalSemaphores = pSignalSemaphores;
+	return submitInfo;
+}
+
 struct vPrimaryCommandBufferManager_t vMainGraphicsBufferManager;
 struct vPrimaryCommandBufferManager_t vMainComputeBufferManager;
 
@@ -1059,6 +1104,37 @@ VkCommandBuffer asVkGetNextGraphicsCommandBuffer()
 VkCommandBuffer asVkGetNextComputeCommandBuffer()
 {
 	return vPrimaryCommandBufferManager_GetNextCommand(&vMainComputeBufferManager);
+}
+
+
+ASEXPORT asResults asGetRenderDimensions(int viewportId, bool dynamicRes, int32_t* pWidth, int32_t* pHeight)
+{
+	*pWidth = vMainScreen.extents.width;
+	*pHeight = vMainScreen.extents.height;
+	return AS_SUCCESS;
+}
+
+/*Global Shader UBO (Maybe move to render core)*/
+
+asUboGlobal globalUboData;
+
+ASEXPORT asResults asSetGlobalCustomShaderParam(int slot, float values[4])
+{
+	ASASSERT(slot < AS_MAX_GLOBAL_CUSTOM_PARAMS);
+	memcpy(globalUboData.customParams[slot], values, sizeof(float) * 4);
+	return AS_SUCCESS;
+}
+
+ASEXPORT asResults asSetGlobalShaderDebugMode(int mode)
+{
+	globalUboData.debugMode = mode;
+	return AS_SUCCESS;
+}
+
+ASEXPORT asResults asSetGlobalShaderTime(double time)
+{
+	globalUboData.timeElapsed = time;
+	return AS_SUCCESS;
 }
 
 /*Init and Shutdown*/
@@ -1184,7 +1260,7 @@ void vScreenResourcesCreate(struct vScreenResources_t *pScreen, SDL_Window* pWin
 			.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
 		};
 		subpass.pDepthStencilAttachment = &(VkAttachmentReference) {
-			.attachment = 0,
+			.attachment = 1,
 			.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
 		};
 
@@ -1323,13 +1399,12 @@ void vScreenResourcesDestroy(struct vScreenResources_t *pScreen)
 	if (pScreen->swapchain != VK_NULL_HANDLE)
 		vkDestroySwapchainKHR(asVkDevice, pScreen->swapchain, AS_VK_MEMCB);
 	if (pScreen->surface != VK_NULL_HANDLE)
-	vkDestroySurfaceKHR(asVkInstance, pScreen->surface, NULL);
+		vkDestroySurfaceKHR(asVkInstance, pScreen->surface, AS_VK_MEMCB);
 }
 
-void asVkInit(asLinearMemoryAllocator_t* pLinearAllocator, asAppInfo_t *pAppInfo, asCfgFile_t* pConfig)
+void asVkInit(asAppInfo_t *pAppInfo, asCfgFile_t* pConfig)
 {
 	asDebugLog("Starting Vulkan Backend...");
-	pCurrentLinearAllocator = pLinearAllocator;
 	/*Create Instance*/
 	{
 #if AS_VK_VALIDATION
@@ -1341,7 +1416,7 @@ void asVkInit(asLinearMemoryAllocator_t* pLinearAllocator, asAppInfo_t *pAppInfo
 		if (!SDL_Vulkan_GetInstanceExtensions(asGetMainWindowPtr(), &sdlExtCount, NULL)) 
 			asFatalError("SDL_Vulkan_GetInstanceExtensions() Failed to get instance extensions");
 		const char** extensions;
-		extensions = (const char**)asAlloc_LinearMalloc(pLinearAllocator, sizeof(unsigned char*) * (sdlExtCount + extraExtCount));
+		extensions = (const char**)asMalloc(sizeof(unsigned char*) * (sdlExtCount + extraExtCount));
 		extensions[0] = VK_EXT_DEBUG_REPORT_EXTENSION_NAME;
 		SDL_Vulkan_GetInstanceExtensions(asGetMainWindowPtr(), &sdlExtCount, &extensions[extraExtCount]);
 		for (uint32_t i = 0; i < sdlExtCount + extraExtCount; i++)
@@ -1352,7 +1427,7 @@ void asVkInit(asLinearMemoryAllocator_t* pLinearAllocator, asAppInfo_t *pAppInfo
 		appInfo.engineVersion = VK_MAKE_VERSION(ASTRENGINE_VERSION_MAJOR, ASTRENGINE_VERSION_MINOR, ASTRENGINE_VERSION_PATCH);
 		appInfo.pApplicationName = pAppInfo->pAppName;
 		appInfo.applicationVersion = VK_MAKE_VERSION(pAppInfo->appVersion.major, pAppInfo->appVersion.minor, pAppInfo->appVersion.patch);
-		appInfo.apiVersion = VK_VERSION_1_1;
+		appInfo.apiVersion = VK_API_VERSION_1_1;
 
 		VkInstanceCreateInfo createInfo = { VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO };
 		createInfo.pApplicationInfo = &appInfo;
@@ -1368,7 +1443,7 @@ void asVkInit(asLinearMemoryAllocator_t* pLinearAllocator, asAppInfo_t *pAppInfo
 
 		if(vkCreateInstance(&createInfo, AS_VK_MEMCB, &asVkInstance) != VK_SUCCESS)
 			asFatalError("vkCreateInstance() Failed to create vulkan instance");
-		asAlloc_LinearFree(pLinearAllocator, (void*)extensions);
+		asFree((void*)extensions);
 	}
 	/*Create Starting Surface*/
 	{
@@ -1382,7 +1457,7 @@ void asVkInit(asLinearMemoryAllocator_t* pLinearAllocator, asAppInfo_t *pAppInfo
 			asFatalError("Failed to find devices with vkEnumeratePhysicalDevices()");
 		if(!gpuCount)
 			asFatalError("No Supported Vulkan Compatible GPU found!");
-		VkPhysicalDevice *gpus = asAlloc_LinearMalloc(pLinearAllocator, gpuCount * sizeof(VkPhysicalDevice));
+		VkPhysicalDevice *gpus = asMalloc(gpuCount * sizeof(VkPhysicalDevice));
 		vkEnumeratePhysicalDevices(asVkInstance, &gpuCount, gpus);
 
 		int preferredGPU = (int)asCfgGetNumber(pConfig, "GPUIndex", -1);
@@ -1400,13 +1475,13 @@ void asVkInit(asLinearMemoryAllocator_t* pLinearAllocator, asAppInfo_t *pAppInfo
 		vkGetPhysicalDeviceFeatures(asVkPhysicalDevice, &asVkDeviceFeatures);
 		vkGetPhysicalDeviceMemoryProperties(asVkPhysicalDevice, &asVkDeviceMemProps);
 
-		asAlloc_LinearFree(pLinearAllocator, gpus);
+		asFree(gpus);
 	}
 	/*Find Extensions*/
 	{
 		uint32_t extCount;
 		vkEnumerateDeviceExtensionProperties(asVkPhysicalDevice, NULL, &extCount, NULL);
-		VkExtensionProperties* availible = (VkExtensionProperties*)asAlloc_LinearMalloc(pLinearAllocator, sizeof(VkExtensionProperties)*extCount);
+		VkExtensionProperties* availible = (VkExtensionProperties*)asMalloc(sizeof(VkExtensionProperties)*extCount);
 		vkEnumerateDeviceExtensionProperties(asVkPhysicalDevice, NULL, &extCount, availible);
 		for (uint32_t i = 0; i < ASARRAYLEN(deviceReqExtensions); i++)
 		{
@@ -1421,7 +1496,7 @@ void asVkInit(asLinearMemoryAllocator_t* pLinearAllocator, asAppInfo_t *pAppInfo
 #endif
 			}
 		}
-		asAlloc_LinearFree(pLinearAllocator, availible);
+		asFree(availible);
 	}
 #if AS_VK_VALIDATION
 	/*Setup Validation Debug Callback*/
@@ -1551,6 +1626,28 @@ void asVkInit(asLinearMemoryAllocator_t* pLinearAllocator, asAppInfo_t *pAppInfo
 		vTextureManager_Init(&vMainTextureManager);
 		vBufferManager_Init(&vMainBufferManager);
 	}
+	/*Simple Texture Samplers*/
+	{
+		VkSamplerCreateInfo createInfo = (VkSamplerCreateInfo){ VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
+		createInfo.anisotropyEnable = VK_TRUE;
+		createInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		createInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		createInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		createInfo.maxAnisotropy = 16.0f;
+		createInfo.compareEnable = VK_FALSE;
+		createInfo.magFilter = VK_FILTER_LINEAR;
+		createInfo.minFilter = VK_FILTER_LINEAR;
+		createInfo.maxLod = 1.0f;
+		createInfo.borderColor = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
+		createInfo.unnormalizedCoordinates = VK_FALSE;
+		createInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+		createInfo.minLod = 0.0f;
+		createInfo.maxLod = 0.0f;
+		createInfo.mipLodBias = 0.0f;
+		vkCreateSampler(asVkDevice, &createInfo, AS_VK_MEMCB, &_vSamplerInterpolate);
+		createInfo.magFilter = VK_FILTER_NEAREST;
+		vkCreateSampler(asVkDevice, &createInfo, AS_VK_MEMCB, &_vSamplerNoInterpolate);
+	}
 	/*Screen Resources*/
 	{
 		vScreenResourcesCreate(&vMainScreen, asGetMainWindowPtr());
@@ -1598,32 +1695,47 @@ void vPresentFrame(struct vScreenResources_t *pScreen)
 	}
 }
 
-void asVkDrawFrame()
+void asVkInitFrame()
 {
+	/*Wait if Frame is in-flight*/
 	vkWaitForFences(asVkDevice, 1, &asVkInFlightFences[asVkCurrentFrame], VK_TRUE, UINT64_MAX);
 
-	vPresentFrame(&vMainScreen);
+	/*Secure Frame Resources (reset if used)*/
+	vPrimaryCommandBufferManager_SecureFrame(&vMainGraphicsBufferManager, asVkCurrentFrame);
+	vPrimaryCommandBufferManager_SecureFrame(&vMainComputeBufferManager, asVkCurrentFrame);
+}
 
-	/*Cleanup Frame Resources*/
-	vPrimaryCommandBufferManager_ReleaseFrame(&vMainGraphicsBufferManager, asVkCurrentFrame);
-	vPrimaryCommandBufferManager_ReleaseFrame(&vMainComputeBufferManager, asVkCurrentFrame);
+void asVkDrawFrame()
+{
+	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+	VkSubmitInfo gfxSubmitInfo = vPrimaryCommandBufferManager_GenSubmitInfo(&vMainGraphicsBufferManager, asVkCurrentFrame, waitStages, 0, NULL, 0, NULL);
+	if (vkQueueSubmit(asVkQueue_GFX, 1, &gfxSubmitInfo, VK_NULL_HANDLE) != VK_SUCCESS)
+		asFatalError("vkQueueSubmit() Failed to submit graphics commands");
+
+	vPresentFrame(&vMainScreen);
 
 	/*Next Frame*/
 	asVkCurrentFrame = (asVkCurrentFrame + 1) % AS_MAX_INFLIGHT;
 }
 
-void asVkShutdown()
+void asVkInitShutdown()
 {
-	if(asVkDevice != VK_NULL_HANDLE)
+	if (asVkDevice != VK_NULL_HANDLE)
 		vkDeviceWaitIdle(asVkDevice);
 
+	vPrimaryCommandBufferManager_Shutdown(&vMainGraphicsBufferManager);
+	vPrimaryCommandBufferManager_Shutdown(&vMainComputeBufferManager);
+}
+
+void asVkFinalShutdown()
+{
 	vScreenResourcesDestroy(&vMainScreen);
+	vkDestroySampler(asVkDevice, _vSamplerInterpolate, AS_VK_MEMCB);
+	vkDestroySampler(asVkDevice, _vSamplerNoInterpolate, AS_VK_MEMCB);
 	vBufferManager_Shutdown(&vMainBufferManager);
 	vTextureManager_Shutdown(&vMainTextureManager);
 	vMemoryAllocator_Shutdown(&vMainAllocator);
 
-	vPrimaryCommandBufferManager_Shutdown(&vMainGraphicsBufferManager);
-	vPrimaryCommandBufferManager_Shutdown(&vMainComputeBufferManager);
 	if (asVkGeneralCommandPool != VK_NULL_HANDLE)
 		vkDestroyCommandPool(asVkDevice, asVkGeneralCommandPool, AS_VK_MEMCB);
 

@@ -57,12 +57,23 @@ extern VkDevice asVkDevice;
 * @brief startup vulkan backend
 * creates an instance, device, memory allocator, etc...
 */
-void asVkInit(asLinearMemoryAllocator_t* pLinearAllocator, asAppInfo_t *pAppInfo, asCfgFile_t* pConfig);
+void asVkInit(asAppInfo_t *pAppInfo, asCfgFile_t* pConfig);
+
 /**
-* @brief shutdown vulkan backend
+* @brief start shutdown vulkan backend
 * destroys every vulkan resource for a clean shutdown
 */
-void asVkShutdown();
+void asVkInitShutdown();
+/**
+* @brief finalize shutdown vulkan backend
+* destroys every vulkan resource for a clean shutdown
+*/
+void asVkFinalShutdown();
+
+/**
+* @brief initialize the frame
+*/
+void asVkInitFrame();
 
 /**
 * @brief draw a single frame
@@ -116,6 +127,10 @@ void asVkUnmapMemory(asVkAllocation_t mem);
 */
 void asVkFlushMemory(asVkAllocation_t mem);
 
+VkFormat asVkConvertToNativePixelFormat(asColorFormat format);
+
+VkShaderStageFlagBits asVkConvertToNativeStage(asShaderStage stage);
+
 /**
 * @brief aquire a the next available graphics command buffer for the frame 
 * Not reusable from frame to frame
@@ -160,6 +175,11 @@ VkRenderPass asVkGetSimpleDrawingRenderpass();
 */
 VkFramebuffer asVkGetSimpleDrawingFramebuffer();
 
+/**
+* @brief Sampler for simple texturing
+*/
+VkSampler* asVkGetSimpleSamplerPtr(bool interpolate);
+
 /*Pipeline Creation Helpers (Because Vulkan has a lot of paperwork)*/
 
 /*Fill out color blend state*/
@@ -178,8 +198,8 @@ VkFramebuffer asVkGetSimpleDrawingFramebuffer();
 (VkPipelineColorBlendAttachmentState){\
 .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,\
 .blendEnable = _vkbEnable,\
-.srcColorBlendFactor = VK_BLEND_FACTOR_ONE,\
-.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO,\
+.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,\
+.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,\
 .colorBlendOp  = VK_BLEND_OP_ADD,\
 .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,\
 .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,\

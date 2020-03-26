@@ -28,8 +28,17 @@ struct nk_buffer nkCommands;
 asBufferHandle_t nkVertexBuffer[AS_MAX_INFLIGHT];
 asBufferHandle_t nkIndexBuffer[AS_MAX_INFLIGHT];
 
+asShaderFx nkShaderFx;
+
+#define AS_BINDING_GUI_TEXTURE 300
+
 #if ASTRENGINE_VK
+VkDescriptorSetLayout vkNuklearDescriptorSetLayout;
 VkPipelineLayout vkNuklearPipelineLayout;
+VkDescriptorPool vkNuklearDescriptorPool;
+
+/*Descriptor Set for the Default Font*/
+VkDescriptorSet vkNuklearDefaultFontDescriptorSet;
 #endif
 
 struct nkVertex
@@ -51,6 +60,7 @@ ASEXPORT asResults _asFillGfxPipeline_Nuklear(
 	asPipelineType pipelineType,
 	void* pDesc,
 	const char* pipelineName,
+	asPipelineHandle* pPipelineOut,
 	void* pUserData)
 {
 	if (api != AS_GFXAPI_VULKAN || pipelineType != AS_PIPELINETYPE_GRAPHICS) { return AS_FAILURE_UNKNOWN_FORMAT; }
@@ -60,19 +70,19 @@ ASEXPORT asResults _asFillGfxPipeline_Nuklear(
 
 	/*Color Blending*/
 	VkPipelineColorBlendAttachmentState attachmentBlends[] = { 
-		AS_VK_INIT_HELPER_ATTACHMENT_BLEND_MIX(VK_FALSE)
+		AS_VK_INIT_HELPER_ATTACHMENT_BLEND_MIX(VK_TRUE)
 	};
 	pGraphicsPipelineDesc->pColorBlendState = &AS_VK_INIT_HELPER_PIPE_COLOR_BLEND_STATE(ASARRAYLEN(attachmentBlends), attachmentBlends);
 	/*Depth Stencil*/
 	pGraphicsPipelineDesc->pDepthStencilState = &AS_VK_INIT_HELPER_PIPE_DEPTH_STENCIL_STATE(
-		VK_FALSE, VK_FALSE, VK_COMPARE_OP_ALWAYS, VK_FALSE, 0.0f, 1.0f);
+		VK_FALSE, VK_FALSE, VK_COMPARE_OP_LESS, VK_FALSE, 0.0f, 1.0f);
 	/*Rasterizer*/
 	pGraphicsPipelineDesc->pRasterizationState = &AS_VK_INIT_HELPER_PIPE_RASTERIZATION_STATE(
 		VK_POLYGON_MODE_FILL,
-		VK_CULL_MODE_BACK_BIT,
+		VK_CULL_MODE_NONE,
 		VK_FRONT_FACE_CLOCKWISE,
 		VK_FALSE,
-		0.0f, 0.0f, 0.0f, 0.0f);
+		0.0f, 0.0f, 0.0f, 1.0f);
 	/*Input Assembler*/
 	pGraphicsPipelineDesc->pInputAssemblyState = &AS_VK_INIT_HELPER_PIPE_INPUT_ASSEMBLER_STATE(
 		VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_FALSE);
@@ -94,7 +104,7 @@ ASEXPORT asResults _asFillGfxPipeline_Nuklear(
 	VkVertexInputAttributeDescription vertexAttributes[] = { 
 		AS_VK_INIT_HELPER_VERTEX_ATTRIBUTE(0, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(struct nkVertex, pos)),
 		AS_VK_INIT_HELPER_VERTEX_ATTRIBUTE(1, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(struct nkVertex, uv)),
-		AS_VK_INIT_HELPER_VERTEX_ATTRIBUTE(2, 0, VK_FORMAT_R8G8B8A8_SRGB, offsetof(struct nkVertex, rgba))
+		AS_VK_INIT_HELPER_VERTEX_ATTRIBUTE(2, 0, VK_FORMAT_R8G8B8A8_UNORM, offsetof(struct nkVertex, rgba))
 	};
 	pGraphicsPipelineDesc->pVertexInputState = &AS_VK_INIT_HELPER_PIPE_VERTEX_STATE(
 		ASARRAYLEN(vertexBindings), vertexBindings,
@@ -103,6 +113,9 @@ ASEXPORT asResults _asFillGfxPipeline_Nuklear(
 	pGraphicsPipelineDesc->renderPass = asVkGetSimpleDrawingRenderpass();
 	pGraphicsPipelineDesc->subpass = 0;
 	pGraphicsPipelineDesc->layout = vkNuklearPipelineLayout;
+
+	if(vkCreateGraphicsPipelines(asVkDevice, VK_NULL_HANDLE, 1, pGraphicsPipelineDesc, AS_VK_MEMCB, (VkPipeline*)pPipelineOut) != VK_SUCCESS)
+		asFatalError("vkCreateGraphicsPipelines() Failed to create nkPipeline");
 	return AS_SUCCESS;
 }
 
@@ -173,14 +186,80 @@ ASEXPORT void asInitNk()
 	}
 	/*Setup Pipeline Layout*/
 	{
+		VkDescriptorSetLayoutBinding descriptorBindings[] = {
+			(VkDescriptorSetLayoutBinding){
+				.binding = AS_BINDING_GUI_TEXTURE,
+				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+				.descriptorCount = 1,
+				.pImmutableSamplers = asVkGetSimpleSamplerPtr(true),
+				.stageFlags = VK_SHADER_STAGE_ALL,
+			}
+		};
+
+		VkDescriptorSetLayoutCreateInfo descriptorSetLayoutInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
+		descriptorSetLayoutInfo.bindingCount = ASARRAYLEN(descriptorBindings);
+		descriptorSetLayoutInfo.pBindings = descriptorBindings;
+		if (vkCreateDescriptorSetLayout(asVkDevice, &descriptorSetLayoutInfo, AS_VK_MEMCB, &vkNuklearDescriptorSetLayout) != VK_SUCCESS)
+			asFatalError("vkCreateDescriptorSetLayout() Failed to create vkNuklearDescriptorSetLayout");
+
 		VkPipelineLayoutCreateInfo createInfo = (VkPipelineLayoutCreateInfo){ VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
+		createInfo.setLayoutCount = 1;
+		createInfo.pSetLayouts = &vkNuklearDescriptorSetLayout;
 		if (vkCreatePipelineLayout(asVkDevice, &createInfo, AS_VK_MEMCB, &vkNuklearPipelineLayout) != VK_SUCCESS)
 			asFatalError("vkCreatePipelineLayout() Failed to create vkNuklearPipelineLayout");
+	}
+	/*Descriptor Pool*/
+	{
+		VkDescriptorPoolSize fontImagePoolSize = { 0 };
+		fontImagePoolSize.descriptorCount = 1;
+		fontImagePoolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+
+		VkDescriptorPoolCreateInfo createInfo = (VkDescriptorPoolCreateInfo){ VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
+		createInfo.maxSets = 1;
+		createInfo.poolSizeCount = 1;
+		createInfo.pPoolSizes = &fontImagePoolSize;
+		if (vkCreateDescriptorPool(asVkDevice, &createInfo, AS_VK_MEMCB, &vkNuklearDescriptorPool) != VK_SUCCESS)
+			asFatalError("vkCreateDescriptorPool() Failed to create vkNuklearDescriptorPool");
+	}
+	/*Descriptor Set*/
+	{
+		VkDescriptorSetAllocateInfo descSetAllocInfo = (VkDescriptorSetAllocateInfo){ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
+		descSetAllocInfo.descriptorPool = vkNuklearDescriptorPool;
+		descSetAllocInfo.descriptorSetCount = 1;
+		descSetAllocInfo.pSetLayouts = &vkNuklearDescriptorSetLayout;
+		if (vkAllocateDescriptorSets(asVkDevice, &descSetAllocInfo, &vkNuklearDefaultFontDescriptorSet) != VK_SUCCESS)
+			asFatalError("vkAllocateDescriptorSets() Failed to allocate vkNuklearDefaultFontDescriptorSet");
+
+		VkWriteDescriptorSet descSetWrite = (VkWriteDescriptorSet){ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
+		descSetWrite.dstSet = vkNuklearDefaultFontDescriptorSet;
+		descSetWrite.dstBinding = AS_BINDING_GUI_TEXTURE;
+		descSetWrite.descriptorCount = 1;
+		descSetWrite.dstArrayElement = 0;
+		descSetWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		descSetWrite.pImageInfo = &(VkDescriptorImageInfo) {
+			.sampler = *asVkGetSimpleSamplerPtr(true),
+			.imageView = asVkGetViewFromTexture(nkFontTexture),
+			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+		};
+		vkUpdateDescriptorSets(asVkDevice, 1, &descSetWrite, 0, NULL);
 	}
 #endif
 	/*Load shader*/
 	{
-		/*Todo...*/
+		unsigned char* fileData;
+		size_t fileSize;
+		asResourceLoader_t resourceLoader;
+		asResourceFileID_t resourceFileId;
+		asResourceLoader_OpenByPath(&resourceLoader, &resourceFileId, "shaders/core/Nuklear_FX.asfx", 28);
+		fileSize = asResourceLoader_GetContentSize(&resourceLoader);
+		fileData = asMalloc(fileSize);
+		asResourceLoader_ReadAll(&resourceLoader, fileSize, fileData);
+		asResourceLoader_Close(&resourceLoader);
+
+		asBinReader shaderBin;
+		asBinReaderOpenMemory(&shaderBin, "ASFX", fileData, fileSize);
+		asCreateShaderFx(&shaderBin, &nkShaderFx, AS_QUALITY_HIGH);
+		asFree(fileData);
 	}
 
 	nk_font_atlas_end(&nkFontAtlas, nk_handle_id(nkFontTexture._index), &nkNullDraw);
@@ -193,14 +272,12 @@ ASEXPORT void asInitNk()
 	nk_buffer_init_default(&nkCommands);
 }
 
-ASEXPORT void asNkDraw()
+ASEXPORT void asNkDraw(int32_t viewport)
 {
 	const struct nk_draw_command* nkCmd;
 	nk_draw_index nkOffset = 0;
 	int viewWidth, viewHeight;
-#if ASTRENGINE_VK
-	SDL_Vulkan_GetDrawableSize(asGetMainWindowPtr(), &viewWidth, &viewHeight);
-#endif
+	asGetRenderDimensions(0, true, &viewWidth, &viewHeight);
 
 	struct nk_buffer nkVerts, nkElements;
 	/*Convert to vertices*/
@@ -220,8 +297,8 @@ ASEXPORT void asNkDraw()
 		config.curve_segment_count = 22;
 		config.arc_segment_count = 22;
 		config.global_alpha = 1.0f;
-		config.shape_AA = NK_ANTI_ALIASING_ON;
-		config.line_AA = NK_ANTI_ALIASING_ON;
+		config.shape_AA = NK_ANTI_ALIASING_OFF;
+		config.line_AA = NK_ANTI_ALIASING_OFF;
 		nk_buffer_init_fixed(&nkVerts, vVertexBufferBindings[asVkCurrentFrame], AS_NK_MAX_VERTS * sizeof(struct nkVertex));
 		nk_buffer_init_fixed(&nkElements, vIndexBufferBindings[asVkCurrentFrame], AS_NK_MAX_INDICES * sizeof(uint16_t));
 		nk_convert(&nkContext, &nkCommands, &nkVerts, &nkElements, &config);
@@ -238,19 +315,46 @@ ASEXPORT void asNkDraw()
 	/*Bind vertex/index buffers*/
 	VkCommandBuffer vCmd = asVkGetNextGraphicsCommandBuffer();
 	VkCommandBufferBeginInfo cmdInfo = (VkCommandBufferBeginInfo) { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
+	cmdInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 	vkBeginCommandBuffer(vCmd, &cmdInfo);
 	VkBuffer vVertexBuffer = asVkGetBufferFromBuffer(nkVertexBuffer[asVkCurrentFrame]);
 	VkBuffer vIndexBuffer = asVkGetBufferFromBuffer(nkIndexBuffer[asVkCurrentFrame]);
 	VkDeviceSize vtxOffset = 0;
 	vkCmdBindVertexBuffers(vCmd, 0, 1, &vVertexBuffer, &vtxOffset);
 	vkCmdBindIndexBuffer(vCmd, vIndexBuffer, 0, VK_INDEX_TYPE_UINT16);
+
+	/*Bind shader pipeline*/
+	vkCmdBindPipeline(vCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, (VkPipeline)nkShaderFx.pipelines[0]);
+	vkCmdBindDescriptorSets(vCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, vkNuklearPipelineLayout, 0, 1, &vkNuklearDefaultFontDescriptorSet, 0, NULL);
+
+	/*Begin Render Pass*/
+	VkClearValue clearValues[] = {
+		(VkClearValue){
+			.color = {0.0f,1.0f,0.0f,0.0f}
+		},
+		(VkClearValue) {
+			.depthStencil = {1.0f, 0}
+		}
+	};
+	VkRenderPassBeginInfo beginInfo = (VkRenderPassBeginInfo){ VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO };
+	beginInfo.clearValueCount = ASARRAYLEN(clearValues);
+	beginInfo.pClearValues = clearValues;
+	beginInfo.renderArea = (VkRect2D){ {0,0},{viewWidth, viewHeight} };
+	beginInfo.renderPass = asVkGetSimpleDrawingRenderpass();
+	beginInfo.framebuffer = asVkGetSimpleDrawingFramebuffer();
+	vkCmdBeginRenderPass(vCmd, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+	/*Setup Viewport*/
+	VkViewport vkViewport = (VkViewport){ 0 };
+	vkViewport.maxDepth = 1.0f;
+	vkViewport.width = (float)viewWidth;
+	vkViewport.height = (float)viewHeight;
+	vkCmdSetViewport(vCmd, 0, 1, &vkViewport);
 #endif
 	nk_draw_foreach(nkCmd, &nkContext, &nkCommands)
 	{
 		if (!nkCmd->elem_count) continue;
 #if ASTRENGINE_VK
-		/*Bind shader pipeline*/
-		/*Todo...*/
 		/*Set scissors*/
 		VkRect2D scissor;
 		scissor.offset.x = (int32_t)(nkCmd->clip_rect.x);
@@ -267,11 +371,12 @@ ASEXPORT void asNkDraw()
 			scissor.offset.y = 0;
 		vkCmdSetScissor(vCmd, 0, 1, &scissor);
 		/*Draw indexed*/
-		//vkCmdDrawIndexed(vCmd, nkCmd->elem_count, 1, 0, 0, 0);
+		vkCmdDrawIndexed(vCmd, nkCmd->elem_count, 1, 0, 0, 0);
 #endif
 		nkOffset += nkCmd->elem_count;
 	}
 #if ASTRENGINE_VK
+	vkCmdEndRenderPass(vCmd);
 	vkEndCommandBuffer(vCmd);
 #endif
 	nk_clear(&nkContext);
@@ -402,10 +507,13 @@ ASEXPORT void asNkEndInput()
 	nk_input_end(&nkContext);
 }
 
-ASEXPORT void asShutdownNk()
+ASEXPORT void asShutdownGfxNk()
 {
-	nk_buffer_free(&nkCommands);
+	asFreeShaderFx(&nkShaderFx);
 #if ASTRENGINE_VK
+	vkDestroyDescriptorPool(asVkDevice, vkNuklearDescriptorPool, AS_VK_MEMCB);
+	vkDestroyDescriptorSetLayout(asVkDevice, vkNuklearDescriptorSetLayout, AS_VK_MEMCB);
+	vkDestroyPipelineLayout(asVkDevice, vkNuklearPipelineLayout, AS_VK_MEMCB);
 	for (int i = 0; i < AS_MAX_INFLIGHT; i++)
 	{
 		asVkUnmapMemory(asVkGetAllocFromBuffer(nkVertexBuffer[i]));
@@ -415,6 +523,12 @@ ASEXPORT void asShutdownNk()
 	}
 #endif
 	asReleaseTexture(nkFontTexture);
+}
+
+ASEXPORT void asShutdownNk()
+{
+	
+	nk_buffer_free(&nkCommands);
 	nk_font_atlas_clear(&nkFontAtlas);
 	asFree(nkMemory);
 }

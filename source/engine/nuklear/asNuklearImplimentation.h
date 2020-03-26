@@ -32,7 +32,7 @@ ASEXPORT void asInitNk();
 * @brief Draw the nuklear user interface
 * @warning The engine update should handle this for you
 */
-ASEXPORT void asNkDraw();
+ASEXPORT void asNkDraw(int32_t viewport);
 
 /**
 * @brief Reset nuklear for next frame
@@ -63,6 +63,11 @@ ASEXPORT void asNkEndInput();
 * @warning The engine shutdown should handle this for you
 */
 ASEXPORT void asShutdownNk();
+/**
+* @brief Shutdown the nuklear backend's graphics resources
+* @warning The engine shutdown should handle this for you
+*/
+ASEXPORT void asShutdownGfxNk();
 
 /**
 * @For internal use by shader system
@@ -73,6 +78,7 @@ ASEXPORT asResults _asFillGfxPipeline_Nuklear(
 	asPipelineType pipelineType,
 	void* pDesc,
 	const char* pipelineName,
+	asPipelineHandle* pPipelineOut,
 	void* pUserData);
 
 #endif

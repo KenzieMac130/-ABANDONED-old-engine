@@ -2,8 +2,8 @@ find_library(LIBSHADERC_LIBRARIES
 NAMES shaderc_shared.lib
 HINTS ${PROJECT_SOURCE_DIR}/../libs/shaderc/lib/ REQUIRED)
 find_path(LIBSHADERC_INCLUDE_DIRS 
-NAMES include
-HINTS ${PROJECT_SOURCE_DIR}/../libs/shaderc/ REQUIRED)
+NAMES shaderc
+HINTS ${PROJECT_SOURCE_DIR}/../libs/shaderc/include REQUIRED)
 find_file(LIBSHADERC_DLL 
 NAMES shaderc_shared.dll
 HINTS ${PROJECT_SOURCE_DIR}/../libs/shaderc/bin/ REQUIRED)
