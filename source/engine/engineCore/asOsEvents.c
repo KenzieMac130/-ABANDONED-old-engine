@@ -5,11 +5,13 @@
 #include "../renderer/asRendererCore.h"
 #if ASTRENGINE_NUKLEAR
 #include "../nuklear/asNuklearImplimentation.h"
+#include "../thirdparty/nuklear/nuklear.h"
 #endif
 
 ASEXPORT void asPollOSEvents()
 {
 #if ASTRENGINE_NUKLEAR
+	nk_input_begin(asGetNuklearContextPtr());
 #endif
 	SDL_Event event;
 	while (SDL_PollEvent(&event))
@@ -42,7 +44,8 @@ ASEXPORT void asPollOSEvents()
 		asNkPushEvent(&event);
 #endif
 	}
-#if ASTRENGINE_NUKLEAR
 
+#if ASTRENGINE_NUKLEAR
+	nk_input_end(asGetNuklearContextPtr());
 #endif
 }

@@ -275,7 +275,6 @@ ASEXPORT void asInitNk()
 ASEXPORT void asNkDraw(int32_t viewport)
 {
 	const struct nk_draw_command* nkCmd;
-	nk_draw_index nkOffset = 0;
 	int viewWidth, viewHeight;
 	asGetRenderDimensions(0, true, &viewWidth, &viewHeight);
 
@@ -330,7 +329,7 @@ ASEXPORT void asNkDraw(int32_t viewport)
 	/*Begin Render Pass*/
 	VkClearValue clearValues[] = {
 		(VkClearValue){
-			.color = {0.0f,1.0f,0.0f,0.0f}
+			.color = {0.0f,0.0f,0.0f,1.0f}
 		},
 		(VkClearValue) {
 			.depthStencil = {1.0f, 0}
@@ -351,6 +350,7 @@ ASEXPORT void asNkDraw(int32_t viewport)
 	vkViewport.height = (float)viewHeight;
 	vkCmdSetViewport(vCmd, 0, 1, &vkViewport);
 #endif
+	uint32_t indexOffset = 0;
 	nk_draw_foreach(nkCmd, &nkContext, &nkCommands)
 	{
 		if (!nkCmd->elem_count) continue;
@@ -371,9 +371,9 @@ ASEXPORT void asNkDraw(int32_t viewport)
 			scissor.offset.y = 0;
 		vkCmdSetScissor(vCmd, 0, 1, &scissor);
 		/*Draw indexed*/
-		vkCmdDrawIndexed(vCmd, nkCmd->elem_count, 1, 0, 0, 0);
+		vkCmdDrawIndexed(vCmd, nkCmd->elem_count, 1, indexOffset, 0, 0);
 #endif
-		nkOffset += nkCmd->elem_count;
+		indexOffset += nkCmd->elem_count;
 	}
 #if ASTRENGINE_VK
 	vkCmdEndRenderPass(vCmd);
