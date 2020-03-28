@@ -4,8 +4,10 @@
 #include "engine/common/asHandleManager.h"
 
 #include "engine/nuklear/asNuklearImplimentation.h"
+#if ASTRENGINE_NUKLEAR
 #define NK_IMPLEMENTATION
 #include "../thirdparty/nuklear/nuklear.h"
+#endif
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "../thirdparty/stb/stb_image.h"
@@ -17,8 +19,8 @@ void onUpdate(double time)
 {
 	/*Test nuklear*/
 	{
-		struct nk_context *pNkCtx = asGetNuklearContextPtr();
-		nk_overview(pNkCtx);
+		//struct nk_context *pNkCtx = asGetNuklearContextPtr();
+		//nk_overview(pNkCtx);
 		//enum { EASY, HARD };
 		//static int op = EASY;
 		//static float value = 0.6f;

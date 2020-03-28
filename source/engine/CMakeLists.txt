@@ -12,7 +12,7 @@ set (ASTRENGINE_VERSION_PATCH 0)
 #	set (ASTRENGINE_VK 0)
 #endif()
 set (ASTRENGINE_VK 1)
-set (ASTRENGINE_NUKLEAR 1)
+set (ASTRENGINE_NUKLEAR 0)
 
 include (TestBigEndian)
 TEST_BIG_ENDIAN(IS_BIG_ENDIAN)
@@ -48,7 +48,7 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/resource)
 #asRenderer
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/renderer) 
 #asNuklear
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/nuklear)
+#add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/nuklear)
 #astrengine
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/engineCore) 
 

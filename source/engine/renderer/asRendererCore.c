@@ -168,7 +168,9 @@ ASEXPORT void asGfxRenderFrame()
 {
 	if (_frameSkip)
 	{
+#if ASTRENGINE_NUKLEAR
 		asNkReset();
+#endif
 		return;
 	}
 #if ASTRENGINE_VK

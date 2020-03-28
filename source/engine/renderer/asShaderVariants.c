@@ -11,7 +11,11 @@ asShaderTypeRegistration shaderTypes[] =
 		.pipelines = { /*Standard Pipeline*/
 			"standard",
 			AS_PIPELINETYPE_GRAPHICS,
+			#if ASTRENGINE_NUKLEAR
 			_asFillGfxPipeline_Nuklear, /*Callback Function*/
+			#else
+			NULL,
+			#endif
 			NULL, /*Callback Data*/
 			2, {
 				{ /*Vertex*/

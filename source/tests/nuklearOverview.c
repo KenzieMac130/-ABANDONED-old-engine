@@ -1,3 +1,4 @@
+#if ASTRENGINE_NUKLEAR
 #define NK_INCLUDE_DEFAULT_ALLOCATOR
 #define NK_INCLUDE_FONT_BAKING
 #define NK_INCLUDE_VERTEX_BUFFER_OUTPUT
@@ -1311,3 +1312,4 @@ int nk_overview(struct nk_context *ctx)
     return !nk_window_is_closed(ctx, "Overview");
 }
 
+#endif

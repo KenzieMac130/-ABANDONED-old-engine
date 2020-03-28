@@ -8,4 +8,4 @@ set_property(TARGET astrengine PROPERTY FOLDER "astrengine")
 #LINK SUBLIBRARIES
 target_link_libraries(astrengine asResource)
 target_link_libraries(astrengine asRenderer)
-target_link_libraries(astrengine asNuklear)
+#target_link_libraries(astrengine asNuklear)
