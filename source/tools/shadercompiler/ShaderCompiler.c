@@ -92,16 +92,13 @@ int main(int argc, char* argv[])
 	}
 
 	/*Compile all Permutations*/
-	for (int i = 0; i < shaderTypeInfo->pipelineCount; i++)
+	for (int j = 0; j < shaderTypeInfo->codePathCount; j++) /*Todo: Fix*/
 	{
-		for (int j = 0; j < shaderTypeInfo->pipelines[i].codePathCount; j++)
-		{
-			glslToSpirv(&fxCreator, 
-				glslContents, fileSize,
-				assetPath,
-				shaderTypeInfo->pipelines[i].name,
-				&shaderTypeInfo->pipelines[i].codePaths[j]);
-		}
+		glslToSpirv(&fxCreator, 
+			glslContents, fileSize,
+			assetPath,
+			shaderTypeInfo->codePaths[j].pipelineName,
+			&shaderTypeInfo->codePaths[j]);
 	}
 
 	FxCreator_Finish(&fxCreator);

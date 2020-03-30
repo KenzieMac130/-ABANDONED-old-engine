@@ -86,7 +86,7 @@ shaderc_shader_kind getShaderKind(asShaderStage stage)
 	}
 }
 
-asResults glslToSpirv(FxCreator* pFxCreator, const char* contents, size_t contentsSize, const char* fileName, const char* pipelineName, const asShaderTypeCodePath* codePath)
+asResults glslToSpirv(FxCreator* pFxCreator, const char* contents, size_t contentsSize, const char* fileName, const char* permName, const asShaderTypeCodePath* codePath)
 {
 	/*Setup Compiler*/
 	struct shaderc_compiler* glslCompiler = shaderc_compiler_initialize();
@@ -143,7 +143,7 @@ asResults glslToSpirv(FxCreator* pFxCreator, const char* contents, size_t conten
 	if (status != shaderc_compilation_status_success)
 	{
 		const char* error = shaderc_result_get_error_message(result);
-		asDebugLog("[ERROR]> Pipeline: \"%s\" Error: \"%s\"", pipelineName, error);
+		asDebugLog("[ERROR]> Pipeline: \"%s\" Error: \"%s\"", permName, error);
 		//if (getchar()) {};
 		_fcloseall();
 		exit(status);
@@ -151,7 +151,7 @@ asResults glslToSpirv(FxCreator* pFxCreator, const char* contents, size_t conten
 
 	/*Add Block*/
 	FxCreator_AddCodeBlock(pFxCreator,
-		pipelineName,
+		permName,
 		shaderc_result_get_bytes(result),
 		shaderc_result_get_length(result),
 		codePath->stage,

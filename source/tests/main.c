@@ -8,6 +8,9 @@
 #define NK_IMPLEMENTATION
 #include "../thirdparty/nuklear/nuklear.h"
 #endif
+#if ASTRENGINE_DEARIMGUI
+#include "engine/cimgui/asDearImGuiImplimentation.h"
+#endif
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "../thirdparty/stb/stb_image.h"
@@ -17,44 +20,20 @@
 
 void onUpdate(double time)
 {
-	/*Test nuklear*/
-	{
-		//struct nk_context *pNkCtx = asGetNuklearContextPtr();
-		//nk_overview(pNkCtx);
-		//enum { EASY, HARD };
-		//static int op = EASY;
-		//static float value = 0.6f;
-		//static int i = 20;
-		//static struct nk_colorf color;
+	/*Test Imgui*/
+	static bool imguiDemoOpen;
+	static bool windowOpen;
+	static bool thing;
+	static float value = 0.0f;
+	static float color[4];
+	igShowDemoWindow(imguiDemoOpen);
 
-		//if (nk_begin(pNkCtx, "Show", nk_rect(50, 50, 220, 220),
-		//	NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_CLOSABLE)) {
-		//	/* fixed widget pixel width */
-		//	nk_layout_row_static(pNkCtx, 30, 80, 1);
-		//	if (nk_button_label(pNkCtx, "button")) {
-		//		/* event handling */
-		//	}
-
-		//	/* fixed widget window ratio width */
-		//	nk_layout_row_dynamic(pNkCtx, 30, 2);
-		//	if (nk_option_label(pNkCtx, "easy", op == EASY)) op = EASY;
-		//	if (nk_option_label(pNkCtx, "hard", op == HARD)) op = HARD;
-
-		//	/* custom widget pixel width */
-		//	nk_layout_row_begin(pNkCtx, NK_STATIC, 30, 2);
-		//	{
-		//		nk_layout_row_push(pNkCtx, 50);
-		//		nk_label(pNkCtx, "Volume:", NK_TEXT_LEFT);
-		//		nk_layout_row_push(pNkCtx, 110);
-		//		nk_slider_float(pNkCtx, 0, &value, 1.0f, 0.1f);
-
-		//		color = nk_color_picker(pNkCtx, color, NK_RGBA);
-		//	}
-
-		//	nk_layout_row_end(pNkCtx);
-		//}
-		//nk_end(pNkCtx);
-	}
+	igBegin("Astrengine Test Window", &windowOpen, 0);
+	igSliderFloat("Test Float", &value, 0, 5.0f, NULL, 1);
+	igTextColored((ImVec4) { 1.0f, 0.0f, 1.0f, 0.4f }, "Delta Time: %f", time);
+	igShowUserGuide();
+	igColorPicker4("Color Picker", color, ImGuiColorEditFlags_Float | ImGuiColorEditFlags_PickerHueWheel, NULL);
+	igEnd();
 }
 
 asTextureHandle_t texture;
@@ -67,6 +46,7 @@ void onExit()
 	asShutdown();
 }
 
+/*Designated Initializer with Array Test*/
 typedef struct {
 	const uint32_t* data;
 } dInitList;

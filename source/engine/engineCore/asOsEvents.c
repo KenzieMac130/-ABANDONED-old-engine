@@ -8,6 +8,10 @@
 #include "../thirdparty/nuklear/nuklear.h"
 #endif
 
+#if ASTRENGINE_DEARIMGUI
+#include "../cimgui/asDearImGuiImplimentation.h"
+#endif
+
 ASEXPORT void asPollOSEvents()
 {
 #if ASTRENGINE_NUKLEAR
@@ -42,6 +46,9 @@ ASEXPORT void asPollOSEvents()
 		}
 #if ASTRENGINE_NUKLEAR
 		asNkPushEvent(&event);
+#endif
+#if ASTRENGINE_DEARIMGUI
+		asImGuiPushEvent(&event);
 #endif
 	}
 

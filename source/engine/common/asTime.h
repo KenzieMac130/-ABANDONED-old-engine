@@ -35,6 +35,11 @@ ASEXPORT uint64_t asTimerTicksElapsed(asTimer_t timer);
 */
 ASEXPORT uint64_t asTimerMicroseconds(asTimer_t timer, uint64_t ticks);
 
+/**
+* @brief Get seconds that passed based on timer as a double
+*/
+ASEXPORT double asTimerSeconds(asTimer_t timer, uint64_t ticks);
+
 #ifdef __cplusplus
 }
 #endif

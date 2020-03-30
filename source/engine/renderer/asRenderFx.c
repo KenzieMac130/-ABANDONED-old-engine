@@ -24,7 +24,7 @@ ASEXPORT asResults asCreateShaderFx(asBinReader* pAsbin, asShaderFx* pShaderfx, 
 	for (int i = 0; i < pShaderType->pipelineCount; i++)
 	{
 #if ASTRENGINE_VK
-		int currentCreateInfo = 0;
+		int stageCount = 0;
 		VkShaderModule shaderModules[AS_SHADER_MAX_CODEPATHS];
 		VkPipelineShaderStageCreateInfo stageCreateInfos[AS_SHADER_MAX_CODEPATHS];
 		memset(shaderModules, 0, sizeof(VkShaderModule) * AS_SHADER_MAX_CODEPATHS);
@@ -32,15 +32,16 @@ ASEXPORT asResults asCreateShaderFx(asBinReader* pAsbin, asShaderFx* pShaderfx, 
 #endif
 		/*Find each associated section*/
 		asHash32_t groupHash = asHashBytes32_xxHash(pShaderType->pipelines[i].name, strlen(pShaderType->pipelines[i].name));
-		for (int j = 0; j < pShaderType->pipelines[i].codePathCount; j++)
+		for (int j = 0; j < pShaderType->pipelines[i].codePathIdxCount; j++)
 		{
+			int32_t codePathIndex = pShaderType->pipelines[i].codePathIdxs[j];
 			asShaderFxProgramDesc* pDesc = NULL;
 			int minQuality = -1;
 			for (int k = 0; k < codeSectionCount; k++) /*Search for Shader to Add*/
 			{
 				/*Correct Section Found*/
 				if (pCodeSections[k].defGroupNameHash == groupHash &&
-					pCodeSections[k].stage == pShaderType->pipelines[i].codePaths[j].stage &&
+					pCodeSections[k].stage == pShaderType->codePaths[codePathIndex].stage &&
 					pCodeSections[k].quality > minQuality &&
 					pCodeSections[k].quality <= quality)
 				{
@@ -49,8 +50,10 @@ ASEXPORT asResults asCreateShaderFx(asBinReader* pAsbin, asShaderFx* pShaderfx, 
 				}
 			}
 			if (!pDesc) { return AS_FAILURE_UNKNOWN_FORMAT; }
-
+			stageCount++;
 #if ASTRENGINE_VK
+			/*Don't Create Redundant Copies*/
+			if (shaderModules[codePathIndex] != 0) { continue; }
 			/*Add Shader to shaderModules*/
 			size_t codeSize;
 			int32_t* pSpirv;
@@ -59,15 +62,14 @@ ASEXPORT asResults asCreateShaderFx(asBinReader* pAsbin, asShaderFx* pShaderfx, 
 			VkShaderModuleCreateInfo createInfo = (VkShaderModuleCreateInfo){ VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
 			createInfo.codeSize = codeSize;
 			createInfo.pCode = pSpirv;
-			vkCreateShaderModule(asVkDevice, &createInfo, AS_VK_MEMCB, &shaderModules[j]);
+			vkCreateShaderModule(asVkDevice, &createInfo, AS_VK_MEMCB, &shaderModules[codePathIndex]);
 
 			/*Describe Stage*/
-			stageCreateInfos[j] = (VkPipelineShaderStageCreateInfo){ VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
-			stageCreateInfos[j].module = shaderModules[j];
-			stageCreateInfos[j].pName = pShaderType->pipelines[i].codePaths[j].entry;
-			stageCreateInfos[j].stage = asVkConvertToNativeStage(pShaderType->pipelines[i].codePaths[j].stage);
-			stageCreateInfos[j].pSpecializationInfo = NULL; /*Pipeline Specialization is not implimented*/
-			currentCreateInfo++;
+			stageCreateInfos[codePathIndex] = (VkPipelineShaderStageCreateInfo){ VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
+			stageCreateInfos[codePathIndex].module = shaderModules[codePathIndex];
+			stageCreateInfos[codePathIndex].pName = pShaderType->codePaths[codePathIndex].entry;
+			stageCreateInfos[codePathIndex].stage = asVkConvertToNativeStage(pShaderType->codePaths[codePathIndex].stage);
+			stageCreateInfos[codePathIndex].pSpecializationInfo = NULL; /*Pipeline Specialization is not implimented*/
 #endif
 		}
 
@@ -76,7 +78,7 @@ ASEXPORT asResults asCreateShaderFx(asBinReader* pAsbin, asShaderFx* pShaderfx, 
 		{
 			VkGraphicsPipelineCreateInfo gfxPipelineInfo = (VkGraphicsPipelineCreateInfo){ VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
 			gfxPipelineInfo.pStages = stageCreateInfos;
-			gfxPipelineInfo.stageCount = currentCreateInfo;
+			gfxPipelineInfo.stageCount = stageCount;
 
 			/*Call Pipleine Creation Callback*/
 			pShaderType->pipelines[i].fpCreatePipelineCallback(
@@ -106,7 +108,7 @@ ASEXPORT asResults asCreateShaderFx(asBinReader* pAsbin, asShaderFx* pShaderfx, 
 		else { return AS_FAILURE_UNKNOWN_FORMAT; }
 
 		/*Free Shader Modules*/
-		for (int j = 0; j < pShaderType->pipelines[i].codePathCount; j++) { vkDestroyShaderModule(asVkDevice, shaderModules[j], AS_VK_MEMCB); }
+		for (int j = 0; j < pShaderType->codePathCount; j++) { vkDestroyShaderModule(asVkDevice, shaderModules[j], AS_VK_MEMCB); }
 #endif
 	}
 	return AS_SUCCESS;

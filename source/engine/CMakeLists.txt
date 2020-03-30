@@ -13,6 +13,7 @@ set (ASTRENGINE_VERSION_PATCH 0)
 #endif()
 set (ASTRENGINE_VK 1)
 set (ASTRENGINE_NUKLEAR 0)
+set (ASTRENGINE_DEARIMGUI 1)
 
 include (TestBigEndian)
 TEST_BIG_ENDIAN(IS_BIG_ENDIAN)
@@ -49,6 +50,8 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/resource)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/renderer) 
 #asNuklear
 #add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/nuklear)
+#asDearImgui
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/cimgui)
 #astrengine
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/engineCore) 
 

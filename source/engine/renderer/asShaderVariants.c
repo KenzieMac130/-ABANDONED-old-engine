@@ -1,7 +1,12 @@
 #include "asRenderFx.h"
 
 /*Shader Backend Dependencies*/
+#if ASTRENGINE_NUKLEAR
 #include "engine/nuklear/asNuklearImplimentation.h"
+#endif
+#if ASTRENGINE_DEARIMGUI
+#include "engine/cimgui/asDearImGuiImplimentation.h"
+#endif
 
 asShaderTypeRegistration shaderTypes[] =
 {
@@ -13,26 +18,34 @@ asShaderTypeRegistration shaderTypes[] =
 			AS_PIPELINETYPE_GRAPHICS,
 			#if ASTRENGINE_NUKLEAR
 			_asFillGfxPipeline_Nuklear, /*Callback Function*/
+			#elif ASTRENGINE_DEARIMGUI
+			_asFillGfxPipeline_DearImgui,
 			#else
 			NULL,
 			#endif
 			NULL, /*Callback Data*/
-			2, {
-				{ /*Vertex*/
-					"main",
-					AS_SHADERSTAGE_VERTEX,
-					AS_QUALITY_LOW,
-					1, /*Macros*/
-					{{"NUKLEAR","1"}}
-				},
-				{ /*Fragment*/
-					"main",
-					AS_SHADERSTAGE_FRAGMENT,
-					AS_QUALITY_LOW,
-					1, /*Macros*/
-					{{"NUKLEAR","1"}}
-				},
+			2, { /*Code Path Mappings*/
+				0, 1
 			}
+		},
+		.codePathCount = 2,
+		.codePaths = {
+			{ /*Vertex*/
+				"standard",
+				"main",
+				AS_SHADERSTAGE_VERTEX,
+				AS_QUALITY_LOW,
+				1, /*Macros*/
+				{{"NUKLEAR","1"}}
+			},
+			{ /*Fragment*/
+				"standard",
+				"main",
+				AS_SHADERSTAGE_FRAGMENT,
+				AS_QUALITY_LOW,
+				1, /*Macros*/
+				{{"NUKLEAR","1"}}
+			},
 		}
 	},
 };

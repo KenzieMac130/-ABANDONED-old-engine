@@ -6,23 +6,13 @@
 #if ASTRENGINE_NUKLEAR
 #include "../nuklear/asNuklearImplimentation.h"
 #endif
+#if ASTRENGINE_DEARIMGUI
+#include "../cimgui/asDearImGuiImplimentation.h"
+#endif
 #include <SDL.h>
 
 bool gContinueLoop;
 asLinearMemoryAllocator_t linearAllocator;
-
-ASEXPORT void asShutdown(void)
-{
-#if ASTRENGINE_NUKLEAR
-	asShutdownNk();
-#endif
-	asShutdownGfx();
-	asShutdownResource();
-	asShutdownUserFiles();
-	SDL_Quit();
-	asAllocShutdown_Linear(&linearAllocator);
-	asDebugLog("astrengine Quit...");
-}
 
 ASEXPORT int asIgnite(int argc, char *argv[], asAppInfo_t *pAppInfo, void *pCustomWindow)
 {
@@ -42,7 +32,26 @@ ASEXPORT int asIgnite(int argc, char *argv[], asAppInfo_t *pAppInfo, void *pCust
 #if ASTRENGINE_NUKLEAR
 	asInitNk();
 #endif
+#if ASTRENGINE_DEARIMGUI
+	asInitImGui();
+#endif
 	return 0; 
+}
+
+ASEXPORT void asShutdown(void)
+{
+#if ASTRENGINE_NUKLEAR
+	asShutdownNk();
+#endif
+#if ASTRENGINE_DEARIMGUI
+	asShutdownImGui();
+#endif
+	asShutdownGfx();
+	asShutdownResource();
+	asShutdownUserFiles();
+	SDL_Quit();
+	asAllocShutdown_Linear(&linearAllocator);
+	asDebugLog("astrengine Quit...");
 }
 
 ASEXPORT int asLoopSingleShot(double time, asLoopDesc_t loopDesc)
@@ -51,17 +60,27 @@ ASEXPORT int asLoopSingleShot(double time, asLoopDesc_t loopDesc)
 		loopDesc.fpOnTick(1.0 / 30);
 	if (loopDesc.fpOnUpdate)
 		loopDesc.fpOnUpdate(time);
+
+	asImGuiEndFrame();
 	asPollOSEvents();
+#if ASTRENGINE_DEARIMGUI
+	asImGuiPumpInput();
+#endif
 	asGfxRenderFrame();
+	asImGuiNewFrame(time);
 	return 0;
 }
 
 ASEXPORT int asEnterLoop(asLoopDesc_t loopDesc)
 {
 	gContinueLoop = true;
-	double deltaTime = 1.0/60;
+	float deltaTime = 1.0/1000;
+	asTimer_t globalTimer = asTimerStart();
 	while (gContinueLoop)
 	{
+		deltaTime = (float)asTimerSeconds(globalTimer, asTimerTicksElapsed(globalTimer));
+		globalTimer = asTimerRestart(globalTimer);
+		if (deltaTime < 0) { deltaTime = 0.000001f; }
 		asLoopSingleShot(deltaTime, loopDesc);
 	}
 	return 0;

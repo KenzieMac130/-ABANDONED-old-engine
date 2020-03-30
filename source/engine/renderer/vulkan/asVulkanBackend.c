@@ -263,7 +263,8 @@ bool vDeviceHasRequiredExtensions(VkPhysicalDevice gpu)
 
 bool vDeviceHasRequiredFeatures(VkPhysicalDeviceFeatures *pFeatures)
 {
-	if (!pFeatures->imageCubeArray) /*Cubemap arrays must be supported*/
+	if (!pFeatures->imageCubeArray || /*Cubemap arrays must be supported*/
+		!pFeatures->shaderFloat64) /*Float 64 for Shaders must be supported*/
 		return false;
 	return true;
 }
@@ -1566,6 +1567,7 @@ void asVkInit(asAppInfo_t *pAppInfo, asCfgFile_t* pConfig)
 		/*Enabled features for the device*/
 		VkPhysicalDeviceFeatures enabledFeatures = (VkPhysicalDeviceFeatures) { 0 };
 		enabledFeatures.imageCubeArray = VK_TRUE;
+		enabledFeatures.shaderFloat64 = VK_TRUE;
 		if(asVkDeviceFeatures.samplerAnisotropy)
 			enabledFeatures.samplerAnisotropy = VK_TRUE;
 

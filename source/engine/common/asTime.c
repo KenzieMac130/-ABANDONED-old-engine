@@ -28,3 +28,8 @@ ASEXPORT uint64_t asTimerMicroseconds(asTimer_t timer, uint64_t ticks)
 {
 	return ticks / (timer.freq / 1000000);
 }
+
+ASEXPORT double asTimerSeconds(asTimer_t timer, uint64_t ticks)
+{
+	return (double)ticks / timer.freq;
+}

@@ -44,7 +44,7 @@ typedef enum {
 * Plus if the material system completely patched over any of these values it would not be good...
 */
 typedef struct {
-	asHash32_t defGroupNameHash; /**< Identifies what pipeline the compiler took when generating (zprepass/gbuffer/forward/etc)*/
+	int32_t defGroupNameHash; /**< Identifies what pipeline the compiler took when generating (zprepass/gbuffer/forward/etc)*/
 	asShaderStage stage; /**< Stage associated with the shader*/
 	int32_t quality; /**< Internal quality level associated with shader (must not affect inputs/outputs interface only instructions)*/
 	asHash32_t programSection; /**< asBin Section Containing Shader code/bytecode for the current API (Vulkan: SPIR-V, OpenGL: GLSL, DirectX: HLSL, ect...)*/
@@ -67,6 +67,7 @@ typedef struct {
 } asShaderTypeMacroPair;
 
 typedef struct {
+	const char* pipelineName;
 	const char* entry;
 	asShaderStage stage;
 	asQualityLevel minQuality;
@@ -102,12 +103,14 @@ typedef struct {
 	asPipelineType type;
 	asGfxPipelineFillCb fpCreatePipelineCallback;
 	void* pUserData;
-	size_t codePathCount;
-	asShaderTypeCodePath codePaths[AS_SHADER_MAX_CODEPATHS];
+	size_t codePathIdxCount;
+	int32_t codePathIdxs[AS_SHADER_MAX_CODEPATHS];
 } asShaderTypePipelineVar;
 
 typedef struct {
 	const char* name;
+	size_t codePathCount;
+	asShaderTypeCodePath codePaths[AS_SHADER_MAX_CODEPATHS];
 	size_t pipelineCount;
 	asShaderTypePipelineVar pipelines[AS_SHADER_MAX_PIPELINES];
 } asShaderTypeRegistration;

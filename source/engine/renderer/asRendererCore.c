@@ -10,6 +10,9 @@
 #if ASTRENGINE_NUKLEAR
 #include "../nuklear/asNuklearImplimentation.h"
 #endif
+#if ASTRENGINE_DEARIMGUI
+#include "../cimgui/asDearImGuiImplimentation.h"
+#endif
 
 asLinearMemoryAllocator_t* pCurrentLinearAllocator;
 
@@ -171,6 +174,9 @@ ASEXPORT void asGfxRenderFrame()
 #if ASTRENGINE_NUKLEAR
 		asNkReset();
 #endif
+#if ASTRENGINE_DEARIMGUI
+		asImGuiReset();
+#endif
 		return;
 	}
 #if ASTRENGINE_VK
@@ -178,6 +184,9 @@ ASEXPORT void asGfxRenderFrame()
 #endif
 #if ASTRENGINE_NUKLEAR
 	asNkDraw(0);
+#endif
+#if ASTRENGINE_DEARIMGUI
+	asImGuiDraw(0);
 #endif
 #if ASTRENGINE_VK
 	asVkDrawFrame();
@@ -190,6 +199,9 @@ ASEXPORT void asShutdownGfx()
 	asVkInitShutdown();
 #if ASTRENGINE_NUKLEAR
 	asShutdownGfxNk();
+#endif
+#if ASTRENGINE_DEARIMGUI
+	asShutdownGfxImGui();
 #endif
 	asVkFinalShutdown();
 #endif
