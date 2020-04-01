@@ -19,7 +19,7 @@ ASEXPORT asCfgFile_t* asCfgLoad(const char* path)
 	FILE *fp;
 	fopen_s(&fp, path, "rb");
 	if (!fp) {
-		asDebugLog("Couldn't Open: %s", path);
+		asDebugWarning("Couldn't Open: %s", path);
 		return NULL;
 	}
 	asDebugLog("Opened: %s", path);
@@ -45,7 +45,7 @@ ASEXPORT asCfgFile_t* asCfgLoadUserFile(const char* path)
 		return NULL;
 	asUserFile userFile;
 	if (asUserFileOpen(&userFile, path, strlen(path), "rb") != AS_SUCCESS) {
-		asDebugLog("Couldn't Open: %s", path);
+		asDebugWarning("Couldn't Open: %s", path);
 		return NULL;
 	}
 	asDebugLog("Opened: %s", path);
@@ -88,6 +88,10 @@ ASEXPORT void asCfgFree(asCfgFile_t* cfg)
 		return;
 	ini_destroy(cfg->pIni);
 	asFree(cfg);
+}
+ASEXPORT void asCfgFree_KeepMattias(asCfgFile_t* pCfg)
+{
+	asFree(pCfg);
 }
 ASEXPORT ini_t* asCfgGetMattiasPtr(asCfgFile_t* pCfg)
 {

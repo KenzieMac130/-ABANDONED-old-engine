@@ -1,5 +1,5 @@
-#ifndef _ASRESOURCE_H_
-#define _ASRESOURCE_H_
+#ifndef _ASUSERFILES_H_
+#define _ASUSERFILES_H_
 
 #include "../common/asCommon.h"
 #ifdef __cplusplus
@@ -10,6 +10,8 @@ typedef struct {
 	FILE* pFile;
 	const char* pPath;
 } asUserFile;
+
+ASEXPORT void asUserFileMakePath(const char* currentName, char* outputBuff, size_t outputBuffSize);
 
 ASEXPORT void asInitUserFiles(const char* developerName, const char* appName);
 

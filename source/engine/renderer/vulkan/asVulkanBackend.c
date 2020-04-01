@@ -3,9 +3,6 @@
 #include <SDL_vulkan.h>
 #include "../asRendererCore.h"
 
-/*Todo: Get rid of linear allocator usage, gain is negligable, and code is subject to future breakage*/
-asLinearMemoryAllocator_t* pCurrentLinearAllocator;
-
 typedef struct{
 	float customParams[AS_MAX_GLOBAL_CUSTOM_PARAMS][4];
 	double timeElapsed;
@@ -84,7 +81,7 @@ bool vValidationLayersAvailible()
 {
 	uint32_t layerCount;
 	vkEnumerateInstanceLayerProperties(&layerCount, NULL);
-	VkLayerProperties *layerProps = (VkLayerProperties*)asAlloc_LinearMalloc(pCurrentLinearAllocator, sizeof(VkLayerProperties) * layerCount);
+	VkLayerProperties *layerProps = (VkLayerProperties*)asMalloc(sizeof(VkLayerProperties) * layerCount);
 	vkEnumerateInstanceLayerProperties(&layerCount, layerProps);
 	for (uint32_t i = 0; i < layerCount; i++)
 		asDebugLog("VK Layer: \"%s\" found", layerProps[i].layerName);
@@ -102,11 +99,11 @@ bool vValidationLayersAvailible()
 		}
 		if (!found)
 		{
-			asAlloc_LinearFree(pCurrentLinearAllocator, layerProps);
+			asFree(layerProps);
 			return false;
 		}
 	}
-	asAlloc_LinearFree(pCurrentLinearAllocator, layerProps);
+	asFree(layerProps);
 	return true;
 }
 
@@ -131,7 +128,7 @@ vQueueFamilyIndices_t vFindQueueFamilyIndices(VkPhysicalDevice gpu)
 	vQueueFamilyIndices_t result = (vQueueFamilyIndices_t) { UINT32_MAX, UINT32_MAX, UINT32_MAX };
 	uint32_t queueFamilyCount;
 	vkGetPhysicalDeviceQueueFamilyProperties(gpu, &queueFamilyCount, NULL);
-	VkQueueFamilyProperties *queueFamilyProps = asAlloc_LinearMalloc(pCurrentLinearAllocator, sizeof(VkQueueFamilyProperties) * queueFamilyCount);
+	VkQueueFamilyProperties *queueFamilyProps = asMalloc(sizeof(VkQueueFamilyProperties) * queueFamilyCount);
 	vkGetPhysicalDeviceQueueFamilyProperties(gpu, &queueFamilyCount, queueFamilyProps);
 	for (uint32_t i = 0; i < queueFamilyCount; i++)
 	{
@@ -150,7 +147,7 @@ vQueueFamilyIndices_t vFindQueueFamilyIndices(VkPhysicalDevice gpu)
 		if (vIsQueueFamilyComplete(result))
 			break;
 	}
-	asAlloc_LinearFree(pCurrentLinearAllocator, queueFamilyProps);
+	asFree(queueFamilyProps);
 	return result;
 }
 
@@ -168,17 +165,17 @@ int32_t vQueryAndRateSwapChainSupport(VkPhysicalDevice gpu, VkSurfaceKHR surf,
 	if (formatCount <= 0){/*No formats availible*/
 		return -1;
 	}
-	VkSurfaceFormatKHR* formats = (VkSurfaceFormatKHR*)asAlloc_LinearMalloc(pCurrentLinearAllocator, sizeof(VkSurfaceFormatKHR)*formatCount);
+	VkSurfaceFormatKHR* formats = (VkSurfaceFormatKHR*)asMalloc(sizeof(VkSurfaceFormatKHR)*formatCount);
 	vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surf, &formatCount, formats);
 
 	/*Present Modes*/
 	uint32_t modeCount;
 	vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surf, &modeCount, NULL);
 	if (modeCount <= 0) {/*No modes availible*/
-		asAlloc_LinearFree(pCurrentLinearAllocator, formats);
+		asFree(formats);
 		return -1;
 	}
-	VkPresentModeKHR* modes = (VkPresentModeKHR*)asAlloc_LinearMalloc(pCurrentLinearAllocator, sizeof(VkPresentModeKHR)*modeCount);
+	VkPresentModeKHR* modes = (VkPresentModeKHR*)asMalloc(sizeof(VkPresentModeKHR)*modeCount);
 	vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surf, &modeCount, modes);
 
 	/*Pick best swapchain format*/
@@ -217,8 +214,8 @@ int32_t vQueryAndRateSwapChainSupport(VkPhysicalDevice gpu, VkSurfaceKHR surf,
 		}
 	}
 
-	asAlloc_LinearFree(pCurrentLinearAllocator, modes);
-	asAlloc_LinearFree(pCurrentLinearAllocator, formats);
+	asFree(modes);
+	asFree(formats);
 
 	/*Additional benifits*/
 	rating += surfaceCaps.maxImageExtent.width + surfaceCaps.maxImageExtent.height;
@@ -237,7 +234,7 @@ bool vDeviceHasRequiredExtensions(VkPhysicalDevice gpu)
 {
 	uint32_t extCount;
 	vkEnumerateDeviceExtensionProperties(gpu, NULL, &extCount, NULL);
-	VkExtensionProperties* availible = (VkExtensionProperties*)asAlloc_LinearMalloc(pCurrentLinearAllocator, sizeof(VkExtensionProperties)*extCount);
+	VkExtensionProperties* availible = (VkExtensionProperties*)asMalloc(sizeof(VkExtensionProperties)*extCount);
 	vkEnumerateDeviceExtensionProperties(gpu, NULL, &extCount, availible);
 
 	bool foundAll = true;
@@ -257,7 +254,7 @@ bool vDeviceHasRequiredExtensions(VkPhysicalDevice gpu)
 			foundAll = false;
 	}
 
-	asAlloc_LinearFree(pCurrentLinearAllocator, availible);
+	asFree(availible);
 	return foundAll;
 }
 
@@ -1656,7 +1653,7 @@ void asVkInit(asAppInfo_t *pAppInfo, asCfgFile_t* pConfig)
 	}
 }
 
-void asVkWindowResize(asLinearMemoryAllocator_t* pLinearAllocator)
+void asVkWindowResize()
 {
 	vScreenResourcesDestroy(&vMainScreen);
 	vScreenResourcesCreate(&vMainScreen, asGetMainWindowPtr());
@@ -1668,7 +1665,7 @@ void vPresentFrame(struct vScreenResources_t *pScreen)
 	VkResult result = vkAcquireNextImageKHR(asVkDevice, pScreen->swapchain, UINT64_MAX,
 		pScreen->swapImageAvailableSemaphores[asVkCurrentFrame], VK_NULL_HANDLE, &imageIndex);
 	if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-		asVkWindowResize(pCurrentLinearAllocator);
+		asVkWindowResize();
 		return;
 	}
 
@@ -1693,7 +1690,7 @@ void vPresentFrame(struct vScreenResources_t *pScreen)
 	presentInfo.pImageIndices = &imageIndex;
 	result = vkQueuePresentKHR(asVkQueue_Present, &presentInfo);
 	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
-		asVkWindowResize(pCurrentLinearAllocator);
+		asVkWindowResize();
 	}
 }
 

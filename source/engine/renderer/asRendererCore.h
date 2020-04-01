@@ -41,7 +41,7 @@ ASEXPORT struct SDL_Window* asGetMainWindowPtr();
 * @brief Initializes the window and renderer
 * @warning The engine ignite should handle this for you
 */
-ASEXPORT void asInitGfx(asLinearMemoryAllocator_t* pLinearAllocator, asAppInfo_t *pAppInfo, void* pCustomWindow);
+ASEXPORT void asInitGfx(asAppInfo_t *pAppInfo, void* pCustomWindow);
 /**
 * @brief Render a single frame
 * @warning The engine update should handle this for you

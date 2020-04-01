@@ -83,7 +83,7 @@ void asVkDrawFrame();
 /**
 * @brief resize a window
 */
-void asVkWindowResize(asLinearMemoryAllocator_t* pLinearAllocator);
+void asVkWindowResize();
 
 /**
 * @brief a memory allocation inside the vulkan backend

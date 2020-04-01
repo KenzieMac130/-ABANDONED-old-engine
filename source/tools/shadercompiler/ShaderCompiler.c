@@ -92,7 +92,7 @@ int main(int argc, char* argv[])
 	}
 
 	/*Compile all Permutations*/
-	for (int j = 0; j < shaderTypeInfo->codePathCount; j++) /*Todo: Fix*/
+	for (int j = 0; j < shaderTypeInfo->codePathCount; j++)
 	{
 		glslToSpirv(&fxCreator, 
 			glslContents, fileSize,

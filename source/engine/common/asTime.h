@@ -1,4 +1,5 @@
-#pragma once
+#ifndef _ASTIME_H_
+#define _ASTIME_H_
 
 #ifdef __cplusplus 
 extern "C" { 
@@ -42,4 +43,5 @@ ASEXPORT double asTimerSeconds(asTimer_t timer, uint64_t ticks);
 
 #ifdef __cplusplus
 }
+#endif
 #endif

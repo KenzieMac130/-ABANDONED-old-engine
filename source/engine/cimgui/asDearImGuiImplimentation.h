@@ -1,5 +1,5 @@
-#ifndef _ASNUKLEARIMPLIMENTATION_H_
-#define _ASNUKLEARIMPLIMENTATION_H_
+#ifndef _ASDEARIMGUIIMPLIMENTATION_H_
+#define _ASDEARIMGUIIMPLIMENTATION_H_
 
 #include "../common/asCommon.h"
 #include "../renderer/asRenderFx.h"

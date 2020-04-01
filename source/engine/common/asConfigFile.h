@@ -37,6 +37,10 @@ ASEXPORT asCfgFile_t* asCfgCreateBlank();
 */
 ASEXPORT void asCfgFree(asCfgFile_t* pCfg);
 /**
+* @brief Free the config file but not mattias ini
+*/
+ASEXPORT void asCfgFree_KeepMattias(asCfgFile_t* pCfg);
+/**
 * @brief Get underlying Mattias Ini Handle (BREAK OUT OF ABSTRACTION)
 */
 ASEXPORT struct ini_t* asCfgGetMattiasPtr(asCfgFile_t* pCfg);

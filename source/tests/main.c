@@ -1,6 +1,7 @@
 #include "engine/engineCore/asEntry.h"
 #include "engine/renderer/asRendererCore.h"
 #include "engine/resource/asResource.h"
+#include "engine/preferences/asPreferences.h"
 #include "engine/common/asHandleManager.h"
 
 #include "engine/nuklear/asNuklearImplimentation.h"
@@ -18,22 +19,25 @@
 #include "reflectTest.h"
 #include "nuklearOverview.h"
 
+#include "engine/guiTools/cmdConsole/asCmdConsole.h"
+
 void onUpdate(double time)
 {
 	/*Test Imgui*/
-	static bool imguiDemoOpen;
+	static bool imguiDemoOpen = true;
 	static bool windowOpen;
 	static bool thing;
 	static float value = 0.0f;
 	static float color[4];
-	igShowDemoWindow(imguiDemoOpen);
+	if (imguiDemoOpen) { igShowDemoWindow(&imguiDemoOpen); }
 
-	igBegin("Astrengine Test Window", &windowOpen, 0);
-	igSliderFloat("Test Float", &value, 0, 5.0f, NULL, 1);
+	/*igSliderFloat("Test Float", &value, 0, 5.0f, NULL, 1);
 	igTextColored((ImVec4) { 1.0f, 0.0f, 1.0f, 0.4f }, "Delta Time: %f", time);
 	igShowUserGuide();
-	igColorPicker4("Color Picker", color, ImGuiColorEditFlags_Float | ImGuiColorEditFlags_PickerHueWheel, NULL);
-	igEnd();
+	igColorPicker4("Color Picker", color, ImGuiColorEditFlags_Float | ImGuiColorEditFlags_PickerHueWheel, NULL);*/
+
+
+	asGuiToolCommandConsoleUI();
 }
 
 asTextureHandle_t texture;
@@ -52,6 +56,34 @@ typedef struct {
 } dInitList;
 dInitList dInK = { .data = (uint32_t []){0,9,2,} };
 
+/*Pref Test*/
+static float testFloat;
+static char testStr[80];
+asResults testCb(const char* propName, void* pCurrentValue, void* pNewValueTmp, void* pUserData)
+{
+	float* pNewFloat = (float*)pNewValueTmp;
+	float* pCurFloat = (float*)pCurrentValue;
+	asDebugLog("test Float is: %f, was: %f", *pNewFloat, *pCurFloat);
+	*pCurFloat = *pNewFloat;
+	return AS_SUCCESS;
+}
+
+asResults showAscii(const char* propName, void* pCurrentValue, void* pNewValueTmp, void* pUserData)
+{
+	asDebugLog("               __ .-~-.   .~``~,._\n"
+		"             .~  `     \\ /     .  `\\\n"
+		"             |     \\    |   .'     |\n"
+		"       _      \\     `.  |  /    __/\n"
+		"    .~` `'. .--;.       ,.O  -~`   `\\\n"
+		"    \\  '-. |     `-  o.O/o, __       |\n"
+		"     '-.,__ \\    .-~' `\\|o `  ~.    /_\n"
+		"       _.--'/   `    ,  /  \\        | `~-.,\n"
+		"      /     |       /  :    '._    / -.    `\\\n"
+		"jgs  /   .-' '.___.;   `      \\`--'\\    `    |\n"
+		"    |          /    \\         /     '.__,.--,/\n"
+		"    '--..,___.'      `~--'--~'");
+}
+
 int main(int argc, char* argv[])
 {
 	asAppInfo_t appInfo = (asAppInfo_t){0};
@@ -60,7 +92,17 @@ int main(int argc, char* argv[])
 	appInfo.appVersion.major = 1; appInfo.appVersion.minor = 0; appInfo.appVersion.patch = 0;
 	atexit(asShutdown);
 	asIgnite(argc, argv, &appInfo, NULL);
+	/*Test Preference System*/
+	{
+		asPreferencesRegisterOpenSection(asGetGlobalPrefs(), "test");
+		asPreferencesRegisterParamFloat(asGetGlobalPrefs(), "testFloat", &testFloat, 0.0f, 1000.0f, testCb, NULL);
+		asPreferencesRegisterParamCString(asGetGlobalPrefs(), "testString", testStr, 80, NULL, NULL);
+		asPreferencesRegisterNullFunction(asGetGlobalPrefs(), "showAsciiArt", showAscii, NULL);
+		strncat(testStr, "I am string", 79);
+		asPreferencesLoadSection(asGetGlobalPrefs(), "test");
 
+		asDebugLog("%.*s", 80, testStr);
+	}
 	/*Test handle manager*/
 	{
 		asHandleManager_t man;
@@ -74,6 +116,19 @@ int main(int argc, char* argv[])
 			}
 		}
 		asHandleManagerDestroy(&man);
+	}
+	/*Test Getting Debug Log Contents*/
+	{
+		_asDebugLoggerGetEntrySecureLogger();
+		size_t debugLogContentCount = _asDebugLoggerGetEntryCount();
+		for (size_t i = 0; i < debugLogContentCount; i++)
+		{
+			const char* entryData = NULL;
+			size_t entryLength;
+			_asDebugLoggerGetEntryAtIdx(i, NULL, &entryData, &entryLength);
+			printf("%.*s\n", entryLength, entryData);
+		}
+		_asDebugLoggerGetEntryReleaseLogger();
 	}
 	/*Test texture creation*/
 	{
@@ -147,11 +202,6 @@ int main(int argc, char* argv[])
 		/*Hash test*/
 		asHash64_t hash = asHashBytes64_xxHash(desc.pInitialContentsBuffer, desc.initialContentsBufferSize);
 		asFree(desc.pInitialContentsBuffer);
-	}
-	/*Test shader loading*/
-	{
-		/*asShaderFxHandle_t fx = asShaderFx_FromResource(asResource_FileIDFromRelativePath("ShaderFileMockup.asfx", 22));*/
-		
 	}
 
 	reflectTest();

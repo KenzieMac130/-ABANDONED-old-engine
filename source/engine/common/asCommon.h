@@ -17,6 +17,7 @@ extern "C" {
 #include <float.h>
 #include <math.h>
 #include <assert.h>
+#include <stdarg.h>
 
 /**
 * @file
@@ -97,15 +98,7 @@ typedef struct {
 	asVersion_t appVersion; /**< Version of the app*/
 } asAppInfo_t;
 
-/**
-* @brief wraps around printf (but can be overriden in the future to output to remote debug tools)
-*/
-#define asDebugLog(_format, ...) printf((_format"\n"), __VA_ARGS__)
-
-/**
-* @brief wraps around printf (but can be overriden in the future to output to remote debug tools)
-*/
-#define asDebugWarning(_format, ...) printf(("[WARNING] " _format"\n"), __VA_ARGS__)
+#include "asDebugLog.h"
 /**
 * @brief Display an error in a platform independent way
 */
@@ -135,6 +128,7 @@ ASEXPORT void asFatalError(const char* msg);
 #include "asHashing.h"
 #include "asTime.h"
 
+#include "../thirdparty/stb/stb_ds.h"
 #include "../thirdparty/tiny-regex/re.h"
 
 #ifdef __cplusplus

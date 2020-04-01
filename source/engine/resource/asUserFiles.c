@@ -5,6 +5,11 @@
 size_t prefPathLength;
 char* prefPath;
 
+ASEXPORT void asUserFileMakePath(const char* currentName, char* outputBuff, size_t outputBuffSize)
+{
+	snprintf(outputBuff, outputBuffSize, "%.*s%s", prefPathLength, prefPath, currentName);
+}
+
 ASEXPORT void asInitUserFiles(const char* developerName, const char* appName)
 {
 	ASASSERT(!prefPath);
@@ -59,7 +64,7 @@ ASEXPORT size_t asUserFileRead(void* pDest, size_t size, size_t count, asUserFil
 
 ASEXPORT size_t asUserFileWrite(void* pSrc, size_t size, size_t count, asUserFile* pUserFile)
 {
-	return fwrite(pSrc, size, count, pUserFile);
+	return fwrite(pSrc, size, count, pUserFile->pFile);
 }
 
 ASEXPORT void asUserFileClose(asUserFile* pUserFile)

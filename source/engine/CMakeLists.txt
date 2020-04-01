@@ -52,6 +52,8 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/renderer)
 #add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/nuklear)
 #asDearImgui
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/cimgui)
+#Gui Tools
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/guiTools)
 #astrengine
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/engineCore) 
 

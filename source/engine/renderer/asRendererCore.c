@@ -96,11 +96,10 @@ ASEXPORT SDL_Window* asGetMainWindowPtr()
 	return asMainWindow;
 }
 
-ASEXPORT void asInitGfx(asLinearMemoryAllocator_t* pLinearAllocator, asAppInfo_t *pAppInfo, void* pCustomWindow)
+ASEXPORT void asInitGfx(asAppInfo_t *pAppInfo, void* pCustomWindow)
 {
 	/*Read Config File*/
 	asCfgFile_t *pConfig = asCfgLoadUserFile("graphics.ini");
-	pCurrentLinearAllocator = pLinearAllocator;
 
 	/*Window Creation*/
 	if (pCustomWindow)
