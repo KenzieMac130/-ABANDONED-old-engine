@@ -15,8 +15,20 @@
 #include "../guiTools/cmdConsole/asCmdConsole.h"
 
 bool gContinueLoop;
+bool gDevConsoleToggleable = true;
+#ifdef NDEBUG
+bool gShowDevConsole = false;
+#else
+bool gShowDevConsole = true;
+#endif
 
 #define GLOBAL_INI_NAME "astrengineConfig.ini"
+
+asResults _commandQuit(const char* propName, void* pCurrentValue, void* pNewValueTmp, void* pUserData)
+{
+	gContinueLoop = false;
+	return AS_SUCCESS;
+}
 
 ASEXPORT int asIgnite(int argc, char *argv[], asAppInfo_t *pAppInfo, void *pCustomWindow)
 {
@@ -39,7 +51,15 @@ ASEXPORT int asIgnite(int argc, char *argv[], asAppInfo_t *pAppInfo, void *pCust
 	asPreferenceManagerCreate(&pPrefMan);
 	_asSetGlobalPrefs(pPrefMan);
 	asPreferencesLoadIni(pPrefMan, GLOBAL_INI_NAME);
-	asGuiToolCommandConsole_RegisterPrefManager(pPrefMan, "g");
+
+	/*Set Global Pref Data*/
+	asPreferencesRegisterOpenSection(asGetGlobalPrefs(), "core");
+	asPreferencesRegisterParamInt32(asGetGlobalPrefs(), "devConsoleEnabled", &gShowDevConsole, 0, 1, false, NULL, NULL, "Show Developer Console");
+	asPreferencesRegisterParamInt32(asGetGlobalPrefs(), "devConsoleToggleable", &gDevConsoleToggleable, 0, 1, true, NULL, NULL, "Dev Console Toggleable Developer Console");
+	asPreferencesRegisterNullFunction(asGetGlobalPrefs(), "quit", _commandQuit, false, NULL, NULL, "Quit Engine (Alt+F4)");
+	asPreferencesLoadSection(asGetGlobalPrefs(), "core");
+
+	asGuiToolCommandConsole_RegisterPrefManager(pPrefMan, "as");
 
 	asInitResource();
 
@@ -72,8 +92,21 @@ ASEXPORT void asShutdown(void)
 	asDebugLog("astrengine Quit...");
 }
 
+ASEXPORT void asToggleDevConsole()
+{
+	if (!gDevConsoleToggleable) { return; }
+
+	if (gShowDevConsole) { gShowDevConsole = false; }
+	else { gShowDevConsole = true; }
+}
+
 ASEXPORT int asLoopSingleShot(double time, asLoopDesc_t loopDesc)
 {
+	/*Dev Console*/
+	if(gShowDevConsole)
+		asGuiToolCommandConsoleUI();
+
+	/*Update Callbacks*/
 	if (loopDesc.fpOnTick)
 		loopDesc.fpOnTick(1.0 / 30);
 	if (loopDesc.fpOnUpdate)
@@ -85,15 +118,17 @@ ASEXPORT int asLoopSingleShot(double time, asLoopDesc_t loopDesc)
 	asImGuiPumpInput();
 #endif
 	asGfxRenderFrame();
+#if ASTRENGINE_DEARIMGUI
 	asImGuiNewFrame(time);
+#endif
 	return 0;
 }
 
 ASEXPORT int asEnterLoop(asLoopDesc_t loopDesc)
 {
-	gContinueLoop = true;
-	float deltaTime = 1.0/1000;
+	float deltaTime = 1.0/30; /*Initial Delta Time*/
 	asTimer_t globalTimer = asTimerStart();
+	gContinueLoop = true;
 	while (gContinueLoop)
 	{
 		deltaTime = (float)asTimerSeconds(globalTimer, asTimerTicksElapsed(globalTimer));

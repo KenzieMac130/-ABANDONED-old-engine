@@ -26,15 +26,18 @@ typedef enum {
 typedef asResults(*asPrefChangeCallback)(const char* propName, void* pCurrentValue, void* pNewValueTmp, void* pUserData);
 
 ASEXPORT asResults asPreferencesRegisterOpenSection(asPreferenceManager* pManager, const char* sectionName);
-ASEXPORT asResults asPreferencesRegisterParamFloat(asPreferenceManager* pManager,  const char* name, float* pVal, float min, float max, asPrefChangeCallback changeCb, void* userData);
-ASEXPORT asResults asPreferencesRegisterParamInt32(asPreferenceManager* pManager, const char* name, int32_t* pVal, int32_t min, int32_t max, asPrefChangeCallback changeCb, void* userData);
-ASEXPORT asResults asPreferencesRegisterParamCString(asPreferenceManager* pManager, const char* name, char* pVal, size_t max, asPrefChangeCallback changeCb, void* userData);
-ASEXPORT asResults asPreferencesRegisterNullFunction(asPreferenceManager* pManager, const char* name, asPrefChangeCallback changeCb, void* userData);
+ASEXPORT asResults asPreferencesRegisterParamFloat(asPreferenceManager* pManager,  const char* name, float* pVal, float min, float max, bool saveLoad, asPrefChangeCallback changeCb, void* userData, const char* helpStr);
+ASEXPORT asResults asPreferencesRegisterParamInt32(asPreferenceManager* pManager, const char* name, int32_t* pVal, int32_t min, int32_t max, bool saveLoad, asPrefChangeCallback changeCb, void* userData, const char* helpStr);
+ASEXPORT asResults asPreferencesRegisterParamCString(asPreferenceManager* pManager, const char* name, char* pVal, size_t max, bool saveLoad, asPrefChangeCallback changeCb, void* userData, const char* helpStr);
+ASEXPORT asResults asPreferencesRegisterNullFunction(asPreferenceManager* pManager, const char* name, asPrefChangeCallback changeCb, void* userData, const char* helpStr);
 
 ASEXPORT asResults asPreferenceManagerCreate(asPreferenceManager** ppManager);
 ASEXPORT asResults asPreferenceManagerDestroy(asPreferenceManager* pManager);
 
 ASEXPORT asResults asPreferencesSetParam(asPreferenceManager* pManager, const char* section, const char* name, const char* valueStr);
+
+ASEXPORT asResults asPreferencesPrintParamHelp(asPreferenceManager* pManager, const char* section, const char* name);
+ASEXPORT asResults asPreferencesPrintParamValue(asPreferenceManager* pManager, const char* section, const char* name);
 
 ASEXPORT asResults asPreferencesLoadIni(asPreferenceManager* pManager, const char* fileName);
 ASEXPORT asResults asPreferencesLoadSection(asPreferenceManager* pManager, const char* section);

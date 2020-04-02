@@ -14,6 +14,8 @@
 #include "../cimgui/asDearImGuiImplimentation.h"
 #endif
 
+#include "../common/preferences/asPreferences.h"
+
 asLinearMemoryAllocator_t* pCurrentLinearAllocator;
 
 ASEXPORT uint32_t asTextureCalcPitch(asColorFormat format, uint32_t width)
@@ -96,11 +98,17 @@ ASEXPORT SDL_Window* asGetMainWindowPtr()
 	return asMainWindow;
 }
 
-ASEXPORT void asInitGfx(asAppInfo_t *pAppInfo, void* pCustomWindow)
-{
-	/*Read Config File*/
-	asCfgFile_t *pConfig = asCfgLoadUserFile("graphics.ini");
+/*Settings*/
+static int32_t gfxSettingsMonitor = 0;
+static int32_t gfxSettingsWinMode = 0;
+static int32_t gfxSettingsWinWidth = 1280;
+static int32_t gfxSettingsWinHeight = 720;
+static int32_t gfxSettingsDevice = -1;
 
+void* gpCustomWindow;
+asAppInfo_t* gpAppInfo;
+void createWindow(asAppInfo_t* pAppInfo, void* pCustomWindow)
+{
 	/*Window Creation*/
 	if (pCustomWindow)
 	{
@@ -108,23 +116,24 @@ ASEXPORT void asInitGfx(asAppInfo_t *pAppInfo, void* pCustomWindow)
 	}
 	else
 	{
-		int monitor = (int)asCfgGetNumber(pConfig, "Monitor", 0);
-		SDL_Rect windowDim; 
+		int monitor = gfxSettingsMonitor;
+		SDL_Rect windowDim;
 		SDL_GetDisplayBounds(monitor, &windowDim);
 		uint32_t windowFlags = 0;
 #if ASTRENGINE_VK
 		windowFlags |= SDL_WINDOW_VULKAN;
 #endif
-		const char* windowModeStr = asCfgGetString(pConfig, "WindowMode", "windowed");
-		if ((asIsStringEqual(windowModeStr, "fullscreen"))) /*Windowed*/
+		if (gfxSettingsWinMode == 0 || gfxSettingsWinMode == 1) /*Windowed*/
 		{
 			windowDim.x = SDL_WINDOWPOS_CENTERED_DISPLAY(monitor);
 			windowDim.y = SDL_WINDOWPOS_CENTERED_DISPLAY(monitor);
-			windowDim.w = (int)asCfgGetNumber(pConfig, "Width", 640);
-			windowDim.h = (int)asCfgGetNumber(pConfig, "Height", 480);
-			
-			if(asIsStringEqual(windowModeStr, "resizable"))
+			windowDim.w = gfxSettingsWinWidth;
+			windowDim.h = gfxSettingsWinHeight;
+
+			if (gfxSettingsWinMode == 1)
+			{
 				windowFlags |= SDL_WINDOW_RESIZABLE;
+			}
 		}
 		else /*Borderless Fullscreen*/
 		{
@@ -140,15 +149,43 @@ ASEXPORT void asInitGfx(asAppInfo_t *pAppInfo, void* pCustomWindow)
 	}
 	if (!asMainWindow)
 	{
-		asCfgFree(pConfig);
 		asFatalError("Failed to find window");
 	}
+}
+
+asResults _applySettings(const char* propName, void* pCurrentValue, void* pNewValueTmp, void* pUserData)
+{
+	SDL_DestroyWindow(asMainWindow);
+	createWindow(gpAppInfo, gpCustomWindow);
+	asGfxTriggerResizeEvent();
+	return AS_SUCCESS;
+}
+
+ASEXPORT void asInitGfx(asAppInfo_t *pAppInfo, void* pCustomWindow)
+{
+	gpCustomWindow = pCustomWindow;
+	gpAppInfo = pAppInfo;
+	/*Setup Config Variables*/
+	asPreferencesRegisterOpenSection(asGetGlobalPrefs(), "gfx");
+	asPreferencesRegisterParamInt32(asGetGlobalPrefs(), "monitor", &gfxSettingsMonitor, 0, 16, true, NULL, NULL, 
+		"Index of the monitor to spawn the window on");
+	asPreferencesRegisterParamInt32(asGetGlobalPrefs(), "windowMode", &gfxSettingsWinMode, 0, 2, true, NULL, NULL,
+		"Window mode (0: Windowed, 1: Resizable Windowed, 2: Borderless Fullscreen)");
+	asPreferencesRegisterParamInt32(asGetGlobalPrefs(), "windowWidth", &gfxSettingsWinWidth, 640, 65536, true, NULL, NULL,
+		"Window hidth");
+	asPreferencesRegisterParamInt32(asGetGlobalPrefs(), "windowHeight", &gfxSettingsWinHeight, 480, 65536, true, NULL, NULL,
+		"Window height");
+	asPreferencesRegisterParamInt32(asGetGlobalPrefs(), "deviceIndex", &gfxSettingsDevice, -1, 64, true, NULL, NULL,
+		"Render device index (GPU) (-1: Autoselect)");
+	asPreferencesRegisterNullFunction(asGetGlobalPrefs(), "applySettings", _applySettings, NULL,
+		"Reinitialize the implimentations as necessary for Settings");
+	asPreferencesLoadSection(asGetGlobalPrefs(), "gfx");
+
+	createWindow(gpAppInfo, gpCustomWindow);
 
 #if ASTRENGINE_VK
-	asVkInit(pAppInfo, pConfig);
+	asVkInit(pAppInfo, gfxSettingsDevice);
 #endif
-
-	asCfgFree(pConfig);
 }
 
 bool _frameSkip = false;

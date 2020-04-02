@@ -50,6 +50,8 @@ ASEXPORT int asLoopSingleShot(double time, asLoopDesc_t loopDesc);
 */
 ASEXPORT void asShutdown(void);
 
+ASEXPORT void asToggleDevConsole();
+
 #ifdef __cplusplus
 }
 #endif

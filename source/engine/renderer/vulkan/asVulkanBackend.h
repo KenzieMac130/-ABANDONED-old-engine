@@ -57,7 +57,7 @@ extern VkDevice asVkDevice;
 * @brief startup vulkan backend
 * creates an instance, device, memory allocator, etc...
 */
-void asVkInit(asAppInfo_t *pAppInfo, asCfgFile_t* pConfig);
+void asVkInit(asAppInfo_t *pAppInfo, int32_t deviceIndex);
 
 /**
 * @brief start shutdown vulkan backend

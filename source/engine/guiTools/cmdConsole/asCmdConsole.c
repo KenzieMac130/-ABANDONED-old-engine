@@ -10,13 +10,23 @@ asPreferenceManager* pNamespacePrefs[MAX_NAMESPACES];
 char namespaceNames[MAX_NAMESPACES][NAMESPACE_MAX_LENGTH];
 
 #define MAX_LINE_INPUT 4096
+//#define COMMAND_HISTORY 16
+//
+//int32_t commandHistoryPoint = 0;
+//char commandHistory[COMMAND_HISTORY][MAX_LINE_INPUT];
 
 int _commandEntryCallback(ImGuiInputTextCallbackData* input)
 {
+	/*if (input->EventKey == ImGuiKey_UpArrow)
+	{
+		commandHistoryPoint--;
+		memcpy(input->Buf, namespaceNames[commandHistoryPoint % COMMAND_HISTORY], MAX_LINE_INPUT);
+	}
 	if (input->EventKey == ImGuiKey_DownArrow)
 	{
-		igOpenPopup("CONSOLE_SUGGESTIONS");
-	}
+		commandHistoryPoint++;
+		memcpy(input->Buf, namespaceNames[commandHistoryPoint % COMMAND_HISTORY], MAX_LINE_INPUT);
+	}*/
 	return 0;
 }
 
@@ -43,6 +53,8 @@ asResults enterCommand(const char* commandString)
 	char* entryStr = NULL;
 	char* arguementStr = NULL;
 	bool startedWhitespace = false;
+	bool helpRequested = false;
+	bool valueRequested = false;
 
 	while (*parsePos != '\0')
 	{
@@ -63,9 +75,19 @@ asResults enterCommand(const char* commandString)
 			*parsePos = '\0';
 			startedWhitespace = true;
 		}
+		else if (entryStr && !startedWhitespace && (*parsePos == '?')) /*Look for arguement as help*/
+		{
+			*parsePos = '\0';
+			helpRequested = true;
+		}
+		else if (entryStr && !startedWhitespace && (*parsePos == '!')) /*Look for arguement as value*/
+		{
+			*parsePos = '\0';
+			valueRequested = true;
+		}
 		else if (!arguementStr && startedWhitespace &! (*parsePos == ' ')) /*Look for beginning of arguement*/
 		{
-			if (*(parsePos + 1) != '\0') { arguementStr = parsePos; }
+			arguementStr = parsePos;
 		}
 		parsePos++;
 	} 
@@ -92,7 +114,12 @@ asResults enterCommand(const char* commandString)
 	}
 
 	/*Submit Pref*/
-	asResults result = asPreferencesSetParam(pPrefMan, sectionStr, entryStr, arguementStr);
+	asResults result;
+	
+	if (helpRequested) { result = asPreferencesPrintParamHelp(pPrefMan, sectionStr, entryStr); }
+	else if (valueRequested) { result = asPreferencesPrintParamValue(pPrefMan, sectionStr, entryStr); }
+	else { result = asPreferencesSetParam(pPrefMan, sectionStr, entryStr, arguementStr); }
+
 	if (result == AS_FAILURE_DATA_DOES_NOT_EXIST)
 	{
 		asDebugError("Command Not Found: %s", commandString);
@@ -109,7 +136,7 @@ asResults enterCommand(const char* commandString)
 
 ASEXPORT void asGuiToolCommandConsoleUI()
 {
-	igSetNextWindowSizeConstraints((ImVec2) { 600, 800 }, (ImVec2){ FLT_MAX, FLT_MAX }, NULL, NULL);
+	igSetNextWindowSizeConstraints((ImVec2) { 400, 600 }, (ImVec2){ FLT_MAX, FLT_MAX }, NULL, NULL);
 	if (igBegin("astrengine Console", NULL, 0))
 	{
 		/*Log*/
@@ -160,6 +187,10 @@ ASEXPORT void asGuiToolCommandConsoleUI()
 			enterCommand(currentText);
 			memset(currentText, 0, MAX_LINE_INPUT);
 		}
+		if (igIsItemHovered(0) && igIsMouseClicked(ImGuiMouseButton_Right, false))
+		{
+			igOpenPopup("CONSOLE_SUGGESTIONS");
+		}
 
 		/*Suggestions*/
 		if (igBeginPopup("CONSOLE_SUGGESTIONS", 0))
@@ -183,7 +214,7 @@ ASEXPORT void asGuiToolCommandConsoleUI()
 								if (igMenuItemBool(entryName, NULL, false, true))
 								{
 									memset(currentText, 0, MAX_LINE_INPUT);
-									snprintf(currentText, MAX_LINE_INPUT, "%s.%s.%s ",
+									snprintf(currentText, MAX_LINE_INPUT, "%s.%s.%s",
 										namespaceNames[n],
 										sectionName,
 										entryName);

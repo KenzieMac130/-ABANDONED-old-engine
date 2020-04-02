@@ -1,5 +1,7 @@
 #include "asDearImGuiImplimentation.h"
 
+#include "../common/preferences/asPreferences.h"
+
 #if ASTRENGINE_DEARIMGUI
 
 #include "SDL_events.h"
@@ -131,6 +133,10 @@ const char* _imguiGetClipboard(void* userData)
 	return _clipboardContent;
 }
 
+static int32_t imguiDrawTestWindow = 0;
+static int32_t imguiDrawStatistics = 0;
+static int32_t imguiDrawStyle = 0;
+
 /*Cursor*/
 static SDL_Cursor* _mouseCursors[ImGuiMouseCursor_COUNT];
 
@@ -141,6 +147,17 @@ void* vIndexBufferBindings[AS_MAX_INFLIGHT];
 ASEXPORT void asInitImGui()
 {
 	asDebugLog("Creating ImGui Backend...");
+
+	/*Settings*/
+	asPreferencesRegisterOpenSection(asGetGlobalPrefs(), "imgui");
+	asPreferencesRegisterParamInt32(asGetGlobalPrefs(), "demoWindowVisible", &imguiDrawTestWindow, 0, 1, false, NULL, NULL,
+		"Show ImGui Demo Window");
+	asPreferencesRegisterParamInt32(asGetGlobalPrefs(), "statisticsVisible", &imguiDrawStatistics, 0, 1, false, NULL, NULL,
+		"Show ImGui Statistics");
+	asPreferencesRegisterParamInt32(asGetGlobalPrefs(), "styleEditorVisible", &imguiDrawStyle, 0, 1, false, NULL, NULL,
+		"Show ImGui Style Editor");
+	asPreferencesLoadSection(asGetGlobalPrefs(), "imgui");
+
 	unsigned char* img;
 	int w = 0, h = 0;
 	/*Setup Imgui*/
@@ -344,6 +361,7 @@ ASEXPORT void asInitImGui()
 
 ASEXPORT void asImGuiDraw(int32_t viewport)
 {
+	/*Drawing*/
 	int viewWidth, viewHeight;
 	asGetRenderDimensions(viewport, true, &viewWidth, &viewHeight);
 	_imguiGetRenderDim(viewport);
@@ -484,6 +502,11 @@ ASEXPORT void asImGuiNewFrame(float time)
 {
 	igNewFrame();
 	pImGuiIo->DeltaTime = time;
+
+	/*Test Windows*/
+	if (imguiDrawTestWindow) { igShowDemoWindow(NULL); }
+	if (imguiDrawStatistics) { igShowMetricsWindow(NULL); }
+	if (imguiDrawStyle) { igShowStyleEditor(NULL); }
 }
 
 ASEXPORT void asImGuiEndFrame()
@@ -493,8 +516,7 @@ ASEXPORT void asImGuiEndFrame()
 
 ASEXPORT void asImGuiReset()
 {
-	asImGuiNewFrame(0.0f);
-	asImGuiEndFrame();
+	igRender();
 }
 
 bool _mousePressed[3];

@@ -1400,7 +1400,7 @@ void vScreenResourcesDestroy(struct vScreenResources_t *pScreen)
 		vkDestroySurfaceKHR(asVkInstance, pScreen->surface, AS_VK_MEMCB);
 }
 
-void asVkInit(asAppInfo_t *pAppInfo, asCfgFile_t* pConfig)
+void asVkInit(asAppInfo_t *pAppInfo, int32_t deviceIndex)
 {
 	asDebugLog("Starting Vulkan Backend...");
 	/*Create Instance*/
@@ -1458,7 +1458,7 @@ void asVkInit(asAppInfo_t *pAppInfo, asCfgFile_t* pConfig)
 		VkPhysicalDevice *gpus = asMalloc(gpuCount * sizeof(VkPhysicalDevice));
 		vkEnumeratePhysicalDevices(asVkInstance, &gpuCount, gpus);
 
-		int preferredGPU = (int)asCfgGetNumber(pConfig, "GPUIndex", -1);
+		int preferredGPU = deviceIndex;
 		if (preferredGPU >= 0 && preferredGPU < (int)gpuCount) /*User selected GPU*/
 		{
 			asVkPhysicalDevice = gpus[preferredGPU];

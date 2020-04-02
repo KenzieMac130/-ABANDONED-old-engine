@@ -8,6 +8,8 @@
 struct prefEntry {
 	const char* name;
 	asPrefType type;
+	bool saveLoad;
+	const char* helpStr;
 	union {
 		void* pValue;
 		float* pFValue;
@@ -44,7 +46,7 @@ struct asPreferenceManager {
 
 asPreferenceManager* globalPrefs;
 ASEXPORT asPreferenceManager* asGetGlobalPrefs() { return globalPrefs; }
-ASEXPORT void _asSetGlobalPrefs(asPreferenceManager* prefs) 
+ASEXPORT void _asSetGlobalPrefs(asPreferenceManager* prefs)
 {
 	globalPrefs = prefs;
 }
@@ -81,10 +83,12 @@ ASEXPORT asResults asPreferencesRegisterOpenSection(asPreferenceManager* pManage
 
 #define _PUTPARAM(_manager, _str, _entry) shput(_manager->sectionHM[_manager->activeSectionId].value.prefHM, _str, _entry)
 
-ASEXPORT asResults asPreferencesRegisterParamFloat(asPreferenceManager* pManager, const char* name, float* pVal, float min, float max, asPrefChangeCallback changeCb, void* userData)
+ASEXPORT asResults asPreferencesRegisterParamFloat(asPreferenceManager* pManager, const char* name, float* pVal, float min, float max, bool saveLoad, asPrefChangeCallback changeCb, void* userData, const char* helpStr)
 {
 	struct prefEntry entry = (struct prefEntry){ 0 };
 	entry.name = name;
+	entry.saveLoad = saveLoad;
+	entry.helpStr = helpStr;
 	entry.userData = userData;
 	entry.changeCallback = changeCb;
 
@@ -97,10 +101,12 @@ ASEXPORT asResults asPreferencesRegisterParamFloat(asPreferenceManager* pManager
 	return AS_SUCCESS;
 }
 
-ASEXPORT asResults asPreferencesRegisterParamInt32(asPreferenceManager* pManager, const char* name, int32_t* pVal, int32_t min, int32_t max, asPrefChangeCallback changeCb, void* userData)
+ASEXPORT asResults asPreferencesRegisterParamInt32(asPreferenceManager* pManager, const char* name, int32_t* pVal, int32_t min, int32_t max, bool saveLoad, asPrefChangeCallback changeCb, void* userData, const char* helpStr)
 {
 	struct prefEntry entry = (struct prefEntry){ 0 };
 	entry.name = name;
+	entry.saveLoad = saveLoad;
+	entry.helpStr = helpStr;
 	entry.userData = userData;
 	entry.changeCallback = changeCb;
 
@@ -113,10 +119,12 @@ ASEXPORT asResults asPreferencesRegisterParamInt32(asPreferenceManager* pManager
 	return AS_SUCCESS;
 }
 
-ASEXPORT asResults asPreferencesRegisterParamCString(asPreferenceManager* pManager, const char* name, char* pVal, size_t max, asPrefChangeCallback changeCb, void* userData)
+ASEXPORT asResults asPreferencesRegisterParamCString(asPreferenceManager* pManager, const char* name, char* pVal, size_t max, bool saveLoad, asPrefChangeCallback changeCb, void* userData, const char* helpStr)
 {
 	struct prefEntry entry = (struct prefEntry){ 0 };
 	entry.name = name;
+	entry.saveLoad = saveLoad;
+	entry.helpStr = helpStr;
 	entry.userData = userData;
 	entry.changeCallback = changeCb;
 
@@ -128,10 +136,12 @@ ASEXPORT asResults asPreferencesRegisterParamCString(asPreferenceManager* pManag
 	return AS_SUCCESS;
 }
 
-ASEXPORT asResults asPreferencesRegisterNullFunction(asPreferenceManager* pManager, const char* name, asPrefChangeCallback changeCb, void* userData)
+ASEXPORT asResults asPreferencesRegisterNullFunction(asPreferenceManager* pManager, const char* name, asPrefChangeCallback changeCb, void* userData, const char* helpStr)
 {
 	struct prefEntry entry = (struct prefEntry){ 0 };
 	entry.name = name;
+	entry.saveLoad = false;
+	entry.helpStr = helpStr;
 	entry.userData = userData;
 	entry.changeCallback = changeCb;
 
@@ -141,8 +151,7 @@ ASEXPORT asResults asPreferencesRegisterNullFunction(asPreferenceManager* pManag
 	return AS_SUCCESS;
 }
 
-/*Setting/Calling*/
-ASEXPORT asResults asPreferencesSetParam(asPreferenceManager* pManager, const char* sectionName, const char* name, const char* valueStrEntered)
+asResults _preferencesSetParam(asPreferenceManager* pManager, const char* sectionName, const char* name, const char* valueStrEntered, bool fromIni)
 {
 	/*Find Section*/
 	struct prefSection* pSection = &shget(pManager->sectionHM, sectionName);
@@ -151,6 +160,9 @@ ASEXPORT asResults asPreferencesSetParam(asPreferenceManager* pManager, const ch
 	/*Find Param*/
 	struct prefEntry* pEntry = &shget(pSection->prefHM, name);
 	if (!pEntry->name) { return AS_FAILURE_DATA_DOES_NOT_EXIST; }
+
+	/*Don't Load from Ini if asked not to*/
+	if (!pEntry->saveLoad && fromIni) { return AS_SUCCESS; }
 
 	/*No Value might be Acceptable*/
 	if (!valueStrEntered && pEntry->type != AS_PREFTYPE_NULL) { return AS_FAILURE_INVALID_PARAM; }
@@ -201,6 +213,66 @@ ASEXPORT asResults asPreferencesSetParam(asPreferenceManager* pManager, const ch
 	}
 }
 
+/*Setting/Calling*/
+ASEXPORT asResults asPreferencesSetParam(asPreferenceManager* pManager, const char* sectionName, const char* name, const char* valueStrEntered)
+{
+	return _preferencesSetParam(pManager, sectionName, name, valueStrEntered, false);
+}
+
+ASEXPORT asResults asPreferencesPrintParamHelp(asPreferenceManager* pManager, const char* sectionName, const char* name)
+{
+	/*Find Section*/
+	struct prefSection* pSection = &shget(pManager->sectionHM, sectionName);
+	if (!pSection->valid) { return AS_FAILURE_DATA_DOES_NOT_EXIST; }
+
+	/*Find Param*/
+	struct prefEntry* pEntry = &shget(pSection->prefHM, name);
+	if (!pEntry->name) { return AS_FAILURE_DATA_DOES_NOT_EXIST; }
+
+	/*If No Help Available*/
+	if (!pEntry->helpStr) { 
+		asDebugLog("No Help Available for \"%s.%s\"... :(", sectionName, name); 
+		return AS_SUCCESS; 
+	}
+
+	asDebugLog("\"%s.%s\"?: %s", sectionName, name, pEntry->helpStr);
+	return AS_SUCCESS;
+}
+
+ASEXPORT asResults asPreferencesPrintParamValue(asPreferenceManager* pManager, const char* sectionName, const char* name)
+{
+	/*Find Section*/
+	struct prefSection* pSection = &shget(pManager->sectionHM, sectionName);
+	if (!pSection->valid) { return AS_FAILURE_DATA_DOES_NOT_EXIST; }
+
+	/*Find Param*/
+	struct prefEntry* pEntry = &shget(pSection->prefHM, name);
+	if (!pEntry->name) { return AS_FAILURE_DATA_DOES_NOT_EXIST; }
+
+	if(!pEntry->pValue) { 
+		asDebugLog("Direct Access to Value Not Available for \"%s.%s\"... :(", sectionName, name);
+		return AS_SUCCESS;
+	}
+
+	switch (pEntry->type)
+	{
+	case AS_PREFTYPE_FLOAT:
+		asDebugLog("\"%s.%s\" = %f", sectionName, name, *pEntry->pFValue);
+		break;
+	case AS_PREFTYPE_INT32:
+		asDebugLog("\"%s.%s\" = %d", sectionName, name, *pEntry->pI32Value);
+		break;
+	case AS_PREFTYPE_CSTRING:
+		asDebugLog("\"%s.%s\" = %.*s", sectionName, name, pEntry->strMax, pEntry->pStrValue);
+		break;
+	default:
+		asDebugLog("Command \"%s.%s\" is a Pure Function", sectionName, name);
+		break;
+	}
+
+	return AS_SUCCESS;
+}
+
 /*Load/Save*/
 ASEXPORT asResults asPreferencesLoadIni(asPreferenceManager* pManager, const char* fileName)
 {
@@ -219,7 +291,7 @@ ASEXPORT asResults asPreferencesLoadSection(asPreferenceManager* pManager, const
 	{
 		const char* propName = ini_property_name(pManager->pIniFile, iniSectionId, i);
 		const char* propValue = ini_property_value(pManager->pIniFile, iniSectionId, i);
-		asPreferencesSetParam(pManager, sectionName, propName, propValue);
+		_preferencesSetParam(pManager, sectionName, propName, propValue, true);
 	}
 	return AS_SUCCESS;
 }
@@ -238,12 +310,16 @@ ASEXPORT asResults asPreferencesSaveSectionsToIni(asPreferenceManager* pManager,
 	{
 		const struct prefSection section = pManager->sectionHM[i].value;
 		const char* sectionName = pManager->sectionHM[i].key;
-		int iniSectionId = ini_section_add(saverIni, sectionName, strlen(sectionName));
+		int iniSectionId = INI_NOT_FOUND;
 		for (int j = 0; j < shlen(section.prefHM); j++)
 		{
 			const char* entryName = section.prefHM[j].key;
 			const struct prefEntry entry = section.prefHM[j].value;
-			
+			if (!entry.saveLoad) { continue; }
+
+			if(iniSectionId == INI_NOT_FOUND)
+				iniSectionId = ini_section_add(saverIni, sectionName, strlen(sectionName));
+
 			char valueName[128];
 			memset(valueName, 0, 128);
 			const char* dataPtr = valueName;

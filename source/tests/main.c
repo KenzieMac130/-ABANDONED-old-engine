@@ -23,21 +23,7 @@
 
 void onUpdate(double time)
 {
-	/*Test Imgui*/
-	static bool imguiDemoOpen = true;
-	static bool windowOpen;
-	static bool thing;
-	static float value = 0.0f;
-	static float color[4];
-	if (imguiDemoOpen) { igShowDemoWindow(&imguiDemoOpen); }
-
-	/*igSliderFloat("Test Float", &value, 0, 5.0f, NULL, 1);
-	igTextColored((ImVec4) { 1.0f, 0.0f, 1.0f, 0.4f }, "Delta Time: %f", time);
-	igShowUserGuide();
-	igColorPicker4("Color Picker", color, ImGuiColorEditFlags_Float | ImGuiColorEditFlags_PickerHueWheel, NULL);*/
-
-
-	asGuiToolCommandConsoleUI();
+	
 }
 
 asTextureHandle_t texture;
@@ -95,9 +81,9 @@ int main(int argc, char* argv[])
 	/*Test Preference System*/
 	{
 		asPreferencesRegisterOpenSection(asGetGlobalPrefs(), "test");
-		asPreferencesRegisterParamFloat(asGetGlobalPrefs(), "testFloat", &testFloat, 0.0f, 1000.0f, testCb, NULL);
-		asPreferencesRegisterParamCString(asGetGlobalPrefs(), "testString", testStr, 80, NULL, NULL);
-		asPreferencesRegisterNullFunction(asGetGlobalPrefs(), "showAsciiArt", showAscii, NULL);
+		asPreferencesRegisterParamFloat(asGetGlobalPrefs(), "testFloat", &testFloat, 0.0f, 1000.0f, false, testCb, NULL, NULL);
+		asPreferencesRegisterParamCString(asGetGlobalPrefs(), "testString", testStr, 80, false, NULL, NULL, NULL);
+		asPreferencesRegisterNullFunction(asGetGlobalPrefs(), "showAsciiArt", showAscii, false, NULL, NULL);
 		strncat(testStr, "I am string", 79);
 		asPreferencesLoadSection(asGetGlobalPrefs(), "test");
 

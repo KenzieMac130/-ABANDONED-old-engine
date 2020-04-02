@@ -25,6 +25,10 @@ ASEXPORT void asPollOSEvents()
 		case SDL_QUIT:
 			asExitLoop();
 			break;
+		case SDL_KEYDOWN:
+			if (event.key.keysym.scancode == SDL_SCANCODE_GRAVE) /*Dev Console Toggle*/
+				asToggleDevConsole();
+			break;
 		case SDL_WINDOWEVENT:
 			switch (event.window.event)
 			{
