@@ -2,9 +2,7 @@
 In-House Game Engine by Alex Strand
 
 ## Features
-* Flexibility
-  * Modularized codebase
-  * Compartmentalized C/C++
+* Itteration Flexibility
   * Library structure encourages Engine/Game or Engine/Tool separation
   * Start creating a new tool in only a few more lines-of-code than "Hello World"
   * Immediate Mode GUI via ImGui/CImGui for rapid tool development (with optional Nuklear backend)
