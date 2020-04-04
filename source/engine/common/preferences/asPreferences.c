@@ -75,8 +75,8 @@ ASEXPORT asResults asPreferenceManagerDestroy(asPreferenceManager* pManager)
 /*Registration*/
 ASEXPORT asResults asPreferencesRegisterOpenSection(asPreferenceManager* pManager, const char* sectionName)
 {
-	struct prefSection section = { true };
-	shput(pManager->sectionHM, sectionName, section);
+	struct prefSection* pSection = &shget(pManager->sectionHM, sectionName);
+	if (!pSection->valid) { struct prefSection section = { true }; shput(pManager->sectionHM, sectionName, section); }
 	pManager->activeSectionId = shgeti(pManager->sectionHM, sectionName);
 	return AS_SUCCESS;
 }

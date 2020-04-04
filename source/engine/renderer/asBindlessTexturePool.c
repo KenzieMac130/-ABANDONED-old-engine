@@ -63,7 +63,7 @@ ASEXPORT asResults asTexturePoolRelease(asBindlessTextureIndex textureIndex)
 
 ASEXPORT asResults asInitTexturePool()
 {
-	asPreferencesRegisterOpenSection(asGetGlobalPrefs(), "texturePool");
+	asPreferencesRegisterOpenSection(asGetGlobalPrefs(), "gfx");
 	asPreferencesRegisterParamInt32(asGetGlobalPrefs(), "debugActiveTextureViewer", &showTexturePoolDebugWindow, 0, 1, false, NULL, NULL, "Show Texture Pool Dump");
 
 	/*Missing Texture*/
