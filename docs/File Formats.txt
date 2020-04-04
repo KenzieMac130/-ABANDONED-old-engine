@@ -14,7 +14,7 @@ asScn:
 	
 3rd Party
 	mp3: Standard audio
-	dds: Texture
+	ktx: Texture
 	newt: Serialized Newton Collision Object 
 	
 	
