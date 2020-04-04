@@ -70,6 +70,11 @@ asResults showAscii(const char* propName, void* pCurrentValue, void* pNewValueTm
 		"    '--..,___.'      `~--'--~'");
 }
 
+asResults doReflectTest(const char* propName, void* pCurrentValue, void* pNewValueTmp, void* pUserData)
+{
+	reflectTest();
+}
+
 int main(int argc, char* argv[])
 {
 	asAppInfo_t appInfo = (asAppInfo_t){0};
@@ -84,7 +89,7 @@ int main(int argc, char* argv[])
 		asPreferencesRegisterParamFloat(asGetGlobalPrefs(), "testFloat", &testFloat, 0.0f, 1000.0f, false, testCb, NULL, NULL);
 		asPreferencesRegisterParamCString(asGetGlobalPrefs(), "testString", testStr, 80, false, NULL, NULL, NULL);
 		asPreferencesRegisterNullFunction(asGetGlobalPrefs(), "showAsciiArt", showAscii, false, NULL, NULL);
-		strncat(testStr, "I am string", 79);
+		asPreferencesRegisterNullFunction(asGetGlobalPrefs(), "reflectTest", doReflectTest, false, NULL, NULL);
 		asPreferencesLoadSection(asGetGlobalPrefs(), "test");
 
 		asDebugLog("%.*s", 80, testStr);
@@ -176,8 +181,6 @@ int main(int argc, char* argv[])
 		asHash64_t hash = asHashBytes64_xxHash(desc.pInitialContentsBuffer, desc.initialContentsBufferSize);
 		asFree(desc.pInitialContentsBuffer);
 	}
-
-	reflectTest();
 
 	asLoopDesc_t loopDesc;
 	loopDesc.fpOnUpdate = (asUpdateFunction_t)onUpdate;

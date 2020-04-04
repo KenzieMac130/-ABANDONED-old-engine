@@ -40,8 +40,8 @@ void _asTexturePoolDebug()
 		igDragFloat("W", &squash, 0.1f, 0.0, 5.0, NULL, 1.0);
 		igDragFloat("H", &stretch, 0.1f, 0.0, 5.0, NULL, 1.0);
 		igImage((ImTextureID)idx, (ImVec2) { 256.0f * squash, 256.0f * stretch }, (ImVec2) { 0, 0 }, (ImVec2) { 1, 1 }, (ImVec4) { 1, 1, 1, 1 }, (ImVec4) { 1, 1, 1, 1 });
-		igEnd();
 	}
+	igEnd();
 #endif
 }
 

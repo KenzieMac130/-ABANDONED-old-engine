@@ -258,7 +258,6 @@ ASEXPORT void asGuiToolCommandConsoleUI()
 
 		if (reclaimCommandFocus)
 			igSetKeyboardFocusHere(-1);
-
-		igEnd();
 	}
+	igEnd();
 }
