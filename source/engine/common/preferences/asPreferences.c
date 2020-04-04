@@ -250,8 +250,7 @@ ASEXPORT asResults asPreferencesPrintParamValue(asPreferenceManager* pManager, c
 	if (!pEntry->name) { return AS_FAILURE_DATA_DOES_NOT_EXIST; }
 
 	if(!pEntry->pValue) { 
-		asDebugLog("Direct Access to Value Not Available for \"%s.%s\"... :(", sectionName, name);
-		return AS_SUCCESS;
+		return AS_FAILURE_UNKNOWN_FORMAT;
 	}
 
 	switch (pEntry->type)

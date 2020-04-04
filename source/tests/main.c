@@ -103,19 +103,6 @@ int main(int argc, char* argv[])
 		}
 		asHandleManagerDestroy(&man);
 	}
-	/*Test Getting Debug Log Contents*/
-	{
-		_asDebugLoggerGetEntrySecureLogger();
-		size_t debugLogContentCount = _asDebugLoggerGetEntryCount();
-		for (size_t i = 0; i < debugLogContentCount; i++)
-		{
-			const char* entryData = NULL;
-			size_t entryLength;
-			_asDebugLoggerGetEntryAtIdx(i, NULL, &entryData, &entryLength);
-			printf("%.*s\n", entryLength, entryData);
-		}
-		_asDebugLoggerGetEntryReleaseLogger();
-	}
 	/*Test texture creation*/
 	{
 		//asResourceType_t resourceType_Texture = asResource_RegisterType("TEXTURE", 7);

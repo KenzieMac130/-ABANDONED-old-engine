@@ -15,28 +15,25 @@
 #include <SDL_vulkan.h>
 #endif
 
+#include "../renderer/asBindlessTexturePool.h"
+
 #define AS_IMGUI_MAX_VERTS 65536
 #define AS_IMGUI_MAX_INDICES 65536
 ImGuiContext* pImGuiContext;
 ImGuiIO* pImGuiIo;
 
 asTextureHandle_t imGuiFontTexture;
+asBindlessTextureIndex imGuiFontTextureIndex;
 
 asBufferHandle_t imGuiVertexBuffer[AS_MAX_INFLIGHT];
 asBufferHandle_t imGuiIndexBuffer[AS_MAX_INFLIGHT];
 
 asShaderFx imGuiShaderFx;
 
-//ImFontAtlas imGuiFontAtlas;
 #define AS_BINDING_GUI_TEXTURE 300
 
 #if ASTRENGINE_VK
-VkDescriptorSetLayout imGuiDescriptorSetLayout;
 VkPipelineLayout imGuiPipelineLayout;
-VkDescriptorPool imGuiDescriptorPool;
-
-/*Descriptor Set for the Default Font*/
-VkDescriptorSet vkImGuiDefaultFontDescriptorSet;
 #endif
 
 typedef struct {
@@ -243,6 +240,8 @@ ASEXPORT void asInitImGui()
 		desc.pInitialContentsBuffer = img;
 		desc.pDebugLabel = "DearImGuiFont";
 		imGuiFontTexture = asCreateTexture(&desc);
+		asTexturePoolAddFromHandle(imGuiFontTexture, &imGuiFontTextureIndex);
+		pImGuiIo->Fonts->TexID = imGuiFontTextureIndex;
 	}
 	/*Create vertex buffer*/
 	{
@@ -277,64 +276,16 @@ ASEXPORT void asInitImGui()
 	}
 	/*Setup Pipeline Layout*/
 	{
-		VkDescriptorSetLayoutBinding descriptorBindings[] = {
-			(VkDescriptorSetLayoutBinding){
-				.binding = AS_BINDING_GUI_TEXTURE,
-				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-				.descriptorCount = 1,
-				.pImmutableSamplers = asVkGetSimpleSamplerPtr(true),
-				.stageFlags = VK_SHADER_STAGE_ALL,
-			}
-		};
-
-		VkDescriptorSetLayoutCreateInfo descriptorSetLayoutInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
-		descriptorSetLayoutInfo.bindingCount = ASARRAYLEN(descriptorBindings);
-		descriptorSetLayoutInfo.pBindings = descriptorBindings;
-		if (vkCreateDescriptorSetLayout(asVkDevice, &descriptorSetLayoutInfo, AS_VK_MEMCB, &imGuiDescriptorSetLayout) != VK_SUCCESS)
-			asFatalError("vkCreateDescriptorSetLayout() Failed to create imGuiDescriptorSetLayout");
+		VkDescriptorSetLayout descSetLayouts[1] = { 0 };
+		asVkGetTexturePoolDescSetLayout(&descSetLayouts[0]);
 
 		VkPipelineLayoutCreateInfo createInfo = (VkPipelineLayoutCreateInfo){ VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
-		createInfo.setLayoutCount = 1;
-		createInfo.pSetLayouts = &imGuiDescriptorSetLayout; 
+		createInfo.setLayoutCount = ASARRAYLEN(descSetLayouts);
+		createInfo.pSetLayouts = descSetLayouts;
 		createInfo.pushConstantRangeCount = 1;
 		createInfo.pPushConstantRanges = &(VkPushConstantRange) { VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(imGuiPushData) };
 		if (vkCreatePipelineLayout(asVkDevice, &createInfo, AS_VK_MEMCB, &imGuiPipelineLayout) != VK_SUCCESS)
 			asFatalError("vkCreatePipelineLayout() Failed to create imGuiPipelineLayout");
-	}
-	/*Descriptor Pool*/
-	{
-		VkDescriptorPoolSize fontImagePoolSize = { 0 };
-		fontImagePoolSize.descriptorCount = 1;
-		fontImagePoolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-
-		VkDescriptorPoolCreateInfo createInfo = (VkDescriptorPoolCreateInfo){ VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
-		createInfo.maxSets = 1;
-		createInfo.poolSizeCount = 1;
-		createInfo.pPoolSizes = &fontImagePoolSize;
-		if (vkCreateDescriptorPool(asVkDevice, &createInfo, AS_VK_MEMCB, &imGuiDescriptorPool) != VK_SUCCESS)
-			asFatalError("vkCreateDescriptorPool() Failed to create imGuiDescriptorPool");
-	}
-	/*Descriptor Set*/
-	{
-		VkDescriptorSetAllocateInfo descSetAllocInfo = (VkDescriptorSetAllocateInfo){ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
-		descSetAllocInfo.descriptorPool = imGuiDescriptorPool;
-		descSetAllocInfo.descriptorSetCount = 1;
-		descSetAllocInfo.pSetLayouts = &imGuiDescriptorSetLayout;
-		if (vkAllocateDescriptorSets(asVkDevice, &descSetAllocInfo, &vkImGuiDefaultFontDescriptorSet) != VK_SUCCESS)
-			asFatalError("vkAllocateDescriptorSets() Failed to allocate vkImGuiDefaultFontDescriptorSet");
-
-		VkWriteDescriptorSet descSetWrite = (VkWriteDescriptorSet){ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
-		descSetWrite.dstSet = vkImGuiDefaultFontDescriptorSet;
-		descSetWrite.dstBinding = AS_BINDING_GUI_TEXTURE;
-		descSetWrite.descriptorCount = 1;
-		descSetWrite.dstArrayElement = 0;
-		descSetWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		descSetWrite.pImageInfo = &(VkDescriptorImageInfo) {
-			.sampler = *asVkGetSimpleSamplerPtr(true),
-			.imageView = asVkGetViewFromTexture(imGuiFontTexture),
-			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-		};
-		vkUpdateDescriptorSets(asVkDevice, 1, &descSetWrite, 0, NULL);
 	}
 #endif
 	/*Load shader*/
@@ -410,7 +361,7 @@ ASEXPORT void asImGuiDraw(int32_t viewport)
 
 	/*Bind shader pipeline*/
 	vkCmdBindPipeline(vCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, (VkPipeline)imGuiShaderFx.pipelines[0]);
-	vkCmdBindDescriptorSets(vCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, imGuiPipelineLayout, 0, 1, &vkImGuiDefaultFontDescriptorSet, 0, NULL);
+	asTexturePoolBindCmd(AS_GFXAPI_VULKAN, &vCmd, &imGuiPipelineLayout);
 
 	/*Begin Render Pass*/
 	VkClearValue clearValues[] = {
@@ -610,8 +561,6 @@ ASEXPORT void asShutdownGfxImGui()
 {
 	asFreeShaderFx(&imGuiShaderFx);
 #if ASTRENGINE_VK
-	vkDestroyDescriptorPool(asVkDevice, imGuiDescriptorPool, AS_VK_MEMCB);
-	vkDestroyDescriptorSetLayout(asVkDevice, imGuiDescriptorSetLayout, AS_VK_MEMCB);
 	vkDestroyPipelineLayout(asVkDevice, imGuiPipelineLayout, AS_VK_MEMCB);
 	for (int i = 0; i < AS_MAX_INFLIGHT; i++)
 	{
@@ -621,6 +570,7 @@ ASEXPORT void asShutdownGfxImGui()
 		asReleaseBuffer(imGuiIndexBuffer[i]);
 	}
 #endif
+	asTexturePoolRelease(imGuiFontTextureIndex);
 	asReleaseTexture(imGuiFontTexture);
 }
 

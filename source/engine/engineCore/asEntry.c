@@ -14,8 +14,8 @@
 
 #include "../guiTools/cmdConsole/asCmdConsole.h"
 
-bool gContinueLoop;
-bool gDevConsoleToggleable = true;
+int32_t gContinueLoop;
+int32_t gDevConsoleToggleable = 1;
 #ifdef NDEBUG
 bool gShowDevConsole = false;
 #else
@@ -112,6 +112,7 @@ ASEXPORT int asLoopSingleShot(double time, asLoopDesc_t loopDesc)
 	if (loopDesc.fpOnUpdate)
 		loopDesc.fpOnUpdate(time);
 
+	asGfxInternalDebugDraws();
 	asImGuiEndFrame();
 	asPollOSEvents();
 #if ASTRENGINE_DEARIMGUI

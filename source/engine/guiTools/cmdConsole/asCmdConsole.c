@@ -10,23 +10,41 @@ asPreferenceManager* pNamespacePrefs[MAX_NAMESPACES];
 char namespaceNames[MAX_NAMESPACES][NAMESPACE_MAX_LENGTH];
 
 #define MAX_LINE_INPUT 4096
-//#define COMMAND_HISTORY 16
-//
-//int32_t commandHistoryPoint = 0;
-//char commandHistory[COMMAND_HISTORY][MAX_LINE_INPUT];
+#define COMMAND_HISTORY 32
+
+int32_t commandHistoryNewest = 0;
+int32_t commandHistoryPoint = 0;
+char commandHistory[COMMAND_HISTORY][MAX_LINE_INPUT] = { "COMMAND" };
 
 int _commandEntryCallback(ImGuiInputTextCallbackData* input)
 {
-	/*if (input->EventKey == ImGuiKey_UpArrow)
+	bool changeHistory = false;
+	if (input->EventKey == ImGuiKey_UpArrow)
 	{
-		commandHistoryPoint--;
-		memcpy(input->Buf, namespaceNames[commandHistoryPoint % COMMAND_HISTORY], MAX_LINE_INPUT);
+		if (commandHistoryPoint >= commandHistoryNewest)
+		{
+			memcpy(commandHistory[commandHistoryPoint % COMMAND_HISTORY], input->Buf, MAX_LINE_INPUT);
+			commandHistoryPoint = commandHistoryNewest;
+		}
+		if (commandHistoryPoint > (commandHistoryNewest - COMMAND_HISTORY > 0 ? commandHistoryNewest - COMMAND_HISTORY : 0))
+		{
+			commandHistoryPoint--;
+			changeHistory = true;
+		}
 	}
 	if (input->EventKey == ImGuiKey_DownArrow)
 	{
-		commandHistoryPoint++;
-		memcpy(input->Buf, namespaceNames[commandHistoryPoint % COMMAND_HISTORY], MAX_LINE_INPUT);
-	}*/
+		if (commandHistoryPoint < commandHistoryNewest)
+		{
+			commandHistoryPoint++;
+			changeHistory = true;
+		}
+	}
+	if (changeHistory)
+	{
+		ImGuiInputTextCallbackData_DeleteChars(input, 0, input->BufTextLen);
+		ImGuiInputTextCallbackData_InsertChars(input, 0, commandHistory[commandHistoryPoint % COMMAND_HISTORY], NULL);
+	}
 	return 0;
 }
 
@@ -118,16 +136,21 @@ asResults enterCommand(const char* commandString)
 	
 	if (helpRequested) { result = asPreferencesPrintParamHelp(pPrefMan, sectionStr, entryStr); }
 	else if (valueRequested) { result = asPreferencesPrintParamValue(pPrefMan, sectionStr, entryStr); }
-	else { result = asPreferencesSetParam(pPrefMan, sectionStr, entryStr, arguementStr); }
+	else { result = asPreferencesSetParam(pPrefMan, sectionStr, entryStr, arguementStr); asPreferencesPrintParamValue(pPrefMan, sectionStr, entryStr); }
 
 	if (result == AS_FAILURE_DATA_DOES_NOT_EXIST)
 	{
 		asDebugError("Command Not Found: %s", commandString);
 		return AS_FAILURE_DATA_DOES_NOT_EXIST;
 	}
-	if (result == AS_FAILURE_INVALID_PARAM)
+	else if (result == AS_FAILURE_INVALID_PARAM)
 	{
 		asDebugError("Arguement Required but Not Given: %s", commandString);
+		return AS_FAILURE_INVALID_PARAM;
+	}
+	else if (result == AS_FAILURE_UNKNOWN_FORMAT)
+	{
+		asDebugError("No Retrievable Value: %s", commandString);
 		return AS_FAILURE_INVALID_PARAM;
 	}
 
@@ -158,8 +181,8 @@ ASEXPORT void asGuiToolCommandConsoleUI()
 				bool colorPopNecessary = false;
 				switch (severity)
 				{
-				case AS_DEBUGLOG_WARNING: igPushStyleColor(ImGuiCol_Text, (ImVec4) { 1.0, 0.7, 0.0f, 1.0f }); colorPopNecessary = true; break;
-				case AS_DEBUGLOG_ERROR: igPushStyleColor(ImGuiCol_Text, (ImVec4) { 1.0, 0.2, 0.0f, 1.0f }); colorPopNecessary = true; break;
+				case AS_DEBUGLOG_WARNING: igPushStyleColor(ImGuiCol_Text, (ImVec4) { 1.0f, 0.7f, 0.0f, 1.0f }); colorPopNecessary = true; break;
+				case AS_DEBUGLOG_ERROR: igPushStyleColor(ImGuiCol_Text, (ImVec4) { 1.0f, 0.2f, 0.0f, 1.0f }); colorPopNecessary = true; break;
 				}
 
 				igTextUnformatted(msgContent, msgContent + msgLength);
@@ -185,6 +208,9 @@ ASEXPORT void asGuiToolCommandConsoleUI()
 		{
 			reclaimCommandFocus = true;
 			enterCommand(currentText);
+			memcpy(commandHistory[commandHistoryPoint % COMMAND_HISTORY], currentText, MAX_LINE_INPUT);
+			commandHistoryPoint++;
+			commandHistoryNewest = commandHistoryPoint;
 			memset(currentText, 0, MAX_LINE_INPUT);
 		}
 		if (igIsItemHovered(0) && igIsMouseClicked(ImGuiMouseButton_Right, false))

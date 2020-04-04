@@ -15,6 +15,7 @@
 #endif
 
 #include "../common/preferences/asPreferences.h"
+#include "asBindlessTexturePool.h"
 
 asLinearMemoryAllocator_t* pCurrentLinearAllocator;
 
@@ -186,6 +187,7 @@ ASEXPORT void asInitGfx(asAppInfo_t *pAppInfo, void* pCustomWindow)
 #if ASTRENGINE_VK
 	asVkInit(pAppInfo, gfxSettingsDevice);
 #endif
+	asInitTexturePool();
 }
 
 bool _frameSkip = false;
@@ -203,9 +205,14 @@ ASEXPORT void asGfxTriggerResizeEvent()
 #endif
 }
 
+ASEXPORT void asGfxInternalDebugDraws()
+{
+	_asTexturePoolDebug();
+}
+
 ASEXPORT void asGfxRenderFrame()
 {
-	if (_frameSkip)
+	if (_frameSkip) /*Frame Skip*/
 	{
 #if ASTRENGINE_NUKLEAR
 		asNkReset();
@@ -217,6 +224,7 @@ ASEXPORT void asGfxRenderFrame()
 	}
 #if ASTRENGINE_VK
 	asVkInitFrame();
+	asTexturePoolUpdate();
 #endif
 #if ASTRENGINE_NUKLEAR
 	asNkDraw(0);
@@ -239,6 +247,7 @@ ASEXPORT void asShutdownGfx()
 #if ASTRENGINE_DEARIMGUI
 	asShutdownGfxImGui();
 #endif
+	asShutdownTexturePool();
 	asVkFinalShutdown();
 #endif
 	SDL_DestroyWindow(asMainWindow);

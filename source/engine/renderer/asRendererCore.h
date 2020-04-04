@@ -48,6 +48,8 @@ ASEXPORT void asInitGfx(asAppInfo_t *pAppInfo, void* pCustomWindow);
 */
 ASEXPORT void asGfxRenderFrame();
 
+ASEXPORT void asGfxInternalDebugDraws();
+
 /**
 * @brief Trigger a window resize event, the renderer will attempt to adjust to it
 */
