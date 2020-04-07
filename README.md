@@ -13,7 +13,7 @@ In-House Game Engine by Alex Strand
   * Binary Container inspired by WAD
   * File System Abstraction for resource locators (WIP)
   * Register config variables for save/load from disk or from the dev console
-* Vulkan
+* Rendering
   * In-house Vulkan renderer
 * Asset Pipeline
   * Asset conditioning tools hooked together by small Python script using WAF meta-build system
