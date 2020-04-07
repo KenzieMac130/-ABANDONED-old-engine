@@ -13,6 +13,7 @@
 #include <SDL.h>
 
 #include "../guiTools/cmdConsole/asCmdConsole.h"
+#include "../flecs/asFlecsImplimentation.h"
 
 int32_t gContinueLoop;
 int32_t gDevConsoleToggleable = 1;
@@ -52,13 +53,14 @@ ASEXPORT int asIgnite(int argc, char *argv[], asAppInfo_t *pAppInfo, void *pCust
 	_asSetGlobalPrefs(pPrefMan);
 	asPreferencesLoadIni(pPrefMan, GLOBAL_INI_NAME);
 
-	/*Set Global Pref Data*/
+	/*Set Global Preferences Data*/
 	asPreferencesRegisterOpenSection(asGetGlobalPrefs(), "core");
 	asPreferencesRegisterParamInt32(asGetGlobalPrefs(), "devConsoleEnabled", &gShowDevConsole, 0, 1, false, NULL, NULL, "Show Developer Console");
 	asPreferencesRegisterParamInt32(asGetGlobalPrefs(), "devConsoleToggleable", &gDevConsoleToggleable, 0, 1, true, NULL, NULL, "Dev Console Toggleable Developer Console");
 	asPreferencesRegisterNullFunction(asGetGlobalPrefs(), "quit", _commandQuit, false, NULL, NULL, "Quit Engine (Alt+F4)");
 	asPreferencesLoadSection(asGetGlobalPrefs(), "core");
 
+	/*Console Global Preferences*/
 	asGuiToolCommandConsole_RegisterPrefManager(pPrefMan, "as");
 
 	asInitResource();
@@ -71,11 +73,19 @@ ASEXPORT int asIgnite(int argc, char *argv[], asAppInfo_t *pAppInfo, void *pCust
 #if ASTRENGINE_DEARIMGUI
 	asInitImGui();
 #endif
+#if ASTRENGINE_FLECS
+	/*Initialize Flecs*/
+	asInitFlecs(argc, argv);
+#endif
+
 	return 0; 
 }
 
 ASEXPORT void asShutdown(void)
 {
+#if ASTRENGINE_FLECS
+	asShutdownFlecs();
+#endif
 #if ASTRENGINE_NUKLEAR
 	asShutdownNk();
 #endif
@@ -111,6 +121,11 @@ ASEXPORT int asLoopSingleShot(double time, asLoopDesc_t loopDesc)
 		loopDesc.fpOnTick(1.0 / 30);
 	if (loopDesc.fpOnUpdate)
 		loopDesc.fpOnUpdate(time);
+
+#if ASTRENGINE_FLECS
+	/*Flecs Itterate*/
+	asUpdateFlecs((float)time);
+#endif
 
 	asGfxInternalDebugDraws();
 	asImGuiEndFrame();

@@ -19,6 +19,7 @@ typedef enum {
 * @brief wraps around printf (but can be overriden in the future to output to remote debug tools)
 */
 ASEXPORT void _asDebugLoggerLog(asDebugLogSeverity level, const char* format, ...);
+ASEXPORT void _asDebugLoggerLogArgs(asDebugLogSeverity level, const char* format, va_list args);
 
 /**
 * @brief treat it as you would printf

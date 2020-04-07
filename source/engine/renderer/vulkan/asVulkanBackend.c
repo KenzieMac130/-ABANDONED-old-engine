@@ -117,7 +117,7 @@ const char* pLayerPrefix,
 const char* pMsg,
 void* pUserData) 
 {
-	asDebugLog("VK Validation Layer: [%s] Code %u : %s", pLayerPrefix, msgCode, pMsg);
+	asDebugWarning("VK Validation Layer: [%s] Code %u : %s", pLayerPrefix, msgCode, pMsg);
 	return VK_FALSE;
 }
 VkDebugReportCallbackEXT vDbgCallback;
@@ -391,7 +391,6 @@ void asVkFlushMemory(asVkAllocation_t mem)
 }
 
 /*Texture Stuff*/
-/*Todo: Break up vTexture_t into multiple arrays*/
 
 struct vTexture_t
 {

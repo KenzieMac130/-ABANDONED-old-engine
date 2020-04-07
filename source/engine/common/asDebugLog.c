@@ -105,7 +105,7 @@ ASEXPORT asResults _asDebugLoggerInitializeFile(const char* path)
 	}
 }
 
-ASEXPORT void _asDebugLoggerLog(asDebugLogSeverity level, const char* format, ...)
+ASEXPORT void _asDebugLoggerLogArgs(asDebugLogSeverity level, const char* format, va_list args)
 {
 	if (!accessMutex) /*Assumes first call to debug log happens before thread management system is launched*/
 	{
@@ -115,10 +115,7 @@ ASEXPORT void _asDebugLoggerLog(asDebugLogSeverity level, const char* format, ..
 	}
 
 	/*Print to OS Console*/
-	va_list args;
-	va_start(args, format);
 	vprintf(format, args);
-	va_end(args);
 	printf("\n");
 
 	/*Print to Internal Ringbuffer*/
@@ -129,11 +126,8 @@ ASEXPORT void _asDebugLoggerLog(asDebugLogSeverity level, const char* format, ..
 		/*Save to internal log*/
 		memset(internalMessageLog[nextWriteIndex % AS_MAX_INTERNAL_DEBUG_LOG_HISTORY].text, 0,
 			AS_MAX_INTERNAL_DEBUG_LOG_INTENRAL_TEXT_LENGTH);
-		va_list args;
-		va_start(args, format);
 		vsnprintf(internalMessageLog[nextWriteIndex % AS_MAX_INTERNAL_DEBUG_LOG_HISTORY].text,
 			AS_MAX_INTERNAL_DEBUG_LOG_INTENRAL_TEXT_LENGTH, format, args);
-		va_end(args);
 		internalMessageLog[nextWriteIndex % AS_MAX_INTERNAL_DEBUG_LOG_HISTORY].logLevel = level;
 
 		nextWriteIndex++;
@@ -149,4 +143,12 @@ ASEXPORT void _asDebugLoggerLog(asDebugLogSeverity level, const char* format, ..
 		SDL_UnlockMutex(accessMutex);
 	}
 	else { asFatalError("Mutex Lock failed in Debug Log!!!"); }
+}
+
+ASEXPORT void _asDebugLoggerLog(asDebugLogSeverity level, const char* format, ...)
+{
+	va_list args;
+	va_start(args, format);
+	_asDebugLoggerLogArgs(level, format, args);
+	va_end(args);
 }

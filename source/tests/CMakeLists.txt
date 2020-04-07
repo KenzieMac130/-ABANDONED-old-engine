@@ -9,6 +9,7 @@ set_property(TARGET astrengine_Testbed PROPERTY FOLDER "Tests")
 set_property(TARGET astrengine_Testbed PROPERTY C_STANDARD 99)
 
 target_link_libraries (astrengine_Testbed astrengine)
+target_link_libraries(astrengine_Testbed thirdParty_flecs)
 
 #tests
 add_test (RUNS astrengine_Testbed)

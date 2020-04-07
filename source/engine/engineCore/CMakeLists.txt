@@ -10,6 +10,7 @@ target_link_libraries(astrengine asResource)
 target_link_libraries(astrengine asRenderer)
 #target_link_libraries(astrengine asNuklear)
 target_link_libraries(astrengine asDearImgui)
+target_link_libraries(astrengine asFlecs)
 
 #LINK GUI TOOLS
 target_link_libraries(astrengine asCmdConsole)

@@ -20,6 +20,7 @@
 #include "nuklearOverview.h"
 
 #include "engine/guiTools/cmdConsole/asCmdConsole.h"
+#include "engine/flecs/asFlecsImplimentation.h"
 
 void onUpdate(double time)
 {
@@ -68,11 +69,34 @@ asResults showAscii(const char* propName, void* pCurrentValue, void* pNewValueTm
 		"jgs  /   .-' '.___.;   `      \\`--'\\    `    |\n"
 		"    |          /    \\         /     '.__,.--,/\n"
 		"    '--..,___.'      `~--'--~'");
+	return AS_SUCCESS;
 }
 
 asResults doReflectTest(const char* propName, void* pCurrentValue, void* pNewValueTmp, void* pUserData)
 {
 	reflectTest();
+	return AS_SUCCESS;
+}
+
+typedef struct TestComponent2
+{
+	float doot;
+} TestComponent2;
+
+void ECS_TEST(ecs_rows_t* rows) {
+	ECS_COLUMN(rows, TestComponent2, dat, 1);
+
+	for (int i = 0; i < rows->count; i++)
+	{
+		//asDebugLog("Doot #%d = %f", i, dat[i].doot);
+	}
+}
+
+asResults addEntityTest(const char* propName, void* pCurrentValue, void* pNewValueTmp, void* pUserData)
+{
+	ecs_world_t* world = asEcsGetWorldPtr();
+	ecs_new_entity(world, "TestEnt", "TestComponent2");
+	return AS_SUCCESS;
 }
 
 int main(int argc, char* argv[])
@@ -83,6 +107,7 @@ int main(int argc, char* argv[])
 	appInfo.appVersion.major = 1; appInfo.appVersion.minor = 0; appInfo.appVersion.patch = 0;
 	atexit(asShutdown);
 	asIgnite(argc, argv, &appInfo, NULL);
+
 	/*Test Preference System*/
 	{
 		asPreferencesRegisterOpenSection(asGetGlobalPrefs(), "test");
@@ -90,6 +115,7 @@ int main(int argc, char* argv[])
 		asPreferencesRegisterParamCString(asGetGlobalPrefs(), "testString", testStr, 80, false, NULL, NULL, NULL);
 		asPreferencesRegisterNullFunction(asGetGlobalPrefs(), "showAsciiArt", showAscii, false, NULL, NULL);
 		asPreferencesRegisterNullFunction(asGetGlobalPrefs(), "reflectTest", doReflectTest, false, NULL, NULL);
+		asPreferencesRegisterParamFloat(asGetGlobalPrefs(), "addEntityTest", NULL, -FLT_MAX, FLT_MAX, false, addEntityTest, NULL, NULL);
 		asPreferencesLoadSection(asGetGlobalPrefs(), "test");
 
 		asDebugLog("%.*s", 80, testStr);
@@ -180,6 +206,15 @@ int main(int argc, char* argv[])
 		/*Hash test*/
 		asHash64_t hash = asHashBytes64_xxHash(desc.pInitialContentsBuffer, desc.initialContentsBufferSize);
 		asFree(desc.pInitialContentsBuffer);
+	}
+	/*Setup ECS for Testing*/
+	{
+		ecs_world_t* world = asEcsGetWorldPtr();
+		ECS_COMPONENT(world, TestComponent2);
+		ECS_SYSTEM(world, ECS_TEST, EcsOnUpdate, TestComponent2);
+		
+		ECS_ENTITY(world, MyEntity, TestComponent2);
+		ecs_set(world, MyEntity, TestComponent2, { 65 });
 	}
 
 	asLoopDesc_t loopDesc;

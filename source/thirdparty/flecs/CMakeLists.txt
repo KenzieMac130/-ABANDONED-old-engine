@@ -1,0 +1,8 @@
+include_directories("include")
+#add_definitions(-DPRIVATE -DFLECS_STATIC)
+add_definitions(-DFLECS_IMPL)
+file(GLOB_RECURSE SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.c")
+file(GLOB_RECURSE HEADER_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.h")
+add_library(thirdParty_flecs STATIC ${SRC_FILES} ${HEADER_FILES})
+set_property(TARGET thirdParty_flecs PROPERTY FOLDER "ThirdParty")
+set_property(TARGET thirdParty_flecs PROPERTY C_STANDARD 99)
