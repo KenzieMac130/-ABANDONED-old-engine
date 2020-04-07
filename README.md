@@ -5,7 +5,8 @@ In-House Game Engine by Alex Strand
 * Itteration Flexibility
   * Library structure encourages Engine/Game or Engine/Tool separation
   * Start creating a new tool in only a few more lines-of-code than "Hello World"
-  * Immediate Mode GUI via ImGui/CImGui for rapid tool development (with optional Nuklear backend)
+  * Immediate Mode GUI via [ImGui](https://github.com/ocornut/imgui)/[CImGui](https://github.com/cimgui/cimgui) for rapid tool development (with optional [Nuklear](https://github.com/Immediate-Mode-UI/Nuklear) backend)
+  * Create complex, powerful yet performant and maintanable features using a Data-Oriented Entity Component System (ECS) infrastructure provided by [FLECS](https://github.com/SanderMertens/flecs) (and forge your own path with non-ecs solutions as necessary)
   * Developer console with API to easily to expose functions and variables for testing
 * Data IO
   * C99 POD shallow Serialization via Designated Initializer macros for easy save/load
@@ -19,7 +20,6 @@ In-House Game Engine by Alex Strand
 * More to Come
   * Mesh building API
   * Lightweight PBR renderer
-  * Entity Component System
  
 ## Use Case
 I am developing this as a hobby.
