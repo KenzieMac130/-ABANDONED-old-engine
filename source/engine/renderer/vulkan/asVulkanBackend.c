@@ -462,10 +462,12 @@ VkFormat asVkConvertToNativePixelFormat(asColorFormat format)
 		return VK_FORMAT_R16G16B16A16_SFLOAT;
 	case AS_COLORFORMAT_RGBA32_SFLOAT:
 		return VK_FORMAT_R32G32B32A32_SFLOAT;
-	case AS_COLORFORMAT_R10G10B10A2_UNORM:
+	case AS_COLORFORMAT_A2R10G10B10_UNORM:
 		return VK_FORMAT_A2B10G10R10_UNORM_PACK32;
 	case AS_COLORFORMAT_R8_UNORM:
 		return VK_FORMAT_R8_UNORM;
+	case AS_COLORFORMAT_R16_UNORM:
+		return VK_FORMAT_R16_UNORM;
 	case AS_COLORFORMAT_R16_SFLOAT:
 		return VK_FORMAT_R16_SFLOAT;
 	case AS_COLORFORMAT_R32_SFLOAT:
@@ -480,7 +482,7 @@ VkFormat asVkConvertToNativePixelFormat(asColorFormat format)
 		return VK_FORMAT_R32G32B32_SFLOAT;
 	case AS_COLORFORMAT_RGBA32_UINT:
 		return VK_FORMAT_R32G32B32A32_UINT;
-	case AS_COLORFORMAT_BC1_UNORM_BLOCK:
+	case AS_COLORFORMAT_BC1_RGBA_UNORM_BLOCK:
 		return VK_FORMAT_BC1_RGBA_UNORM_BLOCK;
 	case AS_COLORFORMAT_BC3_UNORM_BLOCK:
 		return VK_FORMAT_BC3_UNORM_BLOCK;
@@ -686,22 +688,24 @@ ASEXPORT asTextureHandle_t asCreateTexture(asTextureDesc_t *pDesc)
 						VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
 						0, 0, NULL, 0, NULL, 1, &toTransferDst);
 					/*Copy each region*/
+					const asTextureContentRegion_t* pRegions = pDesc->pInitialContentsRegions ?
+						pDesc->pInitialContentsRegions : pDesc->arrInitialContentsRegions;
 					for (uint32_t i = 0; i < pDesc->initialContentsRegionCount; i++)
 					{
 						VkBufferImageCopy cpy;
 						cpy.bufferImageHeight = 0;
 						cpy.bufferRowLength = 0;
-						cpy.bufferOffset = pDesc->pInitialContentsRegions[i].bufferStart;
-						cpy.imageExtent.width = pDesc->pInitialContentsRegions[i].extent[0];
-						cpy.imageExtent.height = pDesc->pInitialContentsRegions[i].extent[1];
-						cpy.imageExtent.depth = pDesc->pInitialContentsRegions[i].extent[2];
-						cpy.imageOffset.x = pDesc->pInitialContentsRegions[i].offset[0];
-						cpy.imageOffset.y = pDesc->pInitialContentsRegions[i].offset[1];
-						cpy.imageOffset.z = pDesc->pInitialContentsRegions[i].offset[2];
+						cpy.bufferOffset = pRegions[i].bufferStart;
+						cpy.imageExtent.width = pRegions[i].extent[0];
+						cpy.imageExtent.height = pRegions[i].extent[1];
+						cpy.imageExtent.depth = pRegions[i].extent[2];
+						cpy.imageOffset.x = pRegions[i].offset[0];
+						cpy.imageOffset.y = pRegions[i].offset[1];
+						cpy.imageOffset.z = pRegions[i].offset[2];
 						cpy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT; /*Uploading depth is unsupported*/
-						cpy.imageSubresource.layerCount = pDesc->pInitialContentsRegions[i].layerCount;
-						cpy.imageSubresource.baseArrayLayer = pDesc->pInitialContentsRegions[i].layer;
-						cpy.imageSubresource.mipLevel = pDesc->pInitialContentsRegions[i].mipLevel;
+						cpy.imageSubresource.layerCount = pRegions[i].layerCount;
+						cpy.imageSubresource.baseArrayLayer = pRegions[i].layer;
+						cpy.imageSubresource.mipLevel = pRegions[i].mipLevel;
 						vkCmdCopyBufferToImage(tmpCmd, stagingBuffer, pTex->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &cpy);
 					}
 					/*Transition to shader input optimal layout*/

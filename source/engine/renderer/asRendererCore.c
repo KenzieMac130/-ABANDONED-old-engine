@@ -24,7 +24,7 @@ ASEXPORT uint32_t asTextureCalcPitch(asColorFormat format, uint32_t width)
 	uint32_t tmpVal = 0;
 	switch (format)
 	{
-	case AS_COLORFORMAT_BC1_UNORM_BLOCK:
+	case AS_COLORFORMAT_BC1_RGBA_UNORM_BLOCK:
 		tmpVal = ((width + 3) / 4) * 8;
 		return tmpVal < 8 ? 8 : tmpVal;
 		break;
@@ -41,7 +41,7 @@ ASEXPORT uint32_t asTextureCalcPitch(asColorFormat format, uint32_t width)
 		case AS_COLORFORMAT_RGBA8_UNORM:
 		case AS_COLORFORMAT_RG16_SFLOAT:
 		case AS_COLORFORMAT_R32_SFLOAT:
-		case AS_COLORFORMAT_R10G10B10A2_UNORM:
+		case AS_COLORFORMAT_A2R10G10B10_UNORM:
 		case AS_COLORFORMAT_B10G11R11_UFLOAT:
 			tmpVal = 4;
 			break;

@@ -91,17 +91,18 @@ typedef enum {
 	AS_COLORFORMAT_RGBA16_UNORM,
 	AS_COLORFORMAT_RGBA16_SFLOAT,
 	AS_COLORFORMAT_RGBA32_SFLOAT,
-	AS_COLORFORMAT_R10G10B10A2_UNORM,
+	AS_COLORFORMAT_A2R10G10B10_UNORM,
 	AS_COLORFORMAT_B10G11R11_UFLOAT,
 	AS_COLORFORMAT_R8_UNORM,
 	AS_COLORFORMAT_R16_SFLOAT,
+	AS_COLORFORMAT_R16_UNORM,
 	AS_COLORFORMAT_R32_SFLOAT,
 	AS_COLORFORMAT_RG16_SFLOAT,
 	AS_COLORFORMAT_RG32_SFLOAT,
 	AS_COLORFORMAT_RGB16_SFLOAT,
 	AS_COLORFORMAT_RGB32_SFLOAT,
 	AS_COLORFORMAT_RGBA32_UINT,
-	AS_COLORFORMAT_BC1_UNORM_BLOCK,
+	AS_COLORFORMAT_BC1_RGBA_UNORM_BLOCK,
 	AS_COLORFORMAT_BC3_UNORM_BLOCK,
 	AS_COLORFORMAT_BC5_UNORM_BLOCK,
 	AS_COLORFORMAT_BC6H_UFLOAT_BLOCK,
@@ -160,6 +161,8 @@ typedef struct {
 	uint32_t layerCount; /**< How many layers this region has in it*/
 } asTextureContentRegion_t;
 
+#define AS_TEXTURE_MAX_REGIONS 16
+
 /**
 * @brief Description for a texture resource
 */
@@ -174,8 +177,9 @@ typedef struct {
 	uint32_t mips; /**< Number of mip levels*/
 	size_t initialContentsBufferSize; /**< The size of the data in the buffer to be uploaded*/
 	const void* pInitialContentsBuffer; /**< Pointer to the initial contents of the texture (if NULL nothing will be uploaded)*/
-	size_t initialContentsRegionCount; /**< The amount of regions to copy into (if 0 the buffer will attempt to copy into the first slice)*/
-	asTextureContentRegion_t *pInitialContentsRegions; /**< Used to map buffer data to parts of the texture image (if NULL same above)*/
+	size_t initialContentsRegionCount; /**< The amount of regions to copy into*/
+	asTextureContentRegion_t* pInitialContentsRegions; /**< Used to map buffer data to parts of the texture image (if NULL look into asTextureDesc_t::arrInitialContentsRegions)*/
+	asTextureContentRegion_t arrInitialContentsRegions[AS_TEXTURE_MAX_REGIONS]; /**< Used to map buffer data to parts of the texture image (if NULL same above)*/
 	const char* pDebugLabel; /**< Debug name of the texture that should appear in debuggers*/
 } asTextureDesc_t;
 
@@ -290,5 +294,8 @@ ASEXPORT asResults asSetGlobalShaderTime(double time);
 /*Backbuffer Draw*/
 /*todo: setup simple backbuffer drawing (gizmos/ui)*/
 
+#ifdef __cplusplus
+}
+#endif
 #include "asRenderFx.h"
 #endif

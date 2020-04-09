@@ -21,6 +21,8 @@
 
 #include "engine/guiTools/cmdConsole/asCmdConsole.h"
 #include "engine/flecs/asFlecsImplimentation.h"
+#include "engine/renderer/asTextureFromKtx.h"
+#include "engine/renderer/asBindlessTexturePool.h"
 
 void onUpdate(double time)
 {
@@ -136,61 +138,38 @@ int main(int argc, char* argv[])
 	}
 	/*Test texture creation*/
 	{
-		//asResourceType_t resourceType_Texture = asResource_RegisterType("TEXTURE", 7);
-		//asResourceLoader_t file;
-		//asResourceFileID_t resID;
-		//if (asResourceLoader_OpenByPath(&file, &resID, "TEST_IMAGE", 11) != AS_SUCCESS)
-		//{
-		//	asFatalError("Failed to open image");
-		//}
-		//
-		//size_t fSize = asResourceLoader_GetContentSize(&file);
-		//unsigned char* fContents = asMalloc(fSize);
-		//asResourceLoader_ReadAll(&file, fSize, fContents);
-		//asResourceLoader_Close(&file);
+		asResourceType_t resourceType_Texture = asResource_RegisterType("TEXTURE", 7);
+		asResourceLoader_t file;
+		asResourceFileID_t resID;
+		if (asResourceLoader_OpenByPath(&file, &resID, "test_image", 11) != AS_SUCCESS)
+		{
+			asFatalError("Failed to open image");
+		}
+		
+		size_t fSize = asResourceLoader_GetContentSize(&file);
+		unsigned char* fContents = asMalloc(fSize);
+		asResourceLoader_ReadAll(&file, fSize, fContents);
+		asResourceLoader_Close(&file);
 
-		///*Todo: Load KTX*/
-		//void* img;
+		/*Todo: Load KTX*/
+		asTextureDesc_t desc = asTextureDesc_Init();
+		asTextureDesc_FromKtxData(&desc, fContents, fSize);
+		texture = asCreateTexture(&desc);
 
-		//asFree(fContents);
-		//if (!img)
-		//{
-		//	asFatalError("Failed to load image");
-		//}
-		//asTextureDesc_t desc = asTextureDesc_Init();
-		//desc.usageFlags = AS_TEXTUREUSAGE_SAMPLED;
-		//desc.cpuAccess = AS_GPURESOURCEACCESS_DEVICE;
-		//desc.format = AS_COLORFORMAT_RGBA8_UNORM;
-		//desc.width = x;
-		//desc.height = y;
-		//desc.initialContentsBufferSize = (size_t)(x * y * 4);
-		//desc.initialContentsRegionCount = 1;
-		//asTextureContentRegion_t region = (asTextureContentRegion_t) { 0 };
-		//region.bufferStart = 0;
-		//region.extent[0] = desc.width;
-		//region.extent[1] = desc.height;
-		//region.extent[2] = 1;
-		//region.layerCount = 1;
-		//region.layer = 0;
-		//region.mipLevel = 0;
-		//desc.pInitialContentsRegions = &region;
-		//desc.pInitialContentsBuffer = img;
-		//desc.pDebugLabel = "TestImage";
-		//texture = asCreateTexture(&desc);
-		//stbi_image_free(img);
+		asTexturePoolAddFromHandle(texture, NULL);
 
-		//asResourceDataMapping_t map = { .hndl = texture };
-		//asResource_Create(resID, map, resourceType_Texture, 3);
-		//asResource_DeincrimentReferences(resID, 1);
-		//asResource_DeincrimentReferences(resID, 1);
-		//asResource_DeincrimentReferences(resID, 3);
+		asResourceDataMapping_t map = { .hndl = texture };
+		asResource_Create(resID, map, resourceType_Texture, 3);
+		asResource_DeincrimentReferences(resID, 1);
+		asResource_DeincrimentReferences(resID, 1);
+		asResource_DeincrimentReferences(resID, 3);
 
-		//asResourceDataMapping_t* deleteQueue;
-		//size_t count = asResource_GetDeletionQueue(resourceType_Texture, &deleteQueue);
-		//for (size_t i = 0; i < count; i++)
-		//{
-		//	asReleaseTexture(deleteQueue[i].hndl);
-		//}
+		asResourceDataMapping_t* deleteQueue;
+		size_t count = asResource_GetDeletionQueue(resourceType_Texture, &deleteQueue);
+		for (size_t i = 0; i < count; i++)
+		{
+			//asReleaseTexture(deleteQueue[i].hndl);
+		}
 	}
 	/*Test buffer creation*/
 	{

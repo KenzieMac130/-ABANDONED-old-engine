@@ -49,7 +49,7 @@ ASEXPORT asResults asTexturePoolAddFromHandle(const asTextureHandle_t handle, as
 {
 	if (handle._index >= AS_MAX_POOLED_TEXTURES) { return AS_FAILURE_OUT_OF_BOUNDS; }
 	textureHandleAssociations[handle._index] = handle;
-	*pTextureIndex = handle._index;
+	if (pTextureIndex) { *pTextureIndex = handle._index; }
 
 	textureUpdateQueue[textureUpdateQueueCount] = handle._index;
 	textureUpdateQueueCount++;
