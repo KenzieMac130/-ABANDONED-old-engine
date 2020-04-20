@@ -17,8 +17,6 @@
 #include "../common/preferences/asPreferences.h"
 #include "asBindlessTexturePool.h"
 
-asLinearMemoryAllocator_t* pCurrentLinearAllocator;
-
 ASEXPORT uint32_t asTextureCalcPitch(asColorFormat format, uint32_t width)
 {
 	uint32_t tmpVal = 0;
@@ -42,6 +40,7 @@ ASEXPORT uint32_t asTextureCalcPitch(asColorFormat format, uint32_t width)
 		case AS_COLORFORMAT_RG16_SFLOAT:
 		case AS_COLORFORMAT_R32_SFLOAT:
 		case AS_COLORFORMAT_A2R10G10B10_UNORM:
+		case AS_COLORFORMAT_A2R10G10B10_SNORM:
 		case AS_COLORFORMAT_B10G11R11_UFLOAT:
 			tmpVal = 4;
 			break;
@@ -49,6 +48,7 @@ ASEXPORT uint32_t asTextureCalcPitch(asColorFormat format, uint32_t width)
 			tmpVal = 6;
 			break;
 		case AS_COLORFORMAT_RGBA16_UNORM:
+		case AS_COLORFORMAT_RGBA16_UINT:
 		case AS_COLORFORMAT_RGBA16_SFLOAT:
 			tmpVal = 8;
 			break;
@@ -68,6 +68,7 @@ ASEXPORT uint32_t asTextureCalcPitch(asColorFormat format, uint32_t width)
 		case AS_COLORFORMAT_DEPTH:
 			asGetDepthFormatSize(format);
 		default:
+			asFatalError("Unknown image format used");
 			break;
 		}
 		return (width * tmpVal + 7) / 8;
@@ -201,7 +202,7 @@ ASEXPORT void asGfxTriggerResizeEvent()
 	if (_frameSkip)
 		return;
 #if ASTRENGINE_VK
-	asVkWindowResize(pCurrentLinearAllocator);
+	asVkWindowResize();
 #endif
 }
 

@@ -458,12 +458,16 @@ VkFormat asVkConvertToNativePixelFormat(asColorFormat format)
 		return VK_FORMAT_R8G8B8A8_UNORM;
 	case AS_COLORFORMAT_RGBA16_UNORM:
 		return VK_FORMAT_R16G16B16A16_UNORM;
+	case AS_COLORFORMAT_RGBA16_UINT:
+		return VK_FORMAT_R16G16B16A16_UINT;
 	case AS_COLORFORMAT_RGBA16_SFLOAT:
 		return VK_FORMAT_R16G16B16A16_SFLOAT;
 	case AS_COLORFORMAT_RGBA32_SFLOAT:
 		return VK_FORMAT_R32G32B32A32_SFLOAT;
 	case AS_COLORFORMAT_A2R10G10B10_UNORM:
 		return VK_FORMAT_A2B10G10R10_UNORM_PACK32;
+	case AS_COLORFORMAT_A2R10G10B10_SNORM:
+		return VK_FORMAT_A2B10G10R10_SNORM_PACK32;
 	case AS_COLORFORMAT_R8_UNORM:
 		return VK_FORMAT_R8_UNORM;
 	case AS_COLORFORMAT_R16_UNORM:
@@ -1181,7 +1185,7 @@ void vScreenResourcesCreate(struct vScreenResources_t *pScreen, SDL_Window* pWin
 		uint32_t queueFamilyIndices[] = { indices.graphicsIdx, indices.presentIdx };
 		if (queueFamilyIndices[0] != queueFamilyIndices[1]){
 			createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
-			createInfo.queueFamilyIndexCount = 2;
+			createInfo.queueFamilyIndexCount = ASARRAYLEN(queueFamilyIndices);
 			createInfo.pQueueFamilyIndices = queueFamilyIndices;
 		}
 		else {
@@ -1307,11 +1311,24 @@ void vScreenResourcesCreate(struct vScreenResources_t *pScreen, SDL_Window* pWin
 			VkCommandBufferBeginInfo beginInfo = (VkCommandBufferBeginInfo) { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
 			vkBeginCommandBuffer(pScreen->pPresentImageToScreenCmds[i], &beginInfo);
 			/*Transfer swap image and composite for blit*/
+			VkImageMemoryBarrier toTransferSrc = (VkImageMemoryBarrier){ VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
+			toTransferSrc.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			toTransferSrc.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+			toTransferSrc.srcQueueFamilyIndex = asVkQueueFamilyIndices.graphicsIdx;
+			toTransferSrc.dstQueueFamilyIndex = asVkQueueFamilyIndices.graphicsIdx;
+			toTransferSrc.image = asVkGetImageFromTexture(pScreen->compositeTexture);
+			toTransferSrc.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			toTransferSrc.subresourceRange.baseMipLevel = 0;
+			toTransferSrc.subresourceRange.levelCount = 1;
+			toTransferSrc.subresourceRange.baseArrayLayer = 0;
+			toTransferSrc.subresourceRange.layerCount = 1;
+			toTransferSrc.srcAccessMask = 0;
+			toTransferSrc.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
 			VkImageMemoryBarrier toTransferDst = (VkImageMemoryBarrier) { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
 			toTransferDst.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 			toTransferDst.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-			toTransferDst.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			toTransferDst.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			toTransferDst.srcQueueFamilyIndex = asVkQueueFamilyIndices.presentIdx;
+			toTransferDst.dstQueueFamilyIndex = asVkQueueFamilyIndices.graphicsIdx;
 			toTransferDst.image = pScreen->pSwapImages[i];
 			toTransferDst.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 			toTransferDst.subresourceRange.baseMipLevel = 0;
@@ -1320,22 +1337,10 @@ void vScreenResourcesCreate(struct vScreenResources_t *pScreen, SDL_Window* pWin
 			toTransferDst.subresourceRange.layerCount = 1;
 			toTransferDst.srcAccessMask = 0;
 			toTransferDst.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-			VkImageMemoryBarrier toTransferSrc = (VkImageMemoryBarrier) { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
-			toTransferSrc.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-			toTransferSrc.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-			toTransferSrc.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			toTransferSrc.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			toTransferSrc.image = asVkGetImageFromTexture(pScreen->compositeTexture);
-			toTransferSrc.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			toTransferSrc.subresourceRange.baseMipLevel = 0;
-			toTransferSrc.subresourceRange.levelCount = 1;
-			toTransferSrc.subresourceRange.baseArrayLayer = 0;
-			toTransferSrc.subresourceRange.layerCount = 1;
-			toTransferSrc.srcAccessMask = 0;
-			toTransferSrc.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-			VkImageMemoryBarrier barriers[2] = { toTransferDst, toTransferSrc };
+
+			VkImageMemoryBarrier barriers[2] = { toTransferSrc, toTransferDst };
 			vkCmdPipelineBarrier(pScreen->pPresentImageToScreenCmds[i],
-				VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 2, barriers);
+				VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 2, barriers);
 
 			/*Blit composite onto swapchain*/
 			VkImageBlit region = (VkImageBlit) { 0 };
@@ -1355,8 +1360,8 @@ void vScreenResourcesCreate(struct vScreenResources_t *pScreen, SDL_Window* pWin
 			VkImageMemoryBarrier toPresent = (VkImageMemoryBarrier) { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
 			toPresent.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 			toPresent.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-			toPresent.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			toPresent.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			toPresent.srcQueueFamilyIndex = asVkQueueFamilyIndices.graphicsIdx;
+			toPresent.dstQueueFamilyIndex = asVkQueueFamilyIndices.presentIdx;
 			toPresent.image = pScreen->pSwapImages[i];
 			toPresent.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 			toPresent.subresourceRange.baseMipLevel = 0;

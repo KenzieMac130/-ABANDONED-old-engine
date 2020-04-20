@@ -24,9 +24,10 @@
 #include "engine/renderer/asTextureFromKtx.h"
 #include "engine/renderer/asBindlessTexturePool.h"
 
+#include "engine/model/runtime/asModelRuntime.h"
+
 void onUpdate(double time)
 {
-	
 }
 
 asTextureHandle_t texture;
@@ -85,7 +86,7 @@ typedef struct TestComponent2
 	float doot;
 } TestComponent2;
 
-void ECS_TEST(ecs_rows_t* rows) {
+void ecsTest(ecs_rows_t* rows) {
 	ECS_COLUMN(rows, TestComponent2, dat, 1);
 
 	for (int i = 0; i < rows->count; i++)
@@ -97,7 +98,6 @@ void ECS_TEST(ecs_rows_t* rows) {
 asResults addEntityTest(const char* propName, void* pCurrentValue, void* pNewValueTmp, void* pUserData)
 {
 	ecs_world_t* world = asEcsGetWorldPtr();
-	ecs_new_entity(world, "TestEnt", "TestComponent2");
 	return AS_SUCCESS;
 }
 
@@ -110,6 +110,14 @@ int main(int argc, char* argv[])
 	atexit(asShutdown);
 	asIgnite(argc, argv, &appInfo, NULL);
 
+	/*Vertex Tests*/
+	{
+		asVertexGeneric vertex;
+		asVertexGeneric_encodeNormal(&vertex, (vec3){ 0.4f, -1.0f, 0.03f });
+		asVertexGeneric_encodeTangent(&vertex, (vec3) { 0.4f, -1.0f, 1.0f }, 1);
+		asVertexGeneric_encodeUV(&vertex, 1, (vec2) { 0.5f, -54.0f });
+		asDebugLog("Vertex Size = %d", sizeof(vertex));
+	}
 	/*Test Preference System*/
 	{
 		asPreferencesRegisterOpenSection(asGetGlobalPrefs(), "test");
@@ -120,7 +128,7 @@ int main(int argc, char* argv[])
 		asPreferencesRegisterParamFloat(asGetGlobalPrefs(), "addEntityTest", NULL, -FLT_MAX, FLT_MAX, false, addEntityTest, NULL, NULL);
 		asPreferencesLoadSection(asGetGlobalPrefs(), "test");
 
-		asDebugLog("%.*s", 80, testStr);
+		asDebugLog("Test String:%.*s", 80, testStr);
 	}
 	/*Test handle manager*/
 	{
@@ -155,6 +163,7 @@ int main(int argc, char* argv[])
 		asTextureDesc_t desc = asTextureDesc_Init();
 		asTextureDesc_FromKtxData(&desc, fContents, fSize);
 		texture = asCreateTexture(&desc);
+		asTextureDesc_FreeKtxData(&desc);
 
 		asTexturePoolAddFromHandle(texture, NULL);
 
@@ -190,7 +199,7 @@ int main(int argc, char* argv[])
 	{
 		ecs_world_t* world = asEcsGetWorldPtr();
 		ECS_COMPONENT(world, TestComponent2);
-		ECS_SYSTEM(world, ECS_TEST, EcsOnUpdate, TestComponent2);
+		ECS_SYSTEM(world, ecsTest, EcsOnUpdate, TestComponent2);
 		
 		ECS_ENTITY(world, MyEntity, TestComponent2);
 		ecs_set(world, MyEntity, TestComponent2, { 65 });

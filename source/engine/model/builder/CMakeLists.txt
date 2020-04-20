@@ -1,0 +1,7 @@
+file(GLOB_RECURSE SRC_FILES ${CMAKE_CURRENT_SOURCE_DIR}/*.c)
+file(GLOB_RECURSE HEADER_FILES ${CMAKE_CURRENT_SOURCE_DIR}/*.h)
+add_library(asModelBuilder ${SRC_FILES} ${HEADER_FILES})
+set_property(TARGET asModelBuilder PROPERTY FOLDER "astrengine/Modules/Mesh")
+set_property(TARGET asModelBuilder PROPERTY C_STANDARD 99)
+target_link_libraries(asModelBuilder thirdParty_mikkt)
+target_link_libraries(asModelBuilder asMeshLoader)

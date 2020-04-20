@@ -26,7 +26,7 @@ ASEXPORT void _asTexturePoolDebug();
 
 ASEXPORT asResults asShutdownTexturePool();
 
-#if ASTRENGINE_VK /*Vulkan Macros*/
+#if ASTRENGINE_VK /*Vulkan Stuff*/
 ASEXPORT void asVkGetTexturePoolDescSetLayout(void* pDest);
 #endif
 

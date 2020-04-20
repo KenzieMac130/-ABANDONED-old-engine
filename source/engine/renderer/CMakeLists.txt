@@ -13,4 +13,5 @@ if(ASTRENGINE_VK)
 endif()
 
 target_link_libraries (asRenderer asResource)
+target_link_libraries (asRenderer asModelRuntime)
 target_link_libraries (asRenderer thirdParty_tiny_ktx)

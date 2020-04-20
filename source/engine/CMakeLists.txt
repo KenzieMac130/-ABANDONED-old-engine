@@ -49,6 +49,8 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/common)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/resource)
 #asRenderer
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/renderer) 
+#Mesh API
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/model)
 #asNuklear
 if(ASTRENGINE_NUKLEAR)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/nuklear)

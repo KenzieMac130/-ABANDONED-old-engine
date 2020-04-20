@@ -1,0 +1,5 @@
+file(GLOB_RECURSE SRC_FILES ${CMAKE_CURRENT_SOURCE_DIR}/*.c)
+file(GLOB_RECURSE HEADER_FILES ${CMAKE_CURRENT_SOURCE_DIR}/*.h)
+add_library(asModelRuntime ${SRC_FILES} ${HEADER_FILES})
+set_property(TARGET asModelRuntime PROPERTY FOLDER "astrengine/Modules/Mesh")
+set_property(TARGET asModelRuntime PROPERTY C_STANDARD 99)

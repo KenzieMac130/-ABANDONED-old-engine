@@ -58,6 +58,9 @@ ASEXPORT asResults asTexturePoolAddFromHandle(const asTextureHandle_t handle, as
 
 ASEXPORT asResults asTexturePoolRelease(asBindlessTextureIndex textureIndex)
 {
+	textureHandleAssociations[textureIndex] = missingTextureHndl;
+	textureUpdateQueue[textureUpdateQueueCount] = missingTextureHndl._index;
+	textureUpdateQueueCount++;
 	return AS_SUCCESS;
 }
 
@@ -157,6 +160,8 @@ ASEXPORT asResults asTexturePoolUpdate()
 {
 	if (textureUpdateQueueCount <= 0) { return AS_SUCCESS; }
 
+	/*Todo: Investigate Necessary Synchronization*/
+
 	/*Update Descriptors*/
 	for (size_t i = 0; i < textureUpdateQueueCount; i++)
 	{
@@ -180,6 +185,7 @@ ASEXPORT asResults asTexturePoolUpdate()
 ASEXPORT asResults asShutdownTexturePool()
 {
 #if ASTRENGINE_VK
+	vkDestroyDescriptorSetLayout(asVkDevice, vTexturePoolDescLayout, AS_VK_MEMCB);
 	vkDestroyDescriptorPool(asVkDevice, vTexturePoolDescriptorPool, AS_VK_MEMCB);
 #endif
 	return AS_SUCCESS;
