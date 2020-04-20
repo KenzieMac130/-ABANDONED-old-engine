@@ -1312,7 +1312,7 @@ void vScreenResourcesCreate(struct vScreenResources_t *pScreen, SDL_Window* pWin
 			vkBeginCommandBuffer(pScreen->pPresentImageToScreenCmds[i], &beginInfo);
 			/*Transfer swap image and composite for blit*/
 			VkImageMemoryBarrier toTransferSrc = (VkImageMemoryBarrier){ VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
-			toTransferSrc.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			toTransferSrc.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 			toTransferSrc.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
 			toTransferSrc.srcQueueFamilyIndex = asVkQueueFamilyIndices.graphicsIdx;
 			toTransferSrc.dstQueueFamilyIndex = asVkQueueFamilyIndices.graphicsIdx;
