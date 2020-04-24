@@ -189,6 +189,7 @@ ASEXPORT void asInitGfx(asAppInfo_t *pAppInfo, void* pCustomWindow)
 	asVkInit(pAppInfo, gfxSettingsDevice);
 #endif
 	asInitTexturePool();
+	asInitSceneRenderer();
 }
 
 bool _frameSkip = false;
@@ -225,8 +226,9 @@ ASEXPORT void asGfxRenderFrame()
 	}
 #if ASTRENGINE_VK
 	asVkInitFrame();
-	asTexturePoolUpdate();
 #endif
+	asTexturePoolUpdate();
+	asSceneRendererDraw(0);
 #if ASTRENGINE_NUKLEAR
 	asNkDraw(0);
 #endif
@@ -242,6 +244,8 @@ ASEXPORT void asShutdownGfx()
 {
 #if ASTRENGINE_VK
 	asVkInitShutdown();
+#endif
+	asShutdownSceneRenderer();
 #if ASTRENGINE_NUKLEAR
 	asShutdownGfxNk();
 #endif
@@ -249,6 +253,7 @@ ASEXPORT void asShutdownGfx()
 	asShutdownGfxImGui();
 #endif
 	asShutdownTexturePool();
+#if ASTRENGINE_VK
 	asVkFinalShutdown();
 #endif
 	SDL_DestroyWindow(asMainWindow);

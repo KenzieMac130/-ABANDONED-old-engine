@@ -22,6 +22,28 @@ extern "C" {
 
 #define AS_VK_MEMCB NULL
 
+typedef struct
+{
+	struct SDL_Window* pWindow;
+	VkSurfaceKHR surface;
+	VkSwapchainKHR swapchain;
+	VkSurfaceCapabilitiesKHR caps;
+	VkSurfaceFormatKHR surfFormat;
+	VkPresentModeKHR presentMode;
+	VkExtent2D extents;
+
+	uint32_t imageCount;
+	VkImage* pSwapImages;
+	VkCommandBuffer* pPresentImageToScreenCmds;
+	VkSemaphore swapImageAvailableSemaphores[AS_MAX_INFLIGHT];
+	VkSemaphore blitFinishedSemaphores[AS_MAX_INFLIGHT];
+
+	asTextureHandle_t compositeTexture;
+	asTextureHandle_t depthTexture;
+} asVkScreenResources;
+
+asVkScreenResources* asVkGetScreenResourcesPtr(int32_t screenIndex);
+
 /**
 * @brief current inflight frame
 * @warning DO NOT WRITE!
@@ -165,15 +187,6 @@ VkBuffer asVkGetBufferFromBuffer(asBufferHandle_t hndl);
 * @brief Get an asVkAllocation_t from a buffer at a slot
 */
 asVkAllocation_t asVkGetAllocFromBuffer(asBufferHandle_t hndl);
-
-/**
-* @brief Renderpass for simple drawing (guizmos, UI, early renderer)
-*/
-VkRenderPass asVkGetSimpleDrawingRenderpass();
-/**
-* @brief Framebuffer for simple drawing (guizmos, UI, early renderer)
-*/
-VkFramebuffer asVkGetSimpleDrawingFramebuffer();
 
 /**
 * @brief Sampler for simple texturing

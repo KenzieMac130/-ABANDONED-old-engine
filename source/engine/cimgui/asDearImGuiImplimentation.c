@@ -34,6 +34,8 @@ asShaderFx imGuiShaderFx;
 
 #if ASTRENGINE_VK
 VkPipelineLayout imGuiPipelineLayout;
+VkRenderPass imGuiRenderPass;
+VkFramebuffer imGuiFramebuffers[1];
 #endif
 
 typedef struct {
@@ -99,7 +101,7 @@ ASEXPORT asResults _asFillGfxPipeline_DearImgui(
 		ASARRAYLEN(vertexBindings), vertexBindings,
 		ASARRAYLEN(vertexAttributes), vertexAttributes);
 
-	pGraphicsPipelineDesc->renderPass = asVkGetSimpleDrawingRenderpass();
+	pGraphicsPipelineDesc->renderPass = imGuiRenderPass;
 	pGraphicsPipelineDesc->subpass = 0;
 	pGraphicsPipelineDesc->layout = imGuiPipelineLayout;
 
@@ -107,6 +109,11 @@ ASEXPORT asResults _asFillGfxPipeline_DearImgui(
 		asFatalError("vkCreateGraphicsPipelines() Failed to create imGuiPipeline");
 	return AS_SUCCESS;
 }
+
+/*Vulkan allows mappings to stay persistant*/
+void* vVertexBufferBindings[AS_MAX_INFLIGHT];
+void* vIndexBufferBindings[AS_MAX_INFLIGHT];
+#endif
 
 void _imguiGetRenderDim(int vp)
 {
@@ -137,10 +144,6 @@ static int32_t imguiDrawStyle = 0;
 /*Cursor*/
 static SDL_Cursor* _mouseCursors[ImGuiMouseCursor_COUNT];
 
-/*Vulkan allows mappings to stay persistant*/
-void* vVertexBufferBindings[AS_MAX_INFLIGHT];
-void* vIndexBufferBindings[AS_MAX_INFLIGHT];
-#endif
 ASEXPORT void asInitImGui()
 {
 	asDebugLog("Creating ImGui Backend...");
@@ -287,6 +290,72 @@ ASEXPORT void asInitImGui()
 		if (vkCreatePipelineLayout(asVkDevice, &createInfo, AS_VK_MEMCB, &imGuiPipelineLayout) != VK_SUCCESS)
 			asFatalError("vkCreatePipelineLayout() Failed to create imGuiPipelineLayout");
 	}
+	/*Renderpass*/
+	{
+		VkAttachmentDescription attachments[] = {
+			(VkAttachmentDescription) { /*Color Buffer*/
+				.format = VK_FORMAT_R8G8B8A8_UNORM,
+				.samples = VK_SAMPLE_COUNT_1_BIT,
+				.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+				.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+				.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+				.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+				.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+				.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+			},
+			(VkAttachmentDescription) { /*Depth Buffer*/
+				.format = VK_FORMAT_D32_SFLOAT,
+				.samples = VK_SAMPLE_COUNT_1_BIT,
+				.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+				.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+				.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+				.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+				.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+				.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+			},
+		};
+
+		/*Setup Subpass*/
+		VkSubpassDescription subpass = (VkSubpassDescription){ 0 };
+		subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+		subpass.colorAttachmentCount = 1;
+		subpass.pColorAttachments = &(VkAttachmentReference) {
+			.attachment = 0,
+				.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+		};
+		subpass.pDepthStencilAttachment = &(VkAttachmentReference) {
+			.attachment = 1,
+				.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+		};
+
+		VkRenderPassCreateInfo createInfo = (VkRenderPassCreateInfo){ VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO };
+		createInfo.attachmentCount = ASARRAYLEN(attachments);
+		createInfo.pAttachments = attachments;
+		createInfo.subpassCount = 1;
+		createInfo.pSubpasses = &subpass;
+
+		if (vkCreateRenderPass(asVkDevice, &createInfo, AS_VK_MEMCB, &imGuiRenderPass) != VK_SUCCESS)
+			asFatalError("vkCreateRenderPass() Failed to create pScreen->simpleRenderPass");
+	}
+	/*Framebuffer (For Each Screen)*/
+	{
+		const int screenIdx = 0;
+		asVkScreenResources* pScreen = asVkGetScreenResourcesPtr(screenIdx);
+		VkImageView attachments[] = {
+			asVkGetViewFromTexture(pScreen->compositeTexture),
+			asVkGetViewFromTexture(pScreen->depthTexture)
+		};
+		VkFramebufferCreateInfo createInfo = (VkFramebufferCreateInfo){ VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO };
+		createInfo.renderPass = imGuiRenderPass;
+		createInfo.attachmentCount = ASARRAYLEN(attachments);
+		createInfo.pAttachments = attachments;
+		createInfo.width = pScreen->extents.width;
+		createInfo.height = pScreen->extents.height;
+		createInfo.layers = 1;
+
+		if (vkCreateFramebuffer(asVkDevice, &createInfo, AS_VK_MEMCB, &imGuiFramebuffers[screenIdx]) != VK_SUCCESS)
+			asFatalError("vkCreateFramebuffer() Failed to create pScreen->simpleFrameBuffer");
+	}
 #endif
 	/*Load shader*/
 	{
@@ -376,8 +445,8 @@ ASEXPORT void asImGuiDraw(int32_t viewport)
 	beginInfo.clearValueCount = ASARRAYLEN(clearValues);
 	beginInfo.pClearValues = clearValues;
 	beginInfo.renderArea = (VkRect2D){ {0,0},{viewWidth, viewHeight} };
-	beginInfo.renderPass = asVkGetSimpleDrawingRenderpass();
-	beginInfo.framebuffer = asVkGetSimpleDrawingFramebuffer();
+	beginInfo.renderPass = imGuiRenderPass;
+	beginInfo.framebuffer = imGuiFramebuffers[viewport];
 	vkCmdBeginRenderPass(vCmd, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
 	/*Setup Viewport*/
@@ -550,7 +619,7 @@ ASEXPORT void asImGuiPumpInput()
 		pImGuiIo->MouseDown[2] = _mousePressed[2] || (mouse_buttons & SDL_BUTTON(SDL_BUTTON_MIDDLE)) != 0;
 		memset(_mousePressed, 0, sizeof(bool) * ASARRAYLEN(_mousePressed));
 		
-		/*The original has handling for slobal mouse states here... astrengine targets desktop only*/
+		/*The original has handling for global mouse states here... astrengine targets desktop only*/
 
 		if (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS)
 			pImGuiIo->MousePos = (ImVec2){(float)mx, (float)my};
@@ -569,6 +638,8 @@ ASEXPORT void asShutdownGfxImGui()
 		asReleaseBuffer(imGuiVertexBuffer[i]);
 		asReleaseBuffer(imGuiIndexBuffer[i]);
 	}
+	vkDestroyRenderPass(asVkDevice, imGuiRenderPass, AS_VK_MEMCB);
+	vkDestroyFramebuffer(asVkDevice, imGuiFramebuffers[0], AS_VK_MEMCB);
 #endif
 	asTexturePoolRelease(imGuiFontTextureIndex);
 	asReleaseTexture(imGuiFontTexture);

@@ -9,28 +9,7 @@ typedef struct{
 	int debugMode;
 } asUboGlobal;
 
-struct vScreenResources_t
-{
-	SDL_Window *pWindow;
-	VkSurfaceKHR surface;
-	VkSwapchainKHR swapchain;
-	VkSurfaceCapabilitiesKHR caps;
-	VkSurfaceFormatKHR surfFormat;
-	VkPresentModeKHR presentMode;
-	VkExtent2D extents;
-
-	uint32_t imageCount;
-	VkImage *pSwapImages;
-	VkCommandBuffer *pPresentImageToScreenCmds;
-	VkSemaphore swapImageAvailableSemaphores[AS_MAX_INFLIGHT];
-	VkSemaphore blitFinishedSemaphores[AS_MAX_INFLIGHT];
-
-	asTextureHandle_t compositeTexture;
-	asTextureHandle_t depthTexture;
-	VkFramebuffer simpleFrameBuffer;
-	VkRenderPass simpleRenderPass;
-};
-struct vScreenResources_t vMainScreen;
+asVkScreenResources vMainScreen;
 
 VkInstance asVkInstance = VK_NULL_HANDLE;
 VkPhysicalDevice asVkPhysicalDevice = VK_NULL_HANDLE;
@@ -57,6 +36,11 @@ typedef struct
 	uint32_t transferIdx;
 } vQueueFamilyIndices_t;
 vQueueFamilyIndices_t asVkQueueFamilyIndices;
+
+asVkScreenResources* asVkGetScreenResourcesPtr(int32_t screenIndex)
+{
+	return &vMainScreen;
+}
 
 bool vIsQueueFamilyComplete(vQueueFamilyIndices_t indices)
 {
@@ -1009,16 +993,6 @@ asVkAllocation_t asVkGetAllocFromBuffer(asBufferHandle_t hndl)
 	return vMainBufferManager.buffers[hndl._index].alloc;
 }
 
-VkRenderPass asVkGetSimpleDrawingRenderpass()
-{
-	return vMainScreen.simpleRenderPass;
-}
-
-VkFramebuffer asVkGetSimpleDrawingFramebuffer()
-{
-	return vMainScreen.simpleFrameBuffer;
-}
-
 VkSampler _vSamplerInterpolate;
 VkSampler _vSamplerNoInterpolate;
 VkSampler* asVkGetSimpleSamplerPtr(bool interpolate)
@@ -1144,7 +1118,7 @@ ASEXPORT asResults asSetGlobalShaderTime(double time)
 
 /*Init and Shutdown*/
 
-void vScreenResourcesCreate(struct vScreenResources_t *pScreen, SDL_Window* pWindow)
+void vScreenResourcesCreate(asVkScreenResources*pScreen, SDL_Window* pWindow)
 {
 	vkDeviceWaitIdle(asVkDevice);
 
@@ -1231,70 +1205,6 @@ void vScreenResourcesCreate(struct vScreenResources_t *pScreen, SDL_Window* pWin
 		depthDesc.pDebugLabel = "Depth";
 		pScreen->depthTexture = asCreateTexture(&depthDesc);
 	}
-	/*Simple Drawing Renderpass*/
-	{
-		VkAttachmentDescription attachments[] = {
-			(VkAttachmentDescription){ /*Color Buffer*/
-				.format = VK_FORMAT_R8G8B8A8_UNORM,
-				.samples = VK_SAMPLE_COUNT_1_BIT,
-				.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-				.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-				.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-				.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-				.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-				.finalLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
-			},
-			(VkAttachmentDescription) { /*Depth Buffer*/
-				.format = VK_FORMAT_D32_SFLOAT,
-				.samples = VK_SAMPLE_COUNT_1_BIT,
-				.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-				.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-				.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-				.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-				.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-				.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-			},
-		};
-
-		/*Setup Subpass*/
-		VkSubpassDescription subpass = (VkSubpassDescription){ 0 };
-		subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-		subpass.colorAttachmentCount = 1;
-		subpass.pColorAttachments = &(VkAttachmentReference) {
-			.attachment = 0,
-			.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-		};
-		subpass.pDepthStencilAttachment = &(VkAttachmentReference) {
-			.attachment = 1,
-			.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-		};
-
-		VkRenderPassCreateInfo createInfo = (VkRenderPassCreateInfo){VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO};
-		createInfo.attachmentCount = ASARRAYLEN(attachments);
-		createInfo.pAttachments = attachments;
-		createInfo.subpassCount = 1;
-		createInfo.pSubpasses = &subpass;
-
-		if (vkCreateRenderPass(asVkDevice, &createInfo, AS_VK_MEMCB, &pScreen->simpleRenderPass) != VK_SUCCESS)
-			asFatalError("vkCreateRenderPass() Failed to create pScreen->simpleRenderPass");
-	}
-	/*Simple Drawing Framebuffer*/
-	{
-		VkImageView attachments[] = {
-			asVkGetViewFromTexture(pScreen->compositeTexture),
-			asVkGetViewFromTexture(pScreen->depthTexture)
-		};
-		VkFramebufferCreateInfo createInfo = (VkFramebufferCreateInfo){VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
-		createInfo.renderPass = pScreen->simpleRenderPass;
-		createInfo.attachmentCount = ASARRAYLEN(attachments);
-		createInfo.pAttachments = attachments;
-		createInfo.width = pScreen->extents.width;
-		createInfo.height = pScreen->extents.height;
-		createInfo.layers = 1;
-
-		if(vkCreateFramebuffer(asVkDevice, &createInfo, AS_VK_MEMCB, &pScreen->simpleFrameBuffer) != VK_SUCCESS)
-			asFatalError("vkCreateFramebuffer() Failed to create pScreen->simpleFrameBuffer");
-	}
 	/*Screen Presentation Commands*/
 	{
 		pScreen->pPresentImageToScreenCmds = asMalloc(sizeof(VkCommandBuffer) * pScreen->imageCount);
@@ -1378,7 +1288,7 @@ void vScreenResourcesCreate(struct vScreenResources_t *pScreen, SDL_Window* pWin
 	}
 }
 
-void vScreenResourcesDestroy(struct vScreenResources_t *pScreen)
+void vScreenResourcesDestroy(asVkScreenResources*pScreen)
 {
 	/*Wait for device to come to a hault*/
 	if(asVkDevice != VK_NULL_HANDLE)
@@ -1386,9 +1296,6 @@ void vScreenResourcesDestroy(struct vScreenResources_t *pScreen)
 
 	vkFreeCommandBuffers(asVkDevice, asVkGeneralCommandPool, pScreen->imageCount, pScreen->pPresentImageToScreenCmds);
 	asFree(pScreen->pPresentImageToScreenCmds);
-
-	vkDestroyFramebuffer(asVkDevice, pScreen->simpleFrameBuffer, AS_VK_MEMCB);
-	vkDestroyRenderPass(asVkDevice, pScreen->simpleRenderPass, AS_VK_MEMCB);
 
 	for (uint32_t i = 0; i < AS_MAX_INFLIGHT; i++){
 		if (pScreen->swapImageAvailableSemaphores[i] == VK_NULL_HANDLE)
@@ -1667,7 +1574,7 @@ void asVkWindowResize()
 	vScreenResourcesCreate(&vMainScreen, asGetMainWindowPtr());
 }
 
-void vPresentFrame(struct vScreenResources_t *pScreen)
+void vPresentFrame(asVkScreenResources*pScreen)
 {
 	uint32_t imageIndex;
 	VkResult result = vkAcquireNextImageKHR(asVkDevice, pScreen->swapchain, UINT64_MAX,

@@ -8,6 +8,8 @@
 #include "engine/cimgui/asDearImGuiImplimentation.h"
 #endif
 
+#include "engine/renderer/asSceneRenderer.h"
+
 asShaderTypeRegistration shaderTypes[] =
 {
 	{ /*2D GUI*/
@@ -45,6 +47,38 @@ asShaderTypeRegistration shaderTypes[] =
 				AS_QUALITY_LOW,
 				1, /*Macros*/
 				{{"NUKLEAR","1"}}
+			},
+		}
+	},
+	{ /*3D Scene*/
+		.name = "Scene",
+		.pipelineCount = 1,
+		.pipelines = { /*Simplified Rendering Pipeline*/
+			"basic",
+			AS_PIPELINETYPE_GRAPHICS,
+			_asFillGfxPipeline_Scene, /*Callback Function*/
+			NULL, /*Callback Data*/
+			2, { /*Code Path Mappings*/
+				0, 1
+			}
+		},
+		.codePathCount = 2,
+		.codePaths = {
+			{ /*Vertex*/
+				"basic",
+				"main",
+				AS_SHADERSTAGE_VERTEX,
+				AS_QUALITY_LOW,
+				1, /*Macros*/
+				{{"RENDER_SIMPLIFIED","1"}}
+			},
+			{ /*Fragment*/
+				"basic",
+				"main",
+				AS_SHADERSTAGE_FRAGMENT,
+				AS_QUALITY_LOW,
+				1, /*Macros*/
+				{{"RENDER_SIMPLIFIED","1"}}
 			},
 		}
 	},
