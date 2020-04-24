@@ -51,9 +51,6 @@ struct shaderc_include_result* includeFile(void* userData, const char* requested
 	fread(glslContents, fileSize, 1, fp);
 	fclose(fp);
 
-	/*Process Reflection Macros for Includes*/
-	processMacros(&pIncludeData->pFxCreator, glslContents, fileSize, requestedFile);
-
 	/*Return Result*/
 	struct shaderc_include_result* result = asMalloc(sizeof(struct shaderc_include_result));
 	ASASSERT(result);
@@ -126,9 +123,6 @@ asResults glslToSpirv(FxCreator* pFxCreator, const char* contents, size_t conten
 			codePath->macros[i].value, strlen(codePath->macros[i].value));
 	}
 
-	/*Process Reflection Macros for Top Level*/
-	processMacros(&pFxCreator, contents, contentsSize, fileName);
-
 	/*Compile*/
 	shaderc_compilation_result_t result = shaderc_compile_into_spv(
 		glslCompiler,
@@ -144,7 +138,6 @@ asResults glslToSpirv(FxCreator* pFxCreator, const char* contents, size_t conten
 	{
 		const char* error = shaderc_result_get_error_message(result);
 		asDebugLog("[ERROR]> Pipeline: \"%s\" Error: \"%s\"", permName, error);
-		//if (getchar()) {};
 		_fcloseall();
 		exit(status);
 	}

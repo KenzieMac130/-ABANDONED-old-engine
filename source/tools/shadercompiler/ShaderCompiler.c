@@ -4,7 +4,6 @@
 #include "GLSLCompiler.h"
 #include "FxCreator.h"
 
-/*argv[1]: Input .glsl, argv[2]: Output .asfx, argv[3] Target: "SPIR-V", argv[4] Shader Class*/
 int main(int argc, char* argv[])
 {
 	asDebugLog("Running Shader Compiler...");
@@ -45,11 +44,6 @@ int main(int argc, char* argv[])
 	{
 		strncat(target, "SPIR-V", 31);
 	}
-	else
-	{
-		strncat(target, argv[3], 31);
-		asDebugLog("%s", target);
-	}
 
 	/*Open File*/
 	FILE* fp = fopen(assetPath, "rb");
@@ -89,6 +83,26 @@ int main(int argc, char* argv[])
 	{
 		asDebugLog("[ERROR]> Could not create file: %s", outputPath);
 		return 2;
+	}
+
+	/*Generate Reflection*/
+	char reflectInfoStatic[4096];
+	char* reflectInfo = reflectInfoStatic;
+	if (argc < 5) /*Output Path*/
+	{
+		asDebugLog("Input Reflect Info");
+		memset(reflectInfoStatic, 0, 4096);
+		fgets(reflectInfoStatic, 4095, stdin);
+		for (int i = 0; i < 4096; i++) { if (reflectInfoStatic[i] == '\n') { reflectInfoStatic[i] = '\0'; } }
+	}
+	else
+	{
+		reflectInfo = argv[4];
+	}
+	if (processMacros(&fxCreator, reflectInfo, strlen(reflectInfo)) != AS_SUCCESS)
+	{
+		asDebugLog("[ERROR]> Invalid Reflection Data: %s", reflectInfo);
+		return 3;
 	}
 
 	/*Compile all Permutations*/
