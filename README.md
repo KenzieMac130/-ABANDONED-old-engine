@@ -26,7 +26,7 @@ I am developing this as a hobby.
 ## Dependencies
 ### Precompiled Dependencies
 * Windows https://drive.google.com/open?id=1qafd7WMtvplOJj94ipOUA_4B7pLW8xR2
-### Default Assets and Shaders + Python Asset Build System
+### Default Assets and Shaders + WAF Asset Build System
 * https://github.com/astrand130/astrengine-assets
-### Install Helpers
+### Installation Walkthrough
 * Windows Batch: https://drive.google.com/open?id=1-DxLFx7Te8juICgSsDHFG8qtwOjb6Rmv
