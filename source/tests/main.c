@@ -20,7 +20,7 @@
 #include "nuklearOverview.h"
 
 #include "engine/guiTools/cmdConsole/asCmdConsole.h"
-#include "engine/flecs/asFlecsImplimentation.h"
+//#include "engine/flecs/asFlecsImplimentation.h"
 #include "engine/renderer/asTextureFromKtx.h"
 #include "engine/renderer/asBindlessTexturePool.h"
 
@@ -86,20 +86,20 @@ typedef struct TestComponent2
 	float doot;
 } TestComponent2;
 
-void ecsTest(ecs_rows_t* rows) {
-	ECS_COLUMN(rows, TestComponent2, dat, 1);
+//void ecsTest(ecs_rows_t* rows) {
+//	ECS_COLUMN(rows, TestComponent2, dat, 1);
+//
+//	for (int i = 0; i < rows->count; i++)
+//	{
+//		//asDebugLog("Doot #%d = %f", i, dat[i].doot);
+//	}
+//}
 
-	for (int i = 0; i < rows->count; i++)
-	{
-		//asDebugLog("Doot #%d = %f", i, dat[i].doot);
-	}
-}
-
-asResults addEntityTest(const char* propName, void* pCurrentValue, void* pNewValueTmp, void* pUserData)
-{
-	ecs_world_t* world = asEcsGetWorldPtr();
-	return AS_SUCCESS;
-}
+//asResults addEntityTest(const char* propName, void* pCurrentValue, void* pNewValueTmp, void* pUserData)
+//{
+//	ecs_world_t* world = asEcsGetWorldPtr();
+//	return AS_SUCCESS;
+//}
 
 int main(int argc, char* argv[])
 {
@@ -125,7 +125,7 @@ int main(int argc, char* argv[])
 		asPreferencesRegisterParamCString(asGetGlobalPrefs(), "testString", testStr, 80, false, NULL, NULL, NULL);
 		asPreferencesRegisterNullFunction(asGetGlobalPrefs(), "showAsciiArt", showAscii, false, NULL, NULL);
 		asPreferencesRegisterNullFunction(asGetGlobalPrefs(), "reflectTest", doReflectTest, false, NULL, NULL);
-		asPreferencesRegisterParamFloat(asGetGlobalPrefs(), "addEntityTest", NULL, -FLT_MAX, FLT_MAX, false, addEntityTest, NULL, NULL);
+		//asPreferencesRegisterParamFloat(asGetGlobalPrefs(), "addEntityTest", NULL, -FLT_MAX, FLT_MAX, false, addEntityTest, NULL, NULL);
 		asPreferencesLoadSection(asGetGlobalPrefs(), "test");
 
 		asDebugLog("Test String:%.*s", 80, testStr);
@@ -196,14 +196,14 @@ int main(int argc, char* argv[])
 		asFree(desc.pInitialContentsBuffer);
 	}
 	/*Setup ECS for Testing*/
-	{
+	/*{
 		ecs_world_t* world = asEcsGetWorldPtr();
 		ECS_COMPONENT(world, TestComponent2);
 		ECS_SYSTEM(world, ecsTest, EcsOnUpdate, TestComponent2);
 		
 		ECS_ENTITY(world, MyEntity, TestComponent2);
 		ecs_set(world, MyEntity, TestComponent2, { 65 });
-	}
+	}*/
 
 	asLoopDesc_t loopDesc;
 	loopDesc.fpOnUpdate = (asUpdateFunction_t)onUpdate;
