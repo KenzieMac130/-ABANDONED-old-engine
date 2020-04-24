@@ -8,9 +8,15 @@ set_property(TARGET astrengine PROPERTY FOLDER "astrengine")
 #LINK SUBLIBRARIES
 target_link_libraries(astrengine asResource)
 target_link_libraries(astrengine asRenderer)
-#target_link_libraries(astrengine asNuklear)
+if(ASTRENGINE_NUKLEAR)
+target_link_libraries(astrengine asNuklear)
+endif()
+if(ASTRENGINE_DEARIMGUI)
 target_link_libraries(astrengine asDearImgui)
+endif()
+if(ASTRENGINE_FLECS)
 target_link_libraries(astrengine asFlecs)
+endif()
 
 #LINK GUI TOOLS
 target_link_libraries(astrengine asCmdConsole)

@@ -54,7 +54,7 @@ typedef enum
 * @brief determine the size of a C array
 * @warning do not use this for memory created with custom allocators!
 */
-#define ASARRAYLEN(arr) sizeof(arr)/sizeof(arr[0])
+#define ASARRAYLEN(arr) (sizeof(arr)/sizeof(arr[0]))
 
 /**
 * @brief better syntax than "strncmp() == 0"

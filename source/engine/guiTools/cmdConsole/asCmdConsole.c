@@ -56,9 +56,55 @@ ASEXPORT asResults asGuiToolCommandConsole_RegisterPrefManager(asPreferenceManag
 	return AS_SUCCESS;
 }
 
-asResults enterCommand(const char* commandString)
+void displayHelp()
 {
-	asDebugLog("Command-> %.*s", MAX_LINE_INPUT, commandString);
+	asDebugLog(
+		"----------Console Help----------\n"
+		"Right-click box for command catalog\n"
+		"(command)!: Display the current command value if applicaple\n"
+		"(command)?: Display the current command help string\n"
+		"-help: Show help for the console");
+	for (size_t n = 0; n < namespaceCount; n++) /*Namespaces*/
+	{
+		size_t sectionCount = asPreferencesInspectGetSectionCount(pNamespacePrefs[n]);
+		for (size_t s = 0; s < sectionCount; s++)
+		{
+			const char* sectionName = NULL;
+			asPreferencesInspectGetSectionNameTmp(pNamespacePrefs[n], s, &sectionName);
+			size_t entryCount = asPreferencesInspectGetEntryCount(pNamespacePrefs[n], s);
+			for (size_t e = 0; e < entryCount; e++)
+			{
+				const char* entryName = NULL;
+				asPreferencesInspectGetEntryNameTmp(pNamespacePrefs[n], s, e, &entryName);
+				const char* helpString = asPreferencesGetParamHelp(pNamespacePrefs[n], sectionName, entryName);
+				if (helpString) {
+					asDebugLog("-%s.%s.%s: %s",
+						namespaceNames[n],
+						sectionName,
+						entryName,
+						helpString);
+				}
+				else {
+					asDebugLog("-%s.%s.%s",
+						namespaceNames[n],
+						sectionName,
+						entryName);
+				}
+			}
+		}
+	}
+}
+
+asResults enterCommand(const char* commandString, bool silent)
+{
+	if (!silent) { asDebugLog("Command-> %.*s", MAX_LINE_INPUT, commandString); }
+
+	/*Help*/
+	if (asIsStringEqual(commandString, "help"))
+	{
+		displayHelp();
+		return AS_SUCCESS;
+	}
 
 	char buffer[MAX_LINE_INPUT];
 	memset(buffer, 0, MAX_LINE_INPUT);
@@ -207,7 +253,7 @@ ASEXPORT void asGuiToolCommandConsoleUI()
 			_commandEntryCallback, currentText))
 		{
 			reclaimCommandFocus = true;
-			enterCommand(currentText);
+			enterCommand(currentText, false);
 			memcpy(commandHistory[commandHistoryPoint % COMMAND_HISTORY], currentText, MAX_LINE_INPUT);
 			commandHistoryPoint++;
 			commandHistoryNewest = commandHistoryPoint;
@@ -260,4 +306,9 @@ ASEXPORT void asGuiToolCommandConsoleUI()
 			igSetKeyboardFocusHere(-1);
 	}
 	igEnd();
+}
+
+ASEXPORT void asGuiToolCommandConsole_ExecuteCommand(const char* command)
+{
+	return enterCommand(command, true);
 }

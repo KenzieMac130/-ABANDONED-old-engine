@@ -36,6 +36,7 @@ ASEXPORT asResults asPreferenceManagerDestroy(asPreferenceManager* pManager);
 
 ASEXPORT asResults asPreferencesSetParam(asPreferenceManager* pManager, const char* section, const char* name, const char* valueStr);
 
+ASEXPORT const char* asPreferencesGetParamHelp(asPreferenceManager* pManager, const char* section, const char* name);
 ASEXPORT asResults asPreferencesPrintParamHelp(asPreferenceManager* pManager, const char* section, const char* name);
 ASEXPORT asResults asPreferencesPrintParamValue(asPreferenceManager* pManager, const char* section, const char* name);
 

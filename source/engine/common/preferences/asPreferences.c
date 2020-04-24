@@ -219,23 +219,31 @@ ASEXPORT asResults asPreferencesSetParam(asPreferenceManager* pManager, const ch
 	return _preferencesSetParam(pManager, sectionName, name, valueStrEntered, false);
 }
 
-ASEXPORT asResults asPreferencesPrintParamHelp(asPreferenceManager* pManager, const char* sectionName, const char* name)
+ASEXPORT const char* asPreferencesGetParamHelp(asPreferenceManager* pManager, const char* sectionName, const char* name)
 {
 	/*Find Section*/
 	struct prefSection* pSection = &shget(pManager->sectionHM, sectionName);
-	if (!pSection->valid) { return AS_FAILURE_DATA_DOES_NOT_EXIST; }
+	if (!pSection->valid) { return NULL; }
 
 	/*Find Param*/
 	struct prefEntry* pEntry = &shget(pSection->prefHM, name);
-	if (!pEntry->name) { return AS_FAILURE_DATA_DOES_NOT_EXIST; }
+	if (!pEntry->name) { return NULL; }
 
 	/*If No Help Available*/
-	if (!pEntry->helpStr) { 
+	if (!pEntry->helpStr) { return NULL; }
+
+	return pEntry->helpStr;
+}
+
+ASEXPORT asResults asPreferencesPrintParamHelp(asPreferenceManager* pManager, const char* sectionName, const char* name)
+{
+	const char* helpStr = asPreferencesGetParamHelp(pManager, sectionName, name);
+	if (!helpStr) { 
 		asDebugLog("No Help Available for \"%s.%s\"... :(", sectionName, name); 
 		return AS_SUCCESS; 
 	}
 
-	asDebugLog("\"%s.%s\"?: %s", sectionName, name, pEntry->helpStr);
+	asDebugLog("\"%s.%s\"?: %s", sectionName, name, helpStr);
 	return AS_SUCCESS;
 }
 

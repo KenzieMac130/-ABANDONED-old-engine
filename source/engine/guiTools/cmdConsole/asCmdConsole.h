@@ -14,6 +14,8 @@ ASEXPORT asResults asGuiToolCommandConsole_RegisterPrefManager(asPreferenceManag
 /*Immediate GUI Widget*/
 ASEXPORT void asGuiToolCommandConsoleUI();
 
+ASEXPORT void asGuiToolCommandConsole_ExecuteCommand(const char* command);
+
 #ifdef __cplusplus
 }
 #endif
