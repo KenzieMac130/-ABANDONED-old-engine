@@ -460,10 +460,6 @@ ASEXPORT void asImGuiDraw(int32_t viewport)
 	uint32_t listVtxOffset = 0;
 	for (int i = 0; i < pDrawData->CmdListsCount; i++)
 	{
-		if (pDrawData->CmdListsCount > 1) 
-		{ 
-			bool doshit = true;
-		}
 		const ImDrawList* imList = pDrawData->CmdLists[i];
 		for (int c = 0; c < imList->CmdBuffer.Size; c++)
 		{
