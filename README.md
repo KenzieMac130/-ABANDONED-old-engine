@@ -25,7 +25,9 @@ I am developing this as a hobby. Please don't use this in production with any ri
 
 ## Dependencies
 ### Precompiled Dependencies
-* Windows https://drive.google.com/open?id=1qafd7WMtvplOJj94ipOUA_4B7pLW8xR2
+* SDL https://www.libsdl.org/download-2.0.php
+* Shaderc https://github.com/google/shaderc/blob/master/downloads.md
+* (Zip of All - Windows) https://drive.google.com/open?id=1qafd7WMtvplOJj94ipOUA_4B7pLW8xR2
 ### Default Assets and Shaders + WAF Asset Build System
 * https://github.com/astrand130/astrengine-assets
 ### Installation Walkthrough
