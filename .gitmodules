@@ -1,0 +1,3 @@
+[submodule "newton-dynamics"]
+	path = source/thirdparty/newton-dynamics
+	url = https://github.com/MADEAPPS/newton-dynamics.git
