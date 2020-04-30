@@ -1,5 +1,5 @@
 # astrengine
-In-House Game Engine by Alex Strand
+In-House Toy Game Engine by Alex Strand
 
 ## Features
 * Itteration Flexibility
@@ -21,7 +21,7 @@ In-House Game Engine by Alex Strand
   * Lightweight PBR renderer
  
 ## Use Case
-I am developing this as a hobby.
+I am developing this as a hobby. Please don't use this in production with any risk.
 
 ## Dependencies
 ### Precompiled Dependencies
