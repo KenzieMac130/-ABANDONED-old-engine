@@ -5,7 +5,7 @@
 ASEXPORT void asVertexGeneric_encodePosition(asVertexGeneric* pVertex, const vec3 pos)
 {
 	float* pPos = (float*)pVertex->position;
-	memcpy(pPos, pos, sizeof(float) * 4);
+	memcpy(pPos, pos, sizeof(float) * 3);
 }
 
 ASEXPORT void asVertexGeneric_encodeNormal(asVertexGeneric* pVertex, const vec3 normal)

@@ -474,6 +474,13 @@ ASEXPORT asResults asInitSceneRenderer()
 	return AS_SUCCESS;
 }
 
+ASEXPORT asResults asTriggerResizeSceneRenderer()
+{
+	asShutdownSceneRenderer();
+	asInitSceneRenderer();
+	return AS_SUCCESS;
+}
+
 ASEXPORT asResults asSceneRendererDraw(int32_t viewport)
 {
 	int viewWidth, viewHeight;

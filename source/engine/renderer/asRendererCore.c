@@ -275,6 +275,8 @@ ASEXPORT void asGfxTriggerResizeEvent()
 #if ASTRENGINE_VK
 	asVkWindowResize();
 #endif
+	asTriggerResizeImGui();
+	asTriggerResizeSceneRenderer();
 }
 
 ASEXPORT void asGfxInternalDebugDraws()

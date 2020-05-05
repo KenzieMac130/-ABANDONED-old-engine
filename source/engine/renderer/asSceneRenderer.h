@@ -24,6 +24,7 @@ typedef struct {
 typedef struct asPrimitiveSubmissionQueueT* asPrimitiveSubmissionQueue;
 
 ASEXPORT asResults asInitSceneRenderer();
+ASEXPORT asResults asTriggerResizeSceneRenderer();
 ASEXPORT asResults asShutdownSceneRenderer();
 
 ASEXPORT asPrimitiveSubmissionQueue asSceneRendererCreateSubmissionQueue(asPrimitiveSubmissionQueueDesc* pDesc);
@@ -52,11 +53,14 @@ typedef enum {
 	AS_SCENE_RENDERPASS_MAX = UINT32_MAX
 } asSceneRenderPass;
 
+/*Layout of structure is to ensure padding with vec4*/
 typedef struct {
-	float position[3];
-	float rotation[4];
-	float scale[3];
-	float customProps[4];
+	float position[3]; /**< Position (XYZ)*/
+	float relativeTime; /**< Relative Time Value*/
+	float rotation[4]; /**< Rotation (XYZW)*/
+	float scale[3]; /**< Scale (XYZ)*/
+	float opacity; /**< Per-Transform Fade Opacity (Useful for LOD)*/
+	float customProps[4]; /**< Custom Shader Props*/
 } asGfxInstanceTransform;
 
 typedef struct {

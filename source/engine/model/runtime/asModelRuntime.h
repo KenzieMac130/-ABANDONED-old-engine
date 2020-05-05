@@ -28,9 +28,9 @@ extern "C" {
 	AS_REFLECT_ENTRY_SINGLE(asVertexGeneric, uint32_t, tangent, AS_REFLECT_FORMAT_NONE)\
 	AS_REFLECT_ENTRY_SINGLE(asVertexGeneric, uint32_t, uv0, AS_REFLECT_FORMAT_NONE)\
 	AS_REFLECT_ENTRY_SINGLE(asVertexGeneric, uint32_t, uv1, AS_REFLECT_FORMAT_NONE)\
-	AS_REFLECT_ENTRY_SINGLE(asVertexGeneric, uint32_t, color, AS_REFLECT_FORMAT_NONE)\
+	AS_REFLECT_ENTRY_ARRAY(asVertexGeneric, uint8_t, color, 4, AS_REFLECT_FORMAT_NONE)\
 	AS_REFLECT_ENTRY_ARRAY(asVertexGeneric, uint16_t, boneIdx, 4, AS_REFLECT_FORMAT_NONE)\
-	AS_REFLECT_ENTRY_SINGLE(asVertexGeneric, uint32_t, boneWeight, AS_REFLECT_FORMAT_NONE)\
+	AS_REFLECT_ENTRY_ARRAY(asVertexGeneric, uint8_t, boneWeight, 4, AS_REFLECT_FORMAT_NONE)\
 )
 
 REFLECT_MACRO_Vertex_Generic

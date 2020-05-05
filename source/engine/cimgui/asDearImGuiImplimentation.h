@@ -27,6 +27,12 @@ ASEXPORT void asInitImGui();
 ASEXPORT void asImGuiDraw(int32_t viewport);
 
 /**
+* @brief Trigger Reset
+* @warning The engine update should handle this for you
+*/
+ASEXPORT void asTriggerResizeImGui();
+
+/**
 * @brief Reset DearImgui for next frame
 * @warning The engine update should handle this for you
 */

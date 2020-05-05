@@ -17,8 +17,8 @@
 
 #include "../renderer/asBindlessTexturePool.h"
 
-#define AS_IMGUI_MAX_VERTS 65536
-#define AS_IMGUI_MAX_INDICES 65536
+#define AS_IMGUI_MAX_VERTS 65536*2
+#define AS_IMGUI_MAX_INDICES 65536*3
 ImGuiContext* pImGuiContext;
 ImGuiIO* pImGuiIo;
 
@@ -143,6 +143,82 @@ static int32_t imguiDrawStyle = 0;
 
 /*Cursor*/
 static SDL_Cursor* _mouseCursors[ImGuiMouseCursor_COUNT];
+
+void _createScreenDepResources()
+{
+	/*Renderpass*/
+	{
+		VkAttachmentDescription attachments[] = {
+			(VkAttachmentDescription) { /*Color Buffer*/
+				.format = VK_FORMAT_R8G8B8A8_UNORM,
+				.samples = VK_SAMPLE_COUNT_1_BIT,
+				.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+				.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+				.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+				.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+				.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+				.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+			},
+			(VkAttachmentDescription) { /*Depth Buffer*/
+				.format = VK_FORMAT_D32_SFLOAT,
+				.samples = VK_SAMPLE_COUNT_1_BIT,
+				.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+				.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+				.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+				.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+				.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+				.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+			},
+		};
+
+		/*Setup Subpass*/
+		VkSubpassDescription subpass = (VkSubpassDescription){ 0 };
+		subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+		subpass.colorAttachmentCount = 1;
+		subpass.pColorAttachments = &(VkAttachmentReference) {
+			.attachment = 0,
+				.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+		};
+		subpass.pDepthStencilAttachment = &(VkAttachmentReference) {
+			.attachment = 1,
+				.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+		};
+
+		VkRenderPassCreateInfo createInfo = (VkRenderPassCreateInfo){ VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO };
+		createInfo.attachmentCount = ASARRAYLEN(attachments);
+		createInfo.pAttachments = attachments;
+		createInfo.subpassCount = 1;
+		createInfo.pSubpasses = &subpass;
+
+		if (vkCreateRenderPass(asVkDevice, &createInfo, AS_VK_MEMCB, &imGuiRenderPass) != VK_SUCCESS)
+			asFatalError("vkCreateRenderPass() Failed to create pScreen->simpleRenderPass");
+	}
+	/*Framebuffer (For Each Screen)*/
+	{
+		const int screenIdx = 0;
+		asVkScreenResources* pScreen = asVkGetScreenResourcesPtr(screenIdx);
+		VkImageView attachments[] = {
+			asVkGetViewFromTexture(pScreen->compositeTexture),
+			asVkGetViewFromTexture(pScreen->depthTexture)
+		};
+		VkFramebufferCreateInfo createInfo = (VkFramebufferCreateInfo){ VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO };
+		createInfo.renderPass = imGuiRenderPass;
+		createInfo.attachmentCount = ASARRAYLEN(attachments);
+		createInfo.pAttachments = attachments;
+		createInfo.width = pScreen->extents.width;
+		createInfo.height = pScreen->extents.height;
+		createInfo.layers = 1;
+
+		if (vkCreateFramebuffer(asVkDevice, &createInfo, AS_VK_MEMCB, &imGuiFramebuffers[screenIdx]) != VK_SUCCESS)
+			asFatalError("vkCreateFramebuffer() Failed to create pScreen->simpleFrameBuffer");
+	}
+}
+
+void _destroyScreenDepResources()
+{
+	vkDestroyRenderPass(asVkDevice, imGuiRenderPass, AS_VK_MEMCB);
+	vkDestroyFramebuffer(asVkDevice, imGuiFramebuffers[0], AS_VK_MEMCB);
+}
 
 ASEXPORT void asInitImGui()
 {
@@ -290,73 +366,8 @@ ASEXPORT void asInitImGui()
 		if (vkCreatePipelineLayout(asVkDevice, &createInfo, AS_VK_MEMCB, &imGuiPipelineLayout) != VK_SUCCESS)
 			asFatalError("vkCreatePipelineLayout() Failed to create imGuiPipelineLayout");
 	}
-	/*Renderpass*/
-	{
-		VkAttachmentDescription attachments[] = {
-			(VkAttachmentDescription) { /*Color Buffer*/
-				.format = VK_FORMAT_R8G8B8A8_UNORM,
-				.samples = VK_SAMPLE_COUNT_1_BIT,
-				.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
-				.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-				.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-				.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-				.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-				.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-			},
-			(VkAttachmentDescription) { /*Depth Buffer*/
-				.format = VK_FORMAT_D32_SFLOAT,
-				.samples = VK_SAMPLE_COUNT_1_BIT,
-				.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-				.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-				.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-				.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-				.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-				.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-			},
-		};
-
-		/*Setup Subpass*/
-		VkSubpassDescription subpass = (VkSubpassDescription){ 0 };
-		subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-		subpass.colorAttachmentCount = 1;
-		subpass.pColorAttachments = &(VkAttachmentReference) {
-			.attachment = 0,
-				.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-		};
-		subpass.pDepthStencilAttachment = &(VkAttachmentReference) {
-			.attachment = 1,
-				.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-		};
-
-		VkRenderPassCreateInfo createInfo = (VkRenderPassCreateInfo){ VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO };
-		createInfo.attachmentCount = ASARRAYLEN(attachments);
-		createInfo.pAttachments = attachments;
-		createInfo.subpassCount = 1;
-		createInfo.pSubpasses = &subpass;
-
-		if (vkCreateRenderPass(asVkDevice, &createInfo, AS_VK_MEMCB, &imGuiRenderPass) != VK_SUCCESS)
-			asFatalError("vkCreateRenderPass() Failed to create pScreen->simpleRenderPass");
-	}
-	/*Framebuffer (For Each Screen)*/
-	{
-		const int screenIdx = 0;
-		asVkScreenResources* pScreen = asVkGetScreenResourcesPtr(screenIdx);
-		VkImageView attachments[] = {
-			asVkGetViewFromTexture(pScreen->compositeTexture),
-			asVkGetViewFromTexture(pScreen->depthTexture)
-		};
-		VkFramebufferCreateInfo createInfo = (VkFramebufferCreateInfo){ VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO };
-		createInfo.renderPass = imGuiRenderPass;
-		createInfo.attachmentCount = ASARRAYLEN(attachments);
-		createInfo.pAttachments = attachments;
-		createInfo.width = pScreen->extents.width;
-		createInfo.height = pScreen->extents.height;
-		createInfo.layers = 1;
-
-		if (vkCreateFramebuffer(asVkDevice, &createInfo, AS_VK_MEMCB, &imGuiFramebuffers[screenIdx]) != VK_SUCCESS)
-			asFatalError("vkCreateFramebuffer() Failed to create pScreen->simpleFrameBuffer");
-	}
 #endif
+	_createScreenDepResources();
 	/*Load shader*/
 	{
 		unsigned char* fileData;
@@ -379,13 +390,18 @@ ASEXPORT void asInitImGui()
 	igNewFrame();
 }
 
+ASEXPORT void asTriggerResizeImGui()
+{
+	_destroyScreenDepResources();
+	_createScreenDepResources();
+}
+
 ASEXPORT void asImGuiDraw(int32_t viewport)
 {
 	/*Drawing*/
 	int viewWidth, viewHeight;
 	asGetRenderDimensions(viewport, true, &viewWidth, &viewHeight);
 	_imguiGetRenderDim(viewport);
-
 	/*Render and Get Draw Data*/
 	igRender();
 	ImDrawData* pDrawData = igGetDrawData();
@@ -399,8 +415,10 @@ ASEXPORT void asImGuiDraw(int32_t viewport)
 		{
 			vtxCount += pDrawData->CmdLists[i]->VtxBuffer.Size;
 			idxCount += pDrawData->CmdLists[i]->IdxBuffer.Size;
-			if (vtxCount > AS_IMGUI_MAX_VERTS) { asDebugWarning("ImGui Vertex Overflow!!!"); continue; }
-			if (idxCount > AS_IMGUI_MAX_INDICES) { asDebugWarning("ImGui Index Overflow!!!"); continue; }
+			if (vtxCount > AS_IMGUI_MAX_VERTS) { 
+				asDebugWarning("ImGui Vertex Overflow!!!"); continue; }
+			if (idxCount > AS_IMGUI_MAX_INDICES) {
+				asDebugWarning("ImGui Index Overflow!!!"); continue; }
 			memcpy(pVertDest, pDrawData->CmdLists[i]->VtxBuffer.Data, pDrawData->CmdLists[i]->VtxBuffer.Size * sizeof(ImDrawVert));
 			memcpy(pIdxDest, pDrawData->CmdLists[i]->IdxBuffer.Data, pDrawData->CmdLists[i]->IdxBuffer.Size * sizeof(ImDrawIdx));
 			pIdxDest += pDrawData->CmdLists[i]->IdxBuffer.Size;
@@ -634,8 +652,7 @@ ASEXPORT void asShutdownGfxImGui()
 		asReleaseBuffer(imGuiVertexBuffer[i]);
 		asReleaseBuffer(imGuiIndexBuffer[i]);
 	}
-	vkDestroyRenderPass(asVkDevice, imGuiRenderPass, AS_VK_MEMCB);
-	vkDestroyFramebuffer(asVkDevice, imGuiFramebuffers[0], AS_VK_MEMCB);
+	_destroyScreenDepResources();
 #endif
 	asTexturePoolRelease(imGuiFontTextureIndex);
 	asReleaseTexture(imGuiFontTexture);

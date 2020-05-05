@@ -226,15 +226,27 @@ int main(int argc, char* argv[])
 			{ 0, 0, 255, 255 },
 		};
 		float vPos[ASARRAYLEN(tris)][3] = {
-			{0.0f, 0.0f, 0.0f},
-			{0.0f, 0.0f, 0.0f},
-			{0.0f, 0.0f, 0.0f},
+			{0.0f, -0.5f, 0.0f},
+			{0.5f, 0.5f, 0.0f},
+			{-0.5f, 0.5f, 0.0f},
+		};
+		float vNormal[ASARRAYLEN(tris)][3] = {
+			{0.0f, 0.0f, -1.0f},
+			{0.0f, 0.0f, -1.0f},
+			{0.0f, 0.0f, -1.0f},
+		};
+		float vUV[ASARRAYLEN(tris)][2] = {
+			{0.5f, 0.0f},
+			{1.0f, 1.0f},
+			{0.0f, 1.0f},
 		};
 
 		for (int i = 0; i < ASARRAYLEN(tris); i++)
 		{
 			asVertexGeneric_encodePosition(&tris[i], vPos[i]);
 			asVertexGeneric_encodeColor(&tris[i], vColors[i]);
+			asVertexGeneric_encodeNormal(&tris[i], vNormal[i]);
+			asVertexGeneric_encodeUV(&tris[i], 0, vUV[i]);
 		}
 
 		/*Buffers*/
@@ -276,7 +288,8 @@ int main(int argc, char* argv[])
 		asGfxInstanceTransform transform = {
 			.position = {0.0f, 0.0f, 0.0f},
 			.rotation = {0.0f, 0.0f, 0.0f, 1.0f},
-			.scale = {1.0f, 1.0f, 1.0f}
+			.scale = {1.0f, 1.0f, 1.0f},
+			.opacity = 1.0f
 		};
 		asSceneRendererSubmissionAddTransforms(subQueue, 1, &transform, &transformOffset);
 
