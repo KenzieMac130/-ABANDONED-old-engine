@@ -26,17 +26,28 @@
 
 #include "engine/model/runtime/asModelRuntime.h"
 
+#include "engine/renderer/asSceneRenderer.h"
+#include "engine/model/runtime/asModelRuntime.h"
+
 void onUpdate(double time)
 {
 }
 
 asTextureHandle_t texture;
-asBufferHandle_t buffer;
+asBufferHandle_t vBuffer;
+asBufferHandle_t iBuffer;
+asShaderFx* pStandardSurfaceShader;
+asResourceFileID_t standardSurfaceShaderFileID;
 
-void onExit()
+asPrimitiveSubmissionQueue subQueue;
+
+void onExit(void)
 {
+	asReleaseBuffer(vBuffer);
+	asReleaseBuffer(iBuffer);
 	asReleaseTexture(texture);
-	asReleaseBuffer(buffer);
+	asShaderFxManagerDereferenceShaderFx(standardSurfaceShaderFileID);
+	asSceneRendererDestroySubmissionQueue(subQueue);
 	asShutdown();
 }
 
@@ -103,17 +114,17 @@ typedef struct TestComponent2
 
 int main(int argc, char* argv[])
 {
-	asAppInfo_t appInfo = (asAppInfo_t){0};
+	asAppInfo_t appInfo = (asAppInfo_t){ 0 };
 	appInfo.pAppName = "astrengine_Testbed";
 	appInfo.pDevName = "Alex Strand";
 	appInfo.appVersion.major = 1; appInfo.appVersion.minor = 0; appInfo.appVersion.patch = 0;
-	atexit(asShutdown);
+	atexit(onExit);
 	asIgnite(argc, argv, &appInfo, NULL);
 
 	/*Vertex Tests*/
 	{
 		asVertexGeneric vertex;
-		asVertexGeneric_encodeNormal(&vertex, (vec3){ 0.4f, -1.0f, 0.03f });
+		asVertexGeneric_encodeNormal(&vertex, (vec3) { 0.4f, -1.0f, 0.03f });
 		asVertexGeneric_encodeTangent(&vertex, (vec3) { 0.4f, -1.0f, 1.0f }, 1);
 		asVertexGeneric_encodeUV(&vertex, 1, (vec2) { 0.5f, -54.0f });
 		asDebugLog("Vertex Size = %d", sizeof(vertex));
@@ -153,7 +164,7 @@ int main(int argc, char* argv[])
 		{
 			asFatalError("Failed to open image");
 		}
-		
+
 		size_t fSize = asResourceLoader_GetContentSize(&file);
 		unsigned char* fContents = asMalloc(fSize);
 		asResourceLoader_ReadAll(&file, fSize, fContents);
@@ -174,7 +185,7 @@ int main(int argc, char* argv[])
 		asResource_DeincrimentReferences(resID, 3);
 
 		asResourceDataMapping_t* deleteQueue;
-		size_t count = asResource_GetDeletionQueue(resourceType_Texture, &deleteQueue);
+		size_t count = asResource_GetDeletionQueue(resourceType_Texture, NULL, &deleteQueue);
 		for (size_t i = 0; i < count; i++)
 		{
 			//asReleaseTexture(deleteQueue[i].hndl);
@@ -182,7 +193,7 @@ int main(int argc, char* argv[])
 	}
 	/*Test buffer creation*/
 	{
-		asBufferDesc_t desc = asBufferDesc_Init();
+		/*asBufferDesc_t desc = asBufferDesc_Init();
 		desc.bufferSize = 1024;
 		desc.cpuAccess = AS_GPURESOURCEACCESS_STREAM;
 		desc.usageFlags = AS_BUFFERUSAGE_VERTEX;
@@ -190,20 +201,105 @@ int main(int argc, char* argv[])
 		desc.pInitialContentsBuffer = asMalloc(desc.initialContentsBufferSize);
 		memset(desc.pInitialContentsBuffer, 0, desc.initialContentsBufferSize);
 		desc.pDebugLabel = "TestBuffer";
-		buffer = asCreateBuffer(&desc);
-		/*Hash test*/
-		asHash64_t hash = asHashBytes64_xxHash(desc.pInitialContentsBuffer, desc.initialContentsBufferSize);
-		asFree(desc.pInitialContentsBuffer);
+		buffer = asCreateBuffer(&desc);*/
+		///*Hash test*/
+		//asHash64_t hash = asHashBytes64_xxHash(desc.pInitialContentsBuffer, desc.initialContentsBufferSize);
+		//asFree(desc.pInitialContentsBuffer);
 	}
 	/*Setup ECS for Testing*/
 	/*{
 		ecs_world_t* world = asEcsGetWorldPtr();
 		ECS_COMPONENT(world, TestComponent2);
 		ECS_SYSTEM(world, ecsTest, EcsOnUpdate, TestComponent2);
-		
+
 		ECS_ENTITY(world, MyEntity, TestComponent2);
 		ecs_set(world, MyEntity, TestComponent2, { 65 });
 	}*/
+	/*Hello Triange*/
+	{
+		/*Triangles*/
+		asVertexGeneric tris[3] = { 0 };
+		uint16_t indices[3] = { 0, 1, 2 };
+		uint8_t vColors[ASARRAYLEN(tris)][4] = {
+			{ 255, 0, 0, 255 },
+			{ 0, 255, 0, 255 },
+			{ 0, 0, 255, 255 },
+		};
+		float vPos[ASARRAYLEN(tris)][3] = {
+			{0.0f, 0.0f, 0.0f},
+			{0.0f, 0.0f, 0.0f},
+			{0.0f, 0.0f, 0.0f},
+		};
+
+		for (int i = 0; i < ASARRAYLEN(tris); i++)
+		{
+			asVertexGeneric_encodePosition(&tris[i], vPos[i]);
+			asVertexGeneric_encodeColor(&tris[i], vColors[i]);
+		}
+
+		/*Buffers*/
+		asBufferDesc_t vBuffDesc = asBufferDesc_Init();
+		vBuffDesc.bufferSize = sizeof(tris);
+		vBuffDesc.cpuAccess = AS_GPURESOURCEACCESS_DEVICE;
+		vBuffDesc.usageFlags = AS_BUFFERUSAGE_VERTEX;
+		vBuffDesc.initialContentsBufferSize = vBuffDesc.bufferSize;
+		vBuffDesc.pInitialContentsBuffer = tris;
+		vBuffDesc.pDebugLabel = "VertexBuffer";
+		vBuffer = asCreateBuffer(&vBuffDesc);
+
+		asBufferDesc_t iBuffDesc = asBufferDesc_Init();
+		iBuffDesc.bufferSize = sizeof(indices);
+		iBuffDesc.cpuAccess = AS_GPURESOURCEACCESS_DEVICE;
+		iBuffDesc.usageFlags = AS_BUFFERUSAGE_INDEX;
+		iBuffDesc.initialContentsBufferSize = iBuffDesc.bufferSize;
+		iBuffDesc.pInitialContentsBuffer = indices;
+		iBuffDesc.pDebugLabel = "IndexBuffer";
+		iBuffer = asCreateBuffer(&iBuffDesc);
+
+		/*Shader*/
+		const char* path = "shaders/core/StandardScene_FX.asfx";
+		standardSurfaceShaderFileID = asResource_FileIDFromRelativePath(path, strlen(path));
+		pStandardSurfaceShader = asShaderFxManagerGetShaderFx(standardSurfaceShaderFileID);
+
+		/*Submission Queue*/
+		asPrimitiveSubmissionQueueDesc desc = { 0 };
+		desc.maxTransforms = 1;
+		desc.maxInstances = 1;
+		desc.maxPrimitives = 1;
+		subQueue = asSceneRendererCreateSubmissionQueue(&desc);
+
+		/*Begin Recording*/
+		asSceneRendererSubmissionQueueBegin(subQueue);
+
+		/*Transforms*/
+		uint32_t transformOffset;
+		asGfxInstanceTransform transform = {
+			.position = {0.0f, 0.0f, 0.0f},
+			.rotation = {0.0f, 0.0f, 0.0f, 1.0f},
+			.scale = {1.0f, 1.0f, 1.0f}
+		};
+		asSceneRendererSubmissionAddTransforms(subQueue, 1, &transform, &transformOffset);
+
+		/*Primitive*/
+		asGfxPrimativeGroupDesc primDesc = { 0 };
+		memset(&primDesc, 0, sizeof(primDesc));
+		primDesc.vertexBuffer = vBuffer;
+		primDesc.vertexCount = ASARRAYLEN(tris);
+		primDesc.indexBuffer = iBuffer;
+		primDesc.indexCount = ASARRAYLEN(indices);
+		primDesc.sortDistance = 0.0f;
+		primDesc.renderPass = AS_SCENE_RENDERPASS_SOLID;
+		primDesc.baseInstanceCount = 1;
+		primDesc.materialId = 0;
+		primDesc.transformCount = 1;
+		primDesc.transformOffset = transformOffset;
+		primDesc.transformOffsetPreviousFrame = transformOffset;
+		primDesc.pShaderFx = pStandardSurfaceShader;
+		asSceneRendererSubmissionAddPrimitiveGroups(subQueue, 1, &primDesc);
+
+		/*End Queue*/
+		asSceneRendererSubmissionQueueFinalize(subQueue);
+	}
 
 	asLoopDesc_t loopDesc;
 	loopDesc.fpOnUpdate = (asUpdateFunction_t)onUpdate;

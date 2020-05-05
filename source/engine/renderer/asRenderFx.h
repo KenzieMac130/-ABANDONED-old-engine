@@ -118,7 +118,6 @@ typedef struct {
 ASEXPORT const asShaderTypeRegistration* asShaderFindTypeRegistrationByName(const char* name);
 
 typedef struct {
-	const char* shaderTypeName;
 	asShaderTypeRegistration* registration;
 	asPipelineHandle pipelines[AS_SHADER_MAX_PIPELINES]; /*Must match as defined in variants*/
 } asShaderFx;
@@ -126,6 +125,9 @@ typedef struct {
 ASEXPORT asResults asCreateShaderFx(asBinReader* pAsbin, asShaderFx* pShaderfx, asQualityLevel minQuality);
 
 ASEXPORT void asFreeShaderFx(asShaderFx* pShaderfx);
+
+ASEXPORT asShaderFx* asShaderFxManagerGetShaderFx(asResourceFileID_t id);
+ASEXPORT void asShaderFxManagerDereferenceShaderFx(asResourceFileID_t id);
 
 #ifdef __cplusplus
 }

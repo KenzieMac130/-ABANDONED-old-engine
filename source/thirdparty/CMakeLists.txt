@@ -8,8 +8,8 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tiny_ktx)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/mikkt)
 
 #Newton
-set(NEWTON_BUILD_CORE_ONLY 1)
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/newton-dynamics/sdk)
-set_property(TARGET dgPhysics PROPERTY FOLDER "ThirdParty/thirdParty_newton")
-set_property(TARGET newton PROPERTY FOLDER "ThirdParty/thirdParty_newton")
-set_property(TARGET dgCore PROPERTY FOLDER "ThirdParty/thirdParty_newton")
+# set(NEWTON_BUILD_CORE_ONLY 1)
+# add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/newton-dynamics/sdk)
+# set_property(TARGET dgPhysics PROPERTY FOLDER "ThirdParty/thirdParty_newton")
+# set_property(TARGET newton PROPERTY FOLDER "ThirdParty/thirdParty_newton")
+# set_property(TARGET dgCore PROPERTY FOLDER "ThirdParty/thirdParty_newton")

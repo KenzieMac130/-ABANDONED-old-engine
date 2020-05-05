@@ -75,6 +75,15 @@ extern VkPhysicalDeviceMemoryProperties asVkDeviceMemProps;
 */
 extern VkDevice asVkDevice;
 
+typedef struct
+{
+	uint32_t graphicsIdx;
+	uint32_t presentIdx;
+	uint32_t computeIdx;
+	uint32_t transferIdx;
+} asVkQueueFamilyIndices_t;
+extern asVkQueueFamilyIndices_t asVkQueueFamilyIndices;
+
 /**
 * @brief startup vulkan backend
 * creates an instance, device, memory allocator, etc...

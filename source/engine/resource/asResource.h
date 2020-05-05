@@ -143,7 +143,7 @@ ASEXPORT asResourceType_t asResource_RegisterType(const char* typeName, size_t s
 /**
 * @brief Get deletion queue by type
 */
-ASEXPORT size_t asResource_GetDeletionQueue(asResourceType_t type, asResourceDataMapping_t** ppMappings);
+ASEXPORT size_t asResource_GetDeletionQueue(asResourceType_t type, size_t* pCount, asResourceDataMapping_t** ppMappings);
 
 /**
 * @brief Clear deletion queue by type

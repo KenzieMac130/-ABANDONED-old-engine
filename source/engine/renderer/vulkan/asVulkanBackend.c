@@ -23,26 +23,18 @@ VkQueue asVkQueue_GFX;
 VkQueue asVkQueue_Present;
 VkQueue asVkQueue_Compute;
 VkQueue asVkQueue_Transfer;
+asVkQueueFamilyIndices_t asVkQueueFamilyIndices;
 
 VkCommandPool asVkGeneralCommandPool;
 uint32_t asVkCurrentFrame = 0;
 VkFence asVkInFlightFences[AS_MAX_INFLIGHT];
-
-typedef struct
-{
-	uint32_t graphicsIdx;
-	uint32_t presentIdx;
-	uint32_t computeIdx;
-	uint32_t transferIdx;
-} vQueueFamilyIndices_t;
-vQueueFamilyIndices_t asVkQueueFamilyIndices;
 
 asVkScreenResources* asVkGetScreenResourcesPtr(int32_t screenIndex)
 {
 	return &vMainScreen;
 }
 
-bool vIsQueueFamilyComplete(vQueueFamilyIndices_t indices)
+bool vIsQueueFamilyComplete(asVkQueueFamilyIndices_t indices)
 {
 	return (indices.graphicsIdx != UINT32_MAX &&
 		indices.transferIdx != UINT32_MAX &&
@@ -107,9 +99,9 @@ void* pUserData)
 VkDebugReportCallbackEXT vDbgCallback;
 #endif
 
-vQueueFamilyIndices_t vFindQueueFamilyIndices(VkPhysicalDevice gpu)
+asVkQueueFamilyIndices_t vFindQueueFamilyIndices(VkPhysicalDevice gpu)
 {
-	vQueueFamilyIndices_t result = (vQueueFamilyIndices_t) { UINT32_MAX, UINT32_MAX, UINT32_MAX };
+	asVkQueueFamilyIndices_t result = (asVkQueueFamilyIndices_t) { UINT32_MAX, UINT32_MAX, UINT32_MAX };
 	uint32_t queueFamilyCount;
 	vkGetPhysicalDeviceQueueFamilyProperties(gpu, &queueFamilyCount, NULL);
 	VkQueueFamilyProperties *queueFamilyProps = asMalloc(sizeof(VkQueueFamilyProperties) * queueFamilyCount);
@@ -1155,7 +1147,7 @@ void vScreenResourcesCreate(asVkScreenResources*pScreen, SDL_Window* pWindow)
 		createInfo.presentMode = pScreen->presentMode;
 		createInfo.oldSwapchain = VK_NULL_HANDLE;
 
-		vQueueFamilyIndices_t indices = vFindQueueFamilyIndices(asVkPhysicalDevice);
+		asVkQueueFamilyIndices_t indices = vFindQueueFamilyIndices(asVkPhysicalDevice);
 		uint32_t queueFamilyIndices[] = { indices.graphicsIdx, indices.presentIdx };
 		if (queueFamilyIndices[0] != queueFamilyIndices[1]){
 			createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;

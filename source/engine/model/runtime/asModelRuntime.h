@@ -39,7 +39,7 @@ ASEXPORT void asVertexGeneric_encodePosition(asVertexGeneric* pVertex, const vec
 ASEXPORT void asVertexGeneric_encodeNormal(asVertexGeneric* pVertex, const vec3 normal);
 ASEXPORT void asVertexGeneric_encodeTangent(asVertexGeneric* pVertex, const vec3 tangent, const int sign);
 ASEXPORT void asVertexGeneric_encodeUV(asVertexGeneric* pVertex, int uvSet, const vec2 uv);
-ASEXPORT void asVertexGeneric_encodeColor(asVertexGeneric* pVertex, const uint8_t* rgba);
+ASEXPORT void asVertexGeneric_encodeColor(asVertexGeneric* pVertex, const uint8_t rgba[4]);
 ASEXPORT void asVertexGeneric_encodeBoneIds_Mult(asVertexGeneric* pVertex, const uint16_t ids[4]);
 ASEXPORT void asVertexGeneric_encodeBoneWeights_Mult(asVertexGeneric* pVertex, const float weight[4]);
 

@@ -12,7 +12,7 @@
 
 #include "stb/stb_ds.h"
 #include "mattias/strpool.h"
-/*Todo: Container performance optimization (generic containers are currently used)*/
+/*Todo: Rewrite this mess*/
 
 char resourceDir[1024];
 
@@ -209,11 +209,12 @@ ASEXPORT asResourceType_t asResource_RegisterType(const char* typeName, size_t s
 	return type;
 }
 
-ASEXPORT size_t asResource_GetDeletionQueue(asResourceType_t type, asResourceDataMapping_t ** ppMappings)
+ASEXPORT size_t asResource_GetDeletionQueue(asResourceType_t type, size_t* pCount, asResourceDataMapping_t ** ppMappings)
 {
 	asResourceDataMapping_t* map = hmget(resDeleteLists, type);
 	ASASSERT(map);
 	*ppMappings = map;
+	if (pCount) { *pCount = arrlen(map); }
 	return arrlen(map);
 }
 

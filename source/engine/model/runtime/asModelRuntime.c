@@ -61,7 +61,7 @@ ASEXPORT void asVertexGeneric_encodeUV(asVertexGeneric* pVertex, int uvSet, cons
 	pUVSet[1] = TinyImageFormat_FloatToHalfAsUint(uv[1]);
 }
 
-ASEXPORT void asVertexGeneric_encodeColor(asVertexGeneric* pVertex, const uint8_t* rgba)
+ASEXPORT void asVertexGeneric_encodeColor(asVertexGeneric* pVertex, const uint8_t rgba[4])
 {
 	uint8_t* pColor = (uint8_t*)&pVertex->color;
 	memcpy(pColor, rgba, 4);

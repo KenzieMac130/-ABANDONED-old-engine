@@ -155,6 +155,75 @@ void createWindow(asAppInfo_t* pAppInfo, void* pCustomWindow)
 	}
 }
 
+/*Shader FX*/
+asResourceType_t shaderFxResourceType;
+ASEXPORT asShaderFx* asShaderFxManagerGetShaderFx(asResourceFileID_t resourceFileId)
+{
+	/*Get Existing*/
+	asResourceDataMapping_t dataMap = asResource_GetExistingDataMapping(resourceFileId, shaderFxResourceType);
+	if (dataMap.ptr != NULL) {
+		asResource_IncrimentReferences(resourceFileId, 1);
+		return dataMap.ptr;
+	}
+
+	/*Create if Not Existing*/
+	asShaderFx* pFx = asMalloc(sizeof(asShaderFx));
+	memset(pFx, 0, sizeof(asShaderFx));
+
+	unsigned char* fileData;
+	size_t fileSize;
+	asResourceLoader_t resourceLoader;
+	if (asResourceLoader_Open(&resourceLoader, resourceFileId) != AS_SUCCESS) { return NULL; }
+	fileSize = asResourceLoader_GetContentSize(&resourceLoader);
+	fileData = asMalloc(fileSize);
+	asResourceLoader_ReadAll(&resourceLoader, fileSize, fileData);
+	asResourceLoader_Close(&resourceLoader);
+
+	asBinReader shaderBin;
+	if (asBinReaderOpenMemory(&shaderBin, "ASFX", fileData, fileSize) != AS_SUCCESS)
+	{
+		asDebugError("ShaderFX file Corrupted!");
+		return NULL;
+	}
+	if (asCreateShaderFx(&shaderBin, pFx, AS_QUALITY_HIGH) != AS_SUCCESS)
+	{
+		asDebugError("Could not load from ShaderFx database!");
+		return NULL;
+	}
+	asFree(fileData);
+
+	/*Create Mappings*/
+	dataMap.ptr = pFx;
+	asResource_Create(resourceFileId, dataMap, shaderFxResourceType, 1);
+	return pFx;
+}
+
+ASEXPORT void asShaderFxManagerDereferenceShaderFx(asResourceFileID_t resourceFileId)
+{
+	asResource_DeincrimentReferences(resourceFileId, 1);
+}
+
+void _ShaderFxManagerInit()
+{
+	shaderFxResourceType = asResource_RegisterType("ASFX", 4);
+}
+
+void _ShaderFxGC()
+{
+	size_t count;
+	asResourceDataMapping_t* pToDelete;
+	asResource_GetDeletionQueue(shaderFxResourceType, &count, &pToDelete);
+	if (count > 0)
+	{
+		for (size_t i = 0; i < count; i++)
+		{
+			asFreeShaderFx(pToDelete->ptr);
+		}
+	}
+	asResource_ClearDeletionQueue(shaderFxResourceType);
+}
+
+/*Everthing*/
 asResults _applySettings(const char* propName, void* pCurrentValue, void* pNewValueTmp, void* pUserData)
 {
 	SDL_DestroyWindow(asMainWindow);
@@ -188,6 +257,7 @@ ASEXPORT void asInitGfx(asAppInfo_t *pAppInfo, void* pCustomWindow)
 #if ASTRENGINE_VK
 	asVkInit(pAppInfo, gfxSettingsDevice);
 #endif
+	_ShaderFxManagerInit();
 	asInitTexturePool();
 	asInitSceneRenderer();
 }
@@ -253,6 +323,7 @@ ASEXPORT void asShutdownGfx()
 	asShutdownGfxImGui();
 #endif
 	asShutdownTexturePool();
+	_ShaderFxGC();
 #if ASTRENGINE_VK
 	asVkFinalShutdown();
 #endif

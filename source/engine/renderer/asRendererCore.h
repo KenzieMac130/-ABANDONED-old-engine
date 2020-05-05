@@ -300,4 +300,5 @@ ASEXPORT asResults asSetGlobalShaderTime(double time);
 }
 #endif
 #include "asRenderFx.h"
+
 #endif
