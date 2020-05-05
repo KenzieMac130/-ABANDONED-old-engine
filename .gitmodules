@@ -1,0 +1,3 @@
+[submodule "source/thirdparty/newton-dynamics"]
+	path = source/thirdparty/newton-dynamics
+	url = https://github.com/astrand130/newton-dynamics.git
