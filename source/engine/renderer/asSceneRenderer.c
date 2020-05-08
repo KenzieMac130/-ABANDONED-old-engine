@@ -7,6 +7,8 @@
 #include "../renderer/vulkan/asVulkanBackend.h"
 #include <SDL_vulkan.h>
 
+#include "../model/runtime/asModelRuntime.h"
+
 VkPipelineLayout scenePipelineLayout;
 VkRenderPass sceneRenderPass;
 VkFramebuffer sceneFramebuffer;
@@ -18,6 +20,104 @@ struct sceneViewport
 	asPrimitiveSubmissionQueue** pPrimQueues;
 };
 struct sceneViewport mainSceneViewport;
+
+struct scenePushConstants
+{
+	int32_t materialIdx;
+	int32_t transformOffsetCurrent;
+	int32_t transformOffsetLast;
+	int32_t debugIdx;
+};
+
+/*Record Command Buffer*/
+void recordSecondaryCommands(uint32_t primCount,
+	asGfxPrimativeGroupDesc* pPrims,
+	asSceneRenderPass scenePass,
+#if ASTRENGINE_VK
+	VkCommandBuffer vCmd
+#else
+	void*
+#endif
+){
+#if ASTRENGINE_VK
+	VkCommandBufferInheritanceInfo inheritInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO };
+	//Todo: Renderpass selection
+	inheritInfo.renderPass = sceneRenderPass;
+	inheritInfo.subpass = 0;
+	inheritInfo.framebuffer = sceneFramebuffer;
+
+	VkCommandBufferBeginInfo beginInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
+	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT;
+	beginInfo.pInheritanceInfo = &inheritInfo;
+	vkBeginCommandBuffer(vCmd, &beginInfo);
+
+	/*Bind Descriptor Set*/
+	//Todo:
+
+	VkPipeline lastPipeline = VK_NULL_HANDLE;
+	uint32_t lastStencilWrite = 0;
+	bool firstLoop = true;
+	for (uint32_t i = 0; i < primCount; i++)
+	{
+		const asGfxPrimativeGroupDesc prim = pPrims[i];
+		const uint32_t instanceCount = prim.baseInstanceCount * 1;
+		const uint32_t instanceStart = 0;
+
+		/*Continue if not a part of the pass*/
+		if (!(prim.renderPass & scenePass)) { continue; }
+
+		/*Bind Pipeline*/
+		ASASSERT(prim.pShaderFx);
+		VkPipeline nextPipeline = (VkPipeline)prim.pShaderFx->pipelines[0];
+		if (nextPipeline != lastPipeline)
+		{
+			vkCmdBindPipeline(vCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nextPipeline);
+			lastPipeline = nextPipeline;
+		}
+
+		/*Push Material Offset*/
+		struct scenePushConstants pushConstants = { 0 };
+		pushConstants.transformOffsetLast = prim.transformOffsetPreviousFrame;
+		pushConstants.transformOffsetCurrent = prim.transformOffset;
+		pushConstants.debugIdx = prim.debugState;
+		pushConstants.materialIdx = prim.materialId;
+		vkCmdPushConstants(vCmd, scenePipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(struct scenePushConstants), &pushConstants);
+
+		/*Bind Vertex Buffer*/
+		if (asHandleValid(prim.vertexBuffer))
+		{
+			VkBuffer vBuff = asVkGetBufferFromBuffer(prim.vertexBuffer);
+			VkDeviceSize byteOffset = prim.vertexByteOffset;
+			vkCmdBindVertexBuffers(vCmd, 0, 1, &vBuff, &byteOffset);
+		}
+
+		/*Stencil Write*/
+		if (lastStencilWrite != prim.stencilWriteBits || firstLoop)
+		{
+			vkCmdSetStencilWriteMask(vCmd, VK_STENCIL_FRONT_AND_BACK, prim.stencilWriteBits);
+		}
+
+		/*Indexed Draw*/
+		if (asHandleValid(prim.indexBuffer))
+		{
+			/*Bind Index Buffer*/
+			VkBuffer iBuff = asVkGetBufferFromBuffer(prim.indexBuffer);
+			VkIndexType iType = prim.flags & AS_GFX_DRAW_FLAG_UINT32_INDICES ? VK_INDEX_TYPE_UINT32 : VK_INDEX_TYPE_UINT16;
+			vkCmdBindIndexBuffer(vCmd, iBuff, prim.indexByteOffset, iType);
+
+			vkCmdDrawIndexed(vCmd, prim.indexCount, instanceCount, prim.indexStart, prim.vertexStart, instanceStart);
+		}
+		else /*Non-indexed Draw*/
+		{
+			vkCmdDraw(vCmd, prim.vertexCount, instanceCount, prim.vertexStart, instanceStart);
+		}
+
+		firstLoop = false;
+	}
+
+	vkEndCommandBuffer(vCmd);
+#endif
+}
 
 /*Primitive Submission Queue*/
 struct primInstanceData {
@@ -254,20 +354,20 @@ ASEXPORT asResults asSceneRendererSubmissionQueueFinalize(asPrimitiveSubmissionQ
 		if (queue->renderpassPopulatedFlags & (1 << i))
 		{
 #if ASTRENGINE_VK
-			const VkCommandBuffer vCmd = queue->vSecondaryCommandBuffers[queue->currentFrame][i];
-			if (vCmd == VK_NULL_HANDLE)
+			const VkCommandBuffer* pVCmd = &queue->vSecondaryCommandBuffers[queue->currentFrame][i];
+			if (*pVCmd == VK_NULL_HANDLE)
 			{
 				VkCommandBufferAllocateInfo allocInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
 				allocInfo.level = VK_COMMAND_BUFFER_LEVEL_SECONDARY;
 				allocInfo.commandPool = queue->vCommandPool;
 				allocInfo.commandBufferCount = 1;
-				if (vkAllocateCommandBuffers(asVkDevice, &allocInfo, &queue->vSecondaryCommandBuffers[queue->currentFrame][i]) != VK_SUCCESS) {
+				if (vkAllocateCommandBuffers(asVkDevice, &allocInfo, pVCmd) != VK_SUCCESS) {
 					asFatalError("vkAllocateCommandBuffers() Failed to create queue->vSecondaryCommandBuffers[]");
 				}
 			}
 
 			/*Build Command Buffers*/
-			/*Todo: Make function that does it*/
+			recordSecondaryCommands(queue->initialPrimitiveGroupCount, queue->pInitialPrimGroups, AS_SCENE_RENDERPASS_SOLID, *pVCmd);
 #endif
 		}
 	}
@@ -348,20 +448,20 @@ ASEXPORT asResults _asFillGfxPipeline_Scene(
 	pGraphicsPipelineDesc->pViewportState = &AS_VK_INIT_HELPER_PIPE_VIEWPORT_STATE_EVERYTHING(0, 0);
 	/*Dynamic States*/
 	VkDynamicState dynamicStates[] = {
-		VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR, VK_DYNAMIC_STATE_DEPTH_BIAS, VK_DYNAMIC_STATE_DEPTH_BOUNDS
+		VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR, VK_DYNAMIC_STATE_DEPTH_BIAS, VK_DYNAMIC_STATE_DEPTH_BOUNDS, VK_DYNAMIC_STATE_STENCIL_WRITE_MASK
 	};
 	pGraphicsPipelineDesc->pDynamicState = &AS_VK_INIT_HELPER_PIPE_DYNAMIC_STATE(ASARRAYLEN(dynamicStates), dynamicStates);
 
 	/*Vertex Inputs*/
-	size_t vtxSize = 1;
-	size_t posOffset = 0;
-	size_t normalOffset = 0;
-	size_t tangentOffset = 0;
-	size_t uv0Offset = 0;
-	size_t uv1Offset = 0;
-	size_t colorOffset = 0;
-	size_t boneIdxOffset = 0; /*Set to 0 for non-skined*/
-	size_t boneWeightOffset = 0;
+	size_t vtxSize = sizeof(asVertexGeneric);
+	size_t posOffset = offsetof(asVertexGeneric, position);
+	size_t normalOffset = offsetof(asVertexGeneric, normal);
+	size_t tangentOffset = offsetof(asVertexGeneric, tangent);
+	size_t uv0Offset = offsetof(asVertexGeneric, uv0);
+	size_t uv1Offset = offsetof(asVertexGeneric, uv1);
+	size_t colorOffset = offsetof(asVertexGeneric, color);
+	size_t boneIdxOffset = offsetof(asVertexGeneric, boneIdx); /*Set to 0 for non-skined*/
+	size_t boneWeightOffset = offsetof(asVertexGeneric, boneWeight);
 	VkVertexInputBindingDescription vertexBindings[] = {
 		AS_VK_INIT_HELPER_VERTEX_BINDING(0, vtxSize, VK_VERTEX_INPUT_RATE_VERTEX)
 	};
@@ -390,21 +490,8 @@ ASEXPORT asResults _asFillGfxPipeline_Scene(
 	return AS_FAILURE_UNKNOWN;
 }
 
-ASEXPORT asResults asInitSceneRenderer()
+void _createScreenResources()
 {
-#if ASTRENGINE_VK
-	/*Setup Pipeline Layout*/
-	{
-		VkDescriptorSetLayout descSetLayouts[1] = { 0 };
-		asVkGetTexturePoolDescSetLayout(&descSetLayouts[0]);
-		//Todo: Other Desc Sets
-
-		VkPipelineLayoutCreateInfo createInfo = (VkPipelineLayoutCreateInfo){ VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
-		createInfo.setLayoutCount = ASARRAYLEN(descSetLayouts);
-		createInfo.pSetLayouts = descSetLayouts;
-		if (vkCreatePipelineLayout(asVkDevice, &createInfo, AS_VK_MEMCB, &scenePipelineLayout) != VK_SUCCESS)
-			asFatalError("vkCreatePipelineLayout() Failed to create imGuiPipelineLayout");
-	}
 	/*Renderpass*/
 	{
 		VkAttachmentDescription attachments[] = {
@@ -470,14 +557,44 @@ ASEXPORT asResults asInitSceneRenderer()
 		if (vkCreateFramebuffer(asVkDevice, &createInfo, AS_VK_MEMCB, &sceneFramebuffer) != VK_SUCCESS)
 			asFatalError("vkCreateFramebuffer() Failed to create pScreen->simpleFrameBuffer");
 	}
+}
+
+void _destroyScreenResources()
+{
+	vkDestroyRenderPass(asVkDevice, sceneRenderPass, AS_VK_MEMCB);
+	vkDestroyFramebuffer(asVkDevice, sceneFramebuffer, AS_VK_MEMCB);
+}
+
+ASEXPORT asResults asInitSceneRenderer()
+{
+#if ASTRENGINE_VK
+	/*Setup Pipeline Layout*/
+	{
+		VkDescriptorSetLayout descSetLayouts[1] = { 0 };
+		asVkGetTexturePoolDescSetLayout(&descSetLayouts[0]);
+		//Todo: Other Desc Sets
+
+		VkPipelineLayoutCreateInfo createInfo = (VkPipelineLayoutCreateInfo){ VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
+		createInfo.setLayoutCount = ASARRAYLEN(descSetLayouts);
+		createInfo.pSetLayouts = descSetLayouts;
+		createInfo.pushConstantRangeCount = 1;
+		VkPushConstantRange pcRange;
+		pcRange.offset = 0;
+		pcRange.size = sizeof(struct scenePushConstants);
+		pcRange.stageFlags = VK_SHADER_STAGE_ALL;
+		createInfo.pPushConstantRanges = &pcRange;
+		if (vkCreatePipelineLayout(asVkDevice, &createInfo, AS_VK_MEMCB, &scenePipelineLayout) != VK_SUCCESS)
+			asFatalError("vkCreatePipelineLayout() Failed to create imGuiPipelineLayout");
+	}
+	_createScreenResources();
 #endif
 	return AS_SUCCESS;
 }
 
 ASEXPORT asResults asTriggerResizeSceneRenderer()
 {
-	asShutdownSceneRenderer();
-	asInitSceneRenderer();
+	_destroyScreenResources();
+	_createScreenResources();
 	return AS_SUCCESS;
 }
 
@@ -550,8 +667,7 @@ ASEXPORT asResults asShutdownSceneRenderer()
 {
 #if ASTRENGINE_VK
 	vkDestroyPipelineLayout(asVkDevice, scenePipelineLayout, AS_VK_MEMCB);
-	vkDestroyRenderPass(asVkDevice, sceneRenderPass, AS_VK_MEMCB);
-	vkDestroyFramebuffer(asVkDevice, sceneFramebuffer, AS_VK_MEMCB);
 #endif
+	_destroyScreenResources();
 	return AS_SUCCESS;
 }

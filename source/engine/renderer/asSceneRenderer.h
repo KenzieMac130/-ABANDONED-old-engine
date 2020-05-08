@@ -66,22 +66,31 @@ typedef struct {
 typedef struct {
 	float sortDistance; /**< Sort Distance (will be reversed on transparent renderpasses)*/
 	asGfxDrawFlags flags; /**< Rendering Flags*/
-	int8_t stencilBits; /**< Base stencil bits*/
 	asSceneRenderPass renderPass; /**< "Renderpass" to target*/
+	
 	uint32_t vertexByteOffset; /**< Vertex buffer offset in bytes*/
 	uint32_t vertexStart; /**< Beginning Vertex*/
 	uint32_t vertexCount; /**< Vertex count (only used if index buffer is unspecified)*/
 	asBufferHandle_t vertexBuffer; /**< Vertex Buffer (optional)*/
+	
 	uint32_t indexByteOffset; /**< Index offset*/
 	uint32_t indexStart; /**< Beginning Index*/
 	uint32_t indexCount; /**< Index count*/
 	asBufferHandle_t indexBuffer; /**< Index Buffer (optional)*/
+	
 	asShaderFx* pShaderFx; /**< Shader FX to Apply*/
 	int32_t materialId; /**< Material index to Bind*/
+	
 	uint32_t baseInstanceCount; /**< Number of instanced (expected to be transformCount unless skinned)*/
+	
 	uint16_t transformOffset; /**< Offset in transforms (expected to be retrieved by last pBeginningTransformOffset)*/
 	uint16_t transformOffsetPreviousFrame; /**< Similar as above but additional transforms for velocity (make same as current frame if no movement)*/
 	uint16_t transformCount; /**< Number of transforms (expected to be same as instance count unless skinned)*/
+	
+	uint32_t stencilWriteBits; /**< Base stencil bits*/
+
+	int32_t debugState; /*Debug State Flag*/
+	
 	void* pCustomRenderData; /**< Custom Data (reserved)*/
 } asGfxPrimativeGroupDesc;
 
