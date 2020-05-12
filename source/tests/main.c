@@ -121,14 +121,6 @@ int main(int argc, char* argv[])
 	atexit(onExit);
 	asIgnite(argc, argv, &appInfo, NULL);
 
-	/*Vertex Tests*/
-	{
-		asVertexGeneric vertex;
-		asVertexGeneric_encodeNormal(&vertex, (vec3) { 0.4f, -1.0f, 0.03f });
-		asVertexGeneric_encodeTangent(&vertex, (vec3) { 0.4f, -1.0f, 1.0f }, 1);
-		asVertexGeneric_encodeUV(&vertex, 1, (vec2) { 0.5f, -54.0f });
-		asDebugLog("Vertex Size = %d", sizeof(vertex));
-	}
 	/*Test Preference System*/
 	{
 		asPreferencesRegisterOpenSection(asGetGlobalPrefs(), "test");
@@ -235,6 +227,11 @@ int main(int argc, char* argv[])
 			{0.0f, 0.0f, -1.0f},
 			{0.0f, 0.0f, -1.0f},
 		};
+		float vTan[ASARRAYLEN(tris)][4] = {
+			{0.0f, 0.0f, 0.0f, -1.0f},
+			{0.0f, 0.0f, 0.0f, 0.0f},
+			{0.0f, 0.0f, 0.0f, 1.0f},
+		};
 		float vUV[ASARRAYLEN(tris)][2] = {
 			{0.5f, 0.0f},
 			{1.0f, 1.0f},
@@ -246,6 +243,7 @@ int main(int argc, char* argv[])
 			asVertexGeneric_encodePosition(&tris[i], vPos[i]);
 			asVertexGeneric_encodeColor(&tris[i], vColors[i]);
 			asVertexGeneric_encodeNormal(&tris[i], vNormal[i]);
+			asVertexGeneric_encodeTangent(&tris[i], vTan[i], (int)vTan[i][3]);
 			asVertexGeneric_encodeUV(&tris[i], 0, vUV[i]);
 		}
 
@@ -304,6 +302,7 @@ int main(int argc, char* argv[])
 		primDesc.renderPass = AS_SCENE_RENDERPASS_SOLID;
 		primDesc.baseInstanceCount = 1;
 		primDesc.materialId = 0;
+		primDesc.debugState = 1;
 		primDesc.transformCount = 1;
 		primDesc.transformOffset = transformOffset;
 		primDesc.transformOffsetPreviousFrame = transformOffset;

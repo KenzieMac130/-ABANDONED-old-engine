@@ -26,9 +26,9 @@ ASEXPORT void asVertexGeneric_encodeNormal(asVertexGeneric* pVertex, const vec3 
 		normal[2] * 0.5f + 0.5f };
 	struct encoding result;
 	result.full = 0;
-	result.b = TinyImageFormat_FloatToUFloat10AsUint(normalizedNormal[2]);
-	result.g = TinyImageFormat_FloatToUFloat11AsUint(normalizedNormal[1]);
 	result.r = TinyImageFormat_FloatToUFloat11AsUint(normalizedNormal[0]);
+	result.g = TinyImageFormat_FloatToUFloat11AsUint(normalizedNormal[1]);
+	result.b = TinyImageFormat_FloatToUFloat10AsUint(normalizedNormal[2]);
 	pVertex->normal = result.full;
 }
 

@@ -12,7 +12,7 @@ typedef struct {
 	uint32_t maxTransforms; /**< Maximum number of uploaded transforms*/
 	uint32_t maxPrimitives; /**< Maximum number of uploaded primatives*/
 	uint32_t maxInstances; /**< Maximum number of instances (post batching)*/
-	bool oneTimeRecord; /**< One time recording (for static level geo vs dynamics)*/
+	bool infrequentRecord; /**< Rerecording is infrequent (recording transforms is expensive, but access fast)*/
 	bool disableInstanceSort; /**< Disable sorting of instances*/
 	bool disableInstanceMerge; /**< Disable merging of instances*/
 } asPrimitiveSubmissionQueueDesc;
