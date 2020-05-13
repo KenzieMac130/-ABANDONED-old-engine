@@ -2,7 +2,7 @@
 In-House Toy Game Engine by Alex Strand
 
 ![alt text](https://github.com/astrand130/astrengine/blob/master/docs/Screenshots/HelloTriangle.PNG "HelloTriangle.png")
-*(Early Test Screenshot, See Hello Triangle [Upload](https://github.com/astrand130/astrengine/blob/eeef48faa7062fec7acaef64f72084d15573025a/source/tests/main.c#L247), [Shader](https://github.com/astrand130/astrengine-assets/blob/master/shaders/core/StandardScene_FX.glsl) and [Submission](https://github.com/astrand130/astrengine/blob/eeef48faa7062fec7acaef64f72084d15573025a/source/tests/main.c#L46))*
+*(Early Test Screenshot, See Hello Triangle [Upload](https://github.com/astrand130/astrengine/blob/eeef48faa7062fec7acaef64f72084d15573025a/source/tests/main.c#L247), [Shader](https://github.com/astrand130/astrengine-assets/blob/da0f74192989d406283d0c2c96712f5306e6ad81/shaders/core/StandardScene_FX.glsl#L1) and [Submission](https://github.com/astrand130/astrengine/blob/eeef48faa7062fec7acaef64f72084d15573025a/source/tests/main.c#L46))*
 
 
 ## Features
