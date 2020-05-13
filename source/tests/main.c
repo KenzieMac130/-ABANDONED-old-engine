@@ -1,7 +1,7 @@
 #include "engine/engineCore/asEntry.h"
 #include "engine/renderer/asRendererCore.h"
 #include "engine/resource/asResource.h"
-#include "engine/preferences/asPreferences.h"
+#include "engine/common/preferences/asPreferences.h"
 #include "engine/common/asHandleManager.h"
 
 #include "engine/nuklear/asNuklearImplimentation.h"
@@ -29,17 +29,53 @@
 #include "engine/renderer/asSceneRenderer.h"
 #include "engine/model/runtime/asModelRuntime.h"
 
-void onUpdate(double time)
-{
-}
-
 asTextureHandle_t texture;
 asBufferHandle_t vBuffer;
+uint32_t vtxCount;
 asBufferHandle_t iBuffer;
+uint32_t idxCount;
 asShaderFx* pStandardSurfaceShader;
 asResourceFileID_t standardSurfaceShaderFileID;
 
 asPrimitiveSubmissionQueue subQueue;
+
+float renderDebug = -1;
+void onUpdate(double time)
+{
+	/*Begin Recording*/
+	asSceneRendererSubmissionQueueBegin(subQueue);
+
+	/*Transforms*/
+	uint32_t transformOffset;
+	asGfxInstanceTransform transform = {
+		.position = {0.0f, 0.0f, 0.0f},
+		.rotation = {0.0f, 0.0f, 0.0f, 1.0f},
+		.scale = {1.0f, 1.0f, 1.0f},
+		.opacity = 1.0f
+	};
+	asSceneRendererSubmissionAddTransforms(subQueue, 1, &transform, &transformOffset);
+
+	/*Primitive*/
+	asGfxPrimativeGroupDesc primDesc = { 0 };
+	memset(&primDesc, 0, sizeof(primDesc));
+	primDesc.vertexBuffer = vBuffer;
+	primDesc.vertexCount = vtxCount;
+	primDesc.indexBuffer = iBuffer;
+	primDesc.indexCount = idxCount;
+	primDesc.sortDistance = 0.0f;
+	primDesc.renderPass = AS_SCENE_RENDERPASS_SOLID;
+	primDesc.baseInstanceCount = 1;
+	primDesc.materialId = 0;
+	primDesc.debugState = (int32_t)renderDebug;
+	primDesc.transformCount = 1;
+	primDesc.transformOffset = transformOffset;
+	primDesc.transformOffsetPreviousFrame = transformOffset;
+	primDesc.pShaderFx = pStandardSurfaceShader;
+	asSceneRendererSubmissionAddPrimitiveGroups(subQueue, 1, &primDesc);
+
+	/*End Queue*/
+	asSceneRendererSubmissionQueueFinalize(subQueue);
+}
 
 void onExit(void)
 {
@@ -125,9 +161,10 @@ int main(int argc, char* argv[])
 	{
 		asPreferencesRegisterOpenSection(asGetGlobalPrefs(), "test");
 		asPreferencesRegisterParamFloat(asGetGlobalPrefs(), "testFloat", &testFloat, 0.0f, 1000.0f, false, testCb, NULL, NULL);
+		asPreferencesRegisterParamFloat(asGetGlobalPrefs(), "drawDebug", &renderDebug, -FLT_MAX, FLT_MAX, true, NULL, NULL, NULL);
 		asPreferencesRegisterParamCString(asGetGlobalPrefs(), "testString", testStr, 80, false, NULL, NULL, NULL);
-		asPreferencesRegisterNullFunction(asGetGlobalPrefs(), "showAsciiArt", showAscii, false, NULL, NULL);
-		asPreferencesRegisterNullFunction(asGetGlobalPrefs(), "reflectTest", doReflectTest, false, NULL, NULL);
+		asPreferencesRegisterNullFunction(asGetGlobalPrefs(), "showAsciiArt", showAscii, NULL, NULL);
+		asPreferencesRegisterNullFunction(asGetGlobalPrefs(), "reflectTest", doReflectTest, NULL, NULL);
 		//asPreferencesRegisterParamFloat(asGetGlobalPrefs(), "addEntityTest", NULL, -FLT_MAX, FLT_MAX, false, addEntityTest, NULL, NULL);
 		asPreferencesLoadSection(asGetGlobalPrefs(), "test");
 
@@ -210,50 +247,52 @@ int main(int argc, char* argv[])
 	/*Hello Triange*/
 	{
 		/*Triangles*/
-		asVertexGeneric tris[3] = { 0 };
+		asVertexGeneric vtx[3] = { 0 };
 		uint16_t indices[3] = { 0, 1, 2 };
-		uint8_t vColors[ASARRAYLEN(tris)][4] = {
+		vtxCount = ASARRAYLEN(vtx);
+		idxCount = ASARRAYLEN(indices);
+		uint8_t vColors[ASARRAYLEN(vtx)][4] = {
 			{ 255, 0, 0, 255 },
 			{ 0, 255, 0, 255 },
 			{ 0, 0, 255, 255 },
 		};
-		float vPos[ASARRAYLEN(tris)][3] = {
+		float vPos[ASARRAYLEN(vtx)][3] = {
 			{0.0f, -0.5f, 0.0f},
 			{0.5f, 0.5f, 0.0f},
 			{-0.5f, 0.5f, 0.0f},
 		};
-		float vNormal[ASARRAYLEN(tris)][3] = {
-			{0.0f, 0.0f, -1.0f},
-			{0.0f, 0.0f, -1.0f},
-			{0.0f, 0.0f, -1.0f},
+		vec3 vNormal[ASARRAYLEN(vtx)] = {
+			{-1.0f, -1.0f, 1.0f},
+			{-1.0f, -1.0f, 1.0f},
+			{-1.0f, -1.0f, 1.0f},
 		};
-		float vTan[ASARRAYLEN(tris)][4] = {
-			{0.0f, 0.0f, 0.0f, -1.0f},
-			{0.0f, 0.0f, 0.0f, 0.0f},
+		float vTan[ASARRAYLEN(vtx)][4] = {
+			{0.0f, 0.0f, 0.0f, 1.0f},
+			{0.0f, 0.0f, 0.0f, 1.0f},
 			{0.0f, 0.0f, 0.0f, 1.0f},
 		};
-		float vUV[ASARRAYLEN(tris)][2] = {
+		float vUV[ASARRAYLEN(vtx)][2] = {
 			{0.5f, 0.0f},
 			{1.0f, 1.0f},
 			{0.0f, 1.0f},
 		};
 
-		for (int i = 0; i < ASARRAYLEN(tris); i++)
+		for (int i = 0; i < ASARRAYLEN(vtx); i++)
 		{
-			asVertexGeneric_encodePosition(&tris[i], vPos[i]);
-			asVertexGeneric_encodeColor(&tris[i], vColors[i]);
-			asVertexGeneric_encodeNormal(&tris[i], vNormal[i]);
-			asVertexGeneric_encodeTangent(&tris[i], vTan[i], (int)vTan[i][3]);
-			asVertexGeneric_encodeUV(&tris[i], 0, vUV[i]);
+			asVertexGeneric_encodePosition(&vtx[i], vPos[i]);
+			asVertexGeneric_encodeColor(&vtx[i], vColors[i]);
+			asVertexGeneric_encodeNormal(&vtx[i], vNormal[i]);
+			asVertexGeneric_encodeTangent(&vtx[i], vTan[i], (int)vTan[i][3]);
+			asVertexGeneric_encodeUV(&vtx[i], 0, vUV[i]);
 		}
 
 		/*Buffers*/
 		asBufferDesc_t vBuffDesc = asBufferDesc_Init();
-		vBuffDesc.bufferSize = sizeof(tris);
+		vBuffDesc.bufferSize = sizeof(vtx);
 		vBuffDesc.cpuAccess = AS_GPURESOURCEACCESS_DEVICE;
 		vBuffDesc.usageFlags = AS_BUFFERUSAGE_VERTEX;
 		vBuffDesc.initialContentsBufferSize = vBuffDesc.bufferSize;
-		vBuffDesc.pInitialContentsBuffer = tris;
+		vBuffDesc.pInitialContentsBuffer = vtx;
 		vBuffDesc.pDebugLabel = "VertexBuffer";
 		vBuffer = asCreateBuffer(&vBuffDesc);
 
@@ -277,40 +316,6 @@ int main(int argc, char* argv[])
 		desc.maxInstances = 1;
 		desc.maxPrimitives = 1;
 		subQueue = asSceneRendererCreateSubmissionQueue(&desc);
-
-		/*Begin Recording*/
-		asSceneRendererSubmissionQueueBegin(subQueue);
-
-		/*Transforms*/
-		uint32_t transformOffset;
-		asGfxInstanceTransform transform = {
-			.position = {0.0f, 0.0f, 0.0f},
-			.rotation = {0.0f, 0.0f, 0.0f, 1.0f},
-			.scale = {1.0f, 1.0f, 1.0f},
-			.opacity = 1.0f
-		};
-		asSceneRendererSubmissionAddTransforms(subQueue, 1, &transform, &transformOffset);
-
-		/*Primitive*/
-		asGfxPrimativeGroupDesc primDesc = { 0 };
-		memset(&primDesc, 0, sizeof(primDesc));
-		primDesc.vertexBuffer = vBuffer;
-		primDesc.vertexCount = ASARRAYLEN(tris);
-		primDesc.indexBuffer = iBuffer;
-		primDesc.indexCount = ASARRAYLEN(indices);
-		primDesc.sortDistance = 0.0f;
-		primDesc.renderPass = AS_SCENE_RENDERPASS_SOLID;
-		primDesc.baseInstanceCount = 1;
-		primDesc.materialId = 0;
-		primDesc.debugState = 1;
-		primDesc.transformCount = 1;
-		primDesc.transformOffset = transformOffset;
-		primDesc.transformOffsetPreviousFrame = transformOffset;
-		primDesc.pShaderFx = pStandardSurfaceShader;
-		asSceneRendererSubmissionAddPrimitiveGroups(subQueue, 1, &primDesc);
-
-		/*End Queue*/
-		asSceneRendererSubmissionQueueFinalize(subQueue);
 	}
 
 	asLoopDesc_t loopDesc;

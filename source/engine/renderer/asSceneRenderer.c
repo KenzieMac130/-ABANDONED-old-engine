@@ -230,8 +230,8 @@ ASEXPORT asPrimitiveSubmissionQueue asSceneRendererCreateSubmissionQueue(asPrimi
 	queue->pInitialPrimGroups = asMalloc(allocSize);
 	memset(queue->pInitialPrimGroups, 0, allocSize);
 
-	/*Create Command Buffer Pool*/
 #if ASTRENGINE_VK
+	/*Create Command Buffer Pool*/
 	VkCommandPoolCreateInfo poolInfo = { VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO };
 	poolInfo.queueFamilyIndex = asVkQueueFamilyIndices.graphicsIdx;
 	poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
@@ -271,6 +271,8 @@ ASEXPORT asResults asSceneRendererSubmissionQueueBegin(asPrimitiveSubmissionQueu
 
 	/*Reset Bounding Box*/
 	glm_aabb_invalidate(queue->boundingBox);
+	queue->initialPrimitiveGroupCount = 0;
+	queue->transformCount = 0;
 
 	queue->state == PRIMITIVE_SUBMISSION_QUEUE_STATE_RECORDING;
 	return AS_SUCCESS;
@@ -279,6 +281,9 @@ ASEXPORT asResults asSceneRendererSubmissionQueueBegin(asPrimitiveSubmissionQueu
 void primQueueRecordCmds(asPrimitiveSubmissionQueue queue)
 {
 #if ASTRENGINE_VK
+	/*Wait on Fence as Necesssary */ 
+	/*Todo: Investigate performance cost... for now seems fine: per-thread, nanosecs, etc*/
+	vkWaitForFences(asVkDevice, 1, &asVkInFlightFences[asVkCurrentFrame], VK_TRUE, UINT64_MAX);
 
 	/*Update Continuous Recording*/
 	asVkAllocation_t indexAlloc = asVkGetAllocFromBuffer(queue->offsetBuffs[queue->currentFrame]);
@@ -305,7 +310,7 @@ void primQueueRecordCmds(asPrimitiveSubmissionQueue queue)
 				if (vkAllocateCommandBuffers(asVkDevice, &allocInfo, pVCmd) != VK_SUCCESS) {
 					asFatalError("vkAllocateCommandBuffers() Failed to create queue->vSecondaryCommandBuffers[]");
 				}
-			}
+			} else { vkResetCommandBuffer(queue->vSecondaryCommandBuffers[queue->finishedFrame][i], 0); }
 
 			/*Dimensions*/
 			int32_t width, height;
@@ -443,7 +448,7 @@ ASEXPORT asResults _asFillGfxPipeline_Scene(
 	};
 	VkVertexInputAttributeDescription vertexAttributes[] = {
 		AS_VK_INIT_HELPER_VERTEX_ATTRIBUTE(0, 0, VK_FORMAT_R32G32B32_SFLOAT, posOffset),
-		AS_VK_INIT_HELPER_VERTEX_ATTRIBUTE(1, 0, VK_FORMAT_B10G11R11_UFLOAT_PACK32, normalOffset),
+		AS_VK_INIT_HELPER_VERTEX_ATTRIBUTE(1, 0, VK_FORMAT_A2R10G10B10_SNORM_PACK32, normalOffset),
 		AS_VK_INIT_HELPER_VERTEX_ATTRIBUTE(2, 0, VK_FORMAT_A2R10G10B10_SNORM_PACK32, tangentOffset),
 		AS_VK_INIT_HELPER_VERTEX_ATTRIBUTE(3, 0, VK_FORMAT_R16G16_SFLOAT, uv0Offset),
 		AS_VK_INIT_HELPER_VERTEX_ATTRIBUTE(4, 0, VK_FORMAT_R16G16_SFLOAT, uv1Offset),
@@ -591,7 +596,7 @@ ASEXPORT asResults asSceneRendererDraw(int32_t viewport)
 	/*Begin Render Pass*/
 	VkClearValue clearValues[] = {
 		(VkClearValue) {
-			.color = {0.0f,0.0f,1.0f,1.0f}
+			.color = {0.0f,0.0f,0.0f,1.0f}
 		},
 		(VkClearValue) {
 			.depthStencil = {1.0f, 0}

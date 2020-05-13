@@ -50,6 +50,8 @@ asVkScreenResources* asVkGetScreenResourcesPtr(int32_t screenIndex);
 */
 extern uint32_t asVkCurrentFrame;
 
+extern VkFence asVkInFlightFences[AS_MAX_INFLIGHT];
+
 /**
 * @brief the global vulkan instance
 */

@@ -10,12 +10,12 @@ ASEXPORT void asVertexGeneric_encodePosition(asVertexGeneric* pVertex, const vec
 
 ASEXPORT void asVertexGeneric_encodeNormal(asVertexGeneric* pVertex, const vec3 normal)
 {
-	struct encoding {
+	/*struct encoding {
 		union {
 			struct {
-				unsigned int b : 10;
-				unsigned int g : 11;
-				unsigned int r : 11;
+				uint16_t b : 10;
+				uint16_t g : 11;
+				uint16_t r : 11;
 			};
 			uint32_t full;
 		};
@@ -26,9 +26,25 @@ ASEXPORT void asVertexGeneric_encodeNormal(asVertexGeneric* pVertex, const vec3 
 		normal[2] * 0.5f + 0.5f };
 	struct encoding result;
 	result.full = 0;
-	result.r = TinyImageFormat_FloatToUFloat11AsUint(normalizedNormal[0]);
-	result.g = TinyImageFormat_FloatToUFloat11AsUint(normalizedNormal[1]);
 	result.b = TinyImageFormat_FloatToUFloat10AsUint(normalizedNormal[2]);
+	result.g = TinyImageFormat_FloatToUFloat11AsUint(normalizedNormal[1]);
+	result.r = TinyImageFormat_FloatToUFloat11AsUint(normalizedNormal[0]);*/
+	struct encoding {
+		union {
+			struct {
+				int b : 10;
+				int g : 10;
+				int r : 10;
+				int a : 2;
+			};
+			uint32_t full;
+		};
+	};
+	struct encoding result;
+	result.full = 0;
+	result.r = ((int)(normal[0] * 511));
+	result.g = ((int)(normal[1] * 511));
+	result.b = ((int)(normal[2] * 511));
 	pVertex->normal = result.full;
 }
 
@@ -37,10 +53,10 @@ ASEXPORT void asVertexGeneric_encodeTangent(asVertexGeneric* pVertex, const vec3
 	struct encoding {
 		union {
 			struct {
-				int a : 2;
-				int r : 10;
-				int g : 10;
 				int b : 10;
+				int g : 10;
+				int r : 10;
+				int a : 2;
 			};
 			uint32_t full;
 		};
