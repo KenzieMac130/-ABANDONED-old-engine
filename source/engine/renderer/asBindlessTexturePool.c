@@ -11,14 +11,17 @@ asTextureHandle_t missingTextureHndl;
 asTextureHandle_t textureHandleAssociations[AS_MAX_POOLED_TEXTURES] = { 0 }; /*Allows Further Remapping for Streaming/Unload*/
 
 #if ASTRENGINE_VK /*Vulkan Globals*/
-VkDescriptorSet vTexturePoolDescSet;
+int32_t texturePoolFrame = 0;
+VkDescriptorSet vTexturePoolDescSets[AS_MAX_INFLIGHT];
 VkDescriptorSetLayout vTexturePoolDescLayout;
 VkDescriptorPool vTexturePoolDescriptorPool;
 #endif
 
 /*Queue of Updates*/
-size_t textureUpdateQueueCount = 0;
-asBindlessTextureIndex textureUpdateQueue[AS_MAX_POOLED_TEXTURES];
+#define TEXTURE_UPDATE_QUEUE_COUNT (AS_MAX_INFLIGHT + 1)
+int32_t textureUpdateQueueCurrent = 0;
+size_t textureUpdateQueueCounts[TEXTURE_UPDATE_QUEUE_COUNT] = { 0 };
+asBindlessTextureIndex textureUpdateQueues[TEXTURE_UPDATE_QUEUE_COUNT][AS_MAX_POOLED_TEXTURES];
 
 /*Debug Window*/
 int32_t showTexturePoolDebugWindow = 0;
@@ -51,16 +54,16 @@ ASEXPORT asResults asTexturePoolAddFromHandle(const asTextureHandle_t handle, as
 	textureHandleAssociations[handle._index] = handle;
 	if (pTextureIndex) { *pTextureIndex = handle._index; }
 
-	textureUpdateQueue[textureUpdateQueueCount] = handle._index;
-	textureUpdateQueueCount++;
+	textureUpdateQueues[textureUpdateQueueCurrent][textureUpdateQueueCounts[textureUpdateQueueCurrent]] = handle._index;
+	textureUpdateQueueCounts[textureUpdateQueueCurrent]++;
 	return AS_SUCCESS;
 }
 
 ASEXPORT asResults asTexturePoolRelease(asBindlessTextureIndex textureIndex)
 {
 	textureHandleAssociations[textureIndex] = missingTextureHndl;
-	textureUpdateQueue[textureUpdateQueueCount] = missingTextureHndl._index;
-	textureUpdateQueueCount++;
+	textureUpdateQueues[textureUpdateQueueCurrent][textureUpdateQueueCounts[textureUpdateQueueCurrent]] = missingTextureHndl._index;
+	textureUpdateQueueCounts[textureUpdateQueueCurrent]++;
 	return AS_SUCCESS;
 }
 
@@ -92,11 +95,11 @@ ASEXPORT asResults asInitTexturePool()
 	/*Descriptor Pool*/
 	{
 		VkDescriptorPoolSize fontImagePoolSize = { 0 };
-		fontImagePoolSize.descriptorCount = AS_MAX_POOLED_TEXTURES;
+		fontImagePoolSize.descriptorCount = AS_MAX_POOLED_TEXTURES * AS_MAX_INFLIGHT;
 		fontImagePoolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 
 		VkDescriptorPoolCreateInfo createInfo = (VkDescriptorPoolCreateInfo){ VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
-		createInfo.maxSets = 1;
+		createInfo.maxSets = 2;
 		createInfo.poolSizeCount = 1;
 		createInfo.pPoolSizes = &fontImagePoolSize;
 		if (vkCreateDescriptorPool(asVkDevice, &createInfo, AS_VK_MEMCB, &vTexturePoolDescriptorPool) != VK_SUCCESS)
@@ -104,12 +107,14 @@ ASEXPORT asResults asInitTexturePool()
 	}
 	/*Descriptor Set*/
 	{
+		VkDescriptorSetLayout layouts[AS_MAX_INFLIGHT];
+		for (int i = 0; i < AS_MAX_INFLIGHT; i++) { layouts[i] = vTexturePoolDescLayout; }
 		VkDescriptorSetAllocateInfo descSetAllocInfo = (VkDescriptorSetAllocateInfo){ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
 		descSetAllocInfo.descriptorPool = vTexturePoolDescriptorPool;
-		descSetAllocInfo.descriptorSetCount = 1;
-		descSetAllocInfo.pSetLayouts = &vTexturePoolDescLayout;
-		if (vkAllocateDescriptorSets(asVkDevice, &descSetAllocInfo, &vTexturePoolDescSet) != VK_SUCCESS)
-			asFatalError("vkAllocateDescriptorSets() Failed to allocate vTexturePoolDescSet");
+		descSetAllocInfo.descriptorSetCount = 2;
+		descSetAllocInfo.pSetLayouts = layouts;
+		if (vkAllocateDescriptorSets(asVkDevice, &descSetAllocInfo, vTexturePoolDescSets) != VK_SUCCESS)
+			asFatalError("vkAllocateDescriptorSets() Failed to allocate vTexturePoolDescSets");
 	}
 	/*Set all as Blank Texture*/
 	{
@@ -138,18 +143,21 @@ ASEXPORT asResults asInitTexturePool()
 
 		for (size_t i = 0; i < AS_MAX_POOLED_TEXTURES; i++)
 		{
-			VkWriteDescriptorSet descSetWrite = (VkWriteDescriptorSet){ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
-			descSetWrite.dstSet = vTexturePoolDescSet;
-			descSetWrite.dstBinding = AS_BINDING_TEXTURE_POOL;
-			descSetWrite.descriptorCount = 1;
-			descSetWrite.dstArrayElement = i;
-			descSetWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-			descSetWrite.pImageInfo = &(VkDescriptorImageInfo) {
-				.imageView = asVkGetViewFromTexture(missingTextureHndl),
-					.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-					.sampler = *asVkGetSimpleSamplerPtr(true)
-			};
-			vkUpdateDescriptorSets(asVkDevice, 1, &descSetWrite, 0, NULL);
+			for (int f = 0; f < AS_MAX_INFLIGHT; f++)
+			{
+				VkWriteDescriptorSet descSetWrite = (VkWriteDescriptorSet){ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
+				descSetWrite.dstSet = vTexturePoolDescSets[f];
+				descSetWrite.dstBinding = AS_BINDING_TEXTURE_POOL;
+				descSetWrite.descriptorCount = 1;
+				descSetWrite.dstArrayElement = i;
+				descSetWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+				descSetWrite.pImageInfo = &(VkDescriptorImageInfo) {
+					.imageView = asVkGetViewFromTexture(missingTextureHndl),
+						.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+						.sampler = *asVkGetSimpleSamplerPtr(true)
+				};
+				vkUpdateDescriptorSets(asVkDevice, 1, &descSetWrite, 0, NULL);
+			}
 		}
 	}
 #endif
@@ -158,27 +166,28 @@ ASEXPORT asResults asInitTexturePool()
 
 ASEXPORT asResults asTexturePoolUpdate()
 {
-	if (textureUpdateQueueCount <= 0) { return AS_SUCCESS; }
-
-	/*Todo: Investigate Necessary Synchronization*/
-
 	/*Update Descriptors*/
-	for (size_t i = 0; i < textureUpdateQueueCount; i++)
+	texturePoolFrame = (texturePoolFrame + 1) % AS_MAX_INFLIGHT;
+	for (int f = 0; f < AS_MAX_INFLIGHT; f++)
 	{
-		VkWriteDescriptorSet descSetWrite = (VkWriteDescriptorSet){ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
-		descSetWrite.dstSet = vTexturePoolDescSet;
-		descSetWrite.dstBinding = AS_BINDING_TEXTURE_POOL;
-		descSetWrite.descriptorCount = 1;
-		descSetWrite.dstArrayElement = textureUpdateQueue[i];
-		descSetWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		descSetWrite.pImageInfo = &(VkDescriptorImageInfo) {
-			.imageView = asVkGetViewFromTexture(textureHandleAssociations[textureUpdateQueue[i]]),
-			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-			.sampler = *asVkGetSimpleSamplerPtr(true)
-		};
-		vkUpdateDescriptorSets(asVkDevice, 1, &descSetWrite, 0, NULL);
+		int queueIdx = abs((f + textureUpdateQueueCurrent - TEXTURE_UPDATE_QUEUE_COUNT) % AS_MAX_INFLIGHT);
+		for (size_t i = 0; i < textureUpdateQueueCounts[queueIdx]; i++)
+		{
+			VkWriteDescriptorSet descSetWrite = (VkWriteDescriptorSet){ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
+			descSetWrite.dstSet = vTexturePoolDescSets[texturePoolFrame];
+			descSetWrite.dstBinding = AS_BINDING_TEXTURE_POOL;
+			descSetWrite.descriptorCount = 1;
+			descSetWrite.dstArrayElement = textureUpdateQueues[queueIdx][i];
+			descSetWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			descSetWrite.pImageInfo = &(VkDescriptorImageInfo) {
+				.imageView = asVkGetViewFromTexture(textureHandleAssociations[textureUpdateQueues[queueIdx][i]]),
+				.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+				.sampler = *asVkGetSimpleSamplerPtr(true)
+			};
+			vkUpdateDescriptorSets(asVkDevice, 1, &descSetWrite, 0, NULL);
+		}
+		if (f == TEXTURE_UPDATE_QUEUE_COUNT - 1) { textureUpdateQueueCounts[queueIdx] = 0; }
 	}
-	textureUpdateQueueCount = 0;
 	return AS_SUCCESS;
 }
 
@@ -202,7 +211,8 @@ ASEXPORT asResults asTexturePoolBindCmd(asGfxAPIs apiValidate, void* pCmdBuff, v
 	ASASSERT(apiValidate == AS_GFXAPI_VULKAN);
 	VkCommandBuffer cmdBuffer = *(VkCommandBuffer*)pCmdBuff;
 	VkPipelineLayout pipelineLayout = *(VkPipelineLayout*)pLayout;
-	vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, AS_DESCSET_TEXTURE_POOL, 1, &vTexturePoolDescSet, 0, NULL);
+	vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+		pipelineLayout, AS_DESCSET_TEXTURE_POOL, 1, &vTexturePoolDescSets[texturePoolFrame], 0, NULL);
 #endif
 	return AS_SUCCESS;
 }

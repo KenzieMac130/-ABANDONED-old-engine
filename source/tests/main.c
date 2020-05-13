@@ -42,6 +42,14 @@ asPrimitiveSubmissionQueue subQueue;
 float renderDebug = -1;
 void onUpdate(double time)
 {
+	/*Mid-frame Texture Submission Test*/
+	static float texUploadTimer = 0;
+	if (texUploadTimer > 5.0f) /*Wait 5 Seconds*/
+	{
+		asTexturePoolAddFromHandle(texture, NULL);
+		texUploadTimer = -1.0;
+	} else if (texUploadTimer >= 0.0f) { texUploadTimer += time; }
+
 	/*Begin Recording*/
 	asSceneRendererSubmissionQueueBegin(subQueue);
 
@@ -205,7 +213,7 @@ int main(int argc, char* argv[])
 		texture = asCreateTexture(&desc);
 		asTextureDesc_FreeKtxData(&desc);
 
-		asTexturePoolAddFromHandle(texture, NULL);
+		//asTexturePoolAddFromHandle(texture, NULL);
 
 		asResourceDataMapping_t map = { .hndl = texture };
 		asResource_Create(resID, map, resourceType_Texture, 3);
