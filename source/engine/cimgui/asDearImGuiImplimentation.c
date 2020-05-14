@@ -1,6 +1,7 @@
 #include "asDearImGuiImplimentation.h"
 
 #include "../common/preferences/asPreferences.h"
+#include "../resource/asUserFiles.h"
 
 #if ASTRENGINE_DEARIMGUI
 
@@ -21,6 +22,8 @@
 #define AS_IMGUI_MAX_INDICES 65536*3
 ImGuiContext* pImGuiContext;
 ImGuiIO* pImGuiIo;
+
+const char* imguiIniName = "Imgui.ini";
 
 asTextureHandle_t imGuiFontTexture;
 asBindlessTextureIndex imGuiFontTextureIndex;
@@ -386,6 +389,22 @@ ASEXPORT void asInitImGui()
 			asFatalError("Could not load from shader database \"shaders/core/DearImGui_FX.asfx\"");
 		asFree(fileData);
 	}
+	/*Load ImGui Settings*/
+	{
+		asUserFile iniFile;
+		if (asUserFileOpen(&iniFile, imguiIniName, strlen(imguiIniName), "rb") == AS_SUCCESS)
+		{
+			size_t fileSize = asUserFileGetSize(&iniFile);
+			if (fileSize > 0) 
+			{
+				void* iniData = asMalloc(fileSize);
+				memset(iniData, 0, fileSize);
+				asUserFileRead(iniData, 1, fileSize, &iniFile);
+				igLoadIniSettingsFromMemory(iniData, fileSize);
+			}
+			asUserFileClose(&iniFile);
+		}
+	}
 
 	igNewFrame();
 }
@@ -660,6 +679,16 @@ ASEXPORT void asShutdownGfxImGui()
 
 ASEXPORT void asShutdownImGui()
 {
+	/*Write Imgui State*/
+	{
+		size_t iniSize = 0;
+		const char* iniContents = igSaveIniSettingsToMemory(&iniSize);
+		asUserFile iniFile;
+		asUserFileOpen(&iniFile, imguiIniName, strlen(iniContents), "wb");
+		asUserFileWrite(iniContents, 1, iniSize, &iniFile);
+		asUserFileClose(&iniFile);
+	}
+
 	igDestroyContext(pImGuiContext);
 	
 	if (_clipboardContent)
