@@ -42,6 +42,16 @@ asPrimitiveSubmissionQueue subQueue;
 float renderDebug = -1;
 void onUpdate(double time)
 {
+	if (igBegin("Hello Triangle", NULL, 0))
+	{
+		int debugValue = (int)renderDebug;
+		if (igDragInt("RenderDebug", &debugValue, 0.1f, -1, 7, NULL))
+		{
+			renderDebug = (float)debugValue;
+		}
+	}
+	igEnd();
+
 	/*Mid-frame Texture Submission Test*/
 	static float texUploadTimer = 0;
 	if (texUploadTimer > 5.0f) /*Wait 5 Seconds*/
