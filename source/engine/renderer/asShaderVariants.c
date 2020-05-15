@@ -38,7 +38,7 @@ asShaderTypeRegistration shaderTypes[] =
 				AS_SHADERSTAGE_VERTEX,
 				AS_QUALITY_LOW,
 				1, /*Macros*/
-				{{"NUKLEAR","1"}}
+				{{"TYPE_GUI","1"}}
 			},
 			{ /*Fragment*/
 				"standard",
@@ -46,7 +46,7 @@ asShaderTypeRegistration shaderTypes[] =
 				AS_SHADERSTAGE_FRAGMENT,
 				AS_QUALITY_LOW,
 				1, /*Macros*/
-				{{"NUKLEAR","1"}}
+				{{"TYPE_GUI","1"}}
 			},
 		}
 	},
@@ -69,16 +69,22 @@ asShaderTypeRegistration shaderTypes[] =
 				"main",
 				AS_SHADERSTAGE_VERTEX,
 				AS_QUALITY_LOW,
-				1, /*Macros*/
-				{{"RENDER_SIMPLIFIED","1"}}
+				2, /*Macros*/
+				{
+					{"RENDER_SIMPLIFIED","1"},
+					{"TYPE_SCENE","1"}
+				}
 			},
 			{ /*Fragment*/
 				"basic",
 				"main",
 				AS_SHADERSTAGE_FRAGMENT,
 				AS_QUALITY_LOW,
-				1, /*Macros*/
-				{{"RENDER_SIMPLIFIED","1"}}
+				2, /*Macros*/
+				{
+					{"RENDER_SIMPLIFIED","1"},
+					{"TYPE_SCENE","1"}
+				}
 			},
 		}
 	},

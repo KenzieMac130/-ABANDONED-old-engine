@@ -111,7 +111,7 @@ ASEXPORT asResults asInitTexturePool()
 		for (int i = 0; i < AS_MAX_INFLIGHT; i++) { layouts[i] = vTexturePoolDescLayout; }
 		VkDescriptorSetAllocateInfo descSetAllocInfo = (VkDescriptorSetAllocateInfo){ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
 		descSetAllocInfo.descriptorPool = vTexturePoolDescriptorPool;
-		descSetAllocInfo.descriptorSetCount = 2;
+		descSetAllocInfo.descriptorSetCount = AS_MAX_INFLIGHT;
 		descSetAllocInfo.pSetLayouts = layouts;
 		if (vkAllocateDescriptorSets(asVkDevice, &descSetAllocInfo, vTexturePoolDescSets) != VK_SUCCESS)
 			asFatalError("vkAllocateDescriptorSets() Failed to allocate vTexturePoolDescSets");
@@ -167,7 +167,8 @@ ASEXPORT asResults asInitTexturePool()
 ASEXPORT asResults asTexturePoolUpdate()
 {
 	/*Update Descriptors*/
-	texturePoolFrame = (texturePoolFrame + 1) % AS_MAX_INFLIGHT;
+	textureUpdateQueueCurrent = texturePoolFrame;
+	texturePoolFrame = asVkCurrentFrame;
 	for (int f = 0; f < AS_MAX_INFLIGHT; f++)
 	{
 		int queueIdx = abs((f + textureUpdateQueueCurrent - TEXTURE_UPDATE_QUEUE_COUNT) % AS_MAX_INFLIGHT);
@@ -205,14 +206,14 @@ ASEXPORT void asVkGetTexturePoolDescSetLayout(void* pDest)
 	memcpy(pDest, &vTexturePoolDescLayout, sizeof(vTexturePoolDescLayout));
 }
 
-ASEXPORT asResults asTexturePoolBindCmd(asGfxAPIs apiValidate, void* pCmdBuff, void* pLayout)
+ASEXPORT asResults asTexturePoolBindCmd(asGfxAPIs apiValidate, void* pCmdBuff, void* pLayout, int frame)
 {
 #if ASTRENGINE_VK
 	ASASSERT(apiValidate == AS_GFXAPI_VULKAN);
 	VkCommandBuffer cmdBuffer = *(VkCommandBuffer*)pCmdBuff;
 	VkPipelineLayout pipelineLayout = *(VkPipelineLayout*)pLayout;
 	vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-		pipelineLayout, AS_DESCSET_TEXTURE_POOL, 1, &vTexturePoolDescSets[texturePoolFrame], 0, NULL);
+		pipelineLayout, AS_DESCSET_TEXTURE_POOL, 1, &vTexturePoolDescSets[frame], 0, NULL);
 #endif
 	return AS_SUCCESS;
 }

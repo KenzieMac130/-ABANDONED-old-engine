@@ -30,7 +30,7 @@ ASEXPORT asResults asShutdownTexturePool();
 ASEXPORT void asVkGetTexturePoolDescSetLayout(void* pDest);
 #endif
 
-ASEXPORT asResults asTexturePoolBindCmd(asGfxAPIs apiValidate, void* pCmdBuff, void* pLayout);
+ASEXPORT asResults asTexturePoolBindCmd(asGfxAPIs apiValidate, void* pCmdBuff, void* pLayout, int frame);
 
 #ifdef __cplusplus
 }

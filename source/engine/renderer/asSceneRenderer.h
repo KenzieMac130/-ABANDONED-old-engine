@@ -12,7 +12,6 @@ typedef struct {
 	uint32_t maxTransforms; /**< Maximum number of uploaded transforms*/
 	uint32_t maxPrimitives; /**< Maximum number of uploaded primatives*/
 	uint32_t maxInstances; /**< Maximum number of instances (post batching)*/
-	bool infrequentRecord; /**< Rerecording is infrequent (recording transforms is expensive, but access fast)*/
 	bool disableInstanceSort; /**< Disable sorting of instances*/
 	bool disableInstanceMerge; /**< Disable merging of instances*/
 } asPrimitiveSubmissionQueueDesc;
@@ -30,8 +29,9 @@ ASEXPORT asResults asShutdownSceneRenderer();
 ASEXPORT asPrimitiveSubmissionQueue asSceneRendererCreateSubmissionQueue(asPrimitiveSubmissionQueueDesc* pDesc);
 ASEXPORT asResults asSceneRendererDestroySubmissionQueue(asPrimitiveSubmissionQueue queue);
 
-ASEXPORT asResults asSceneRendererSubmissionQueueBegin(asPrimitiveSubmissionQueue queue);
-ASEXPORT asResults asSceneRendererSubmissionQueueFinalize(asPrimitiveSubmissionQueue queue);
+ASEXPORT asResults asSceneRendererSubmissionQueuePopulateBegin(asPrimitiveSubmissionQueue queue);
+ASEXPORT asResults asSceneRendererSubmissionQueuePopulateEnd(asPrimitiveSubmissionQueue queue);
+ASEXPORT asResults asSceneRendererSubmissionQueuePrepareFrameSubmit(asPrimitiveSubmissionQueue queue);
 
 typedef int32_t asGfxDrawFlags;
 typedef enum {
@@ -97,6 +97,21 @@ typedef struct {
 ASEXPORT asResults asSceneRendererSubmissionAddBoundingBoxes(asPrimitiveSubmissionQueue queue, uint32_t boundsCount, float* pBoundingBoxes);
 ASEXPORT asResults asSceneRendererSubmissionAddTransforms(asPrimitiveSubmissionQueue queue, uint32_t transformCount, asGfxInstanceTransform* pTransforms, uint32_t* pBeginningTransformOffset);
 ASEXPORT asResults asSceneRendererSubmissionAddPrimitiveGroups(asPrimitiveSubmissionQueue queue, uint32_t primitiveCount, asGfxPrimativeGroupDesc* pDescs);
+
+typedef struct {
+	int32_t viewportIdx;
+	int32_t subViewportIdx;
+	int32_t flags;
+	float time;
+	vec3 viewPos;
+	quat viewRotation;
+	float fov;
+	float clipStart;
+	float clipEnd;
+	int32_t debugState;
+} asGfxViewerParamsDesc;
+
+ASEXPORT asResults asSceneRendererSetViewerParams(size_t descCount, asGfxViewerParamsDesc* pDescs);
 
 ASEXPORT asResults asSceneRendererDraw(int32_t viewport);
 

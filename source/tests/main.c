@@ -40,6 +40,10 @@ asResourceFileID_t standardSurfaceShaderFileID;
 asPrimitiveSubmissionQueue subQueue;
 
 float renderDebug = -1;
+vec3 cameraPos = { 0, 0, -1 };
+vec3 lookAtPos = { 0, 0, 0 };
+float lookRotation;
+float fov = 90.0f;
 void onUpdate(double time)
 {
 	if (igBegin("Hello Triangle", NULL, 0))
@@ -49,6 +53,11 @@ void onUpdate(double time)
 		{
 			renderDebug = (float)debugValue;
 		}
+
+		igDragFloat3("Camera Position", cameraPos, 0.1f, -FLT_MAX, FLT_MAX, NULL, 1.0f);
+		igDragFloat3("LookAt Position", lookAtPos, 0.1f, -FLT_MAX, FLT_MAX, NULL, 1.0f);
+		igDragFloat("Look Roatation", &lookRotation, 0.1f, -360.0f, 360.0f, NULL, 1.0f);
+		igDragFloat("FOV", &fov, 0.1f, 1.0f, 180.0f, NULL, 1.0f);
 	}
 	igEnd();
 
@@ -60,8 +69,18 @@ void onUpdate(double time)
 		texUploadTimer = -1.0;
 	} else if (texUploadTimer >= 0.0f) { texUploadTimer += time; }
 
+	/*Set Viewport*/
+	asGfxViewerParamsDesc viewParams = { 0 };
+	viewParams.fov = fov;
+	viewParams.clipStart = 0.001f;
+	viewParams.clipEnd = 10000.0f;
+	viewParams.debugState = (int32_t)renderDebug;
+	glm_vec3_copy(cameraPos, viewParams.viewPos);
+	glm_quatv(viewParams.viewRotation, glm_rad(lookRotation), (vec3) { 0, 1, 0 });
+	asSceneRendererSetViewerParams(1, &viewParams);
+
 	/*Begin Recording*/
-	asSceneRendererSubmissionQueueBegin(subQueue);
+	asSceneRendererSubmissionQueuePopulateBegin(subQueue);
 
 	/*Transforms*/
 	uint32_t transformOffset;
@@ -84,7 +103,7 @@ void onUpdate(double time)
 	primDesc.renderPass = AS_SCENE_RENDERPASS_SOLID;
 	primDesc.baseInstanceCount = 1;
 	primDesc.materialId = 0;
-	primDesc.debugState = (int32_t)renderDebug;
+	primDesc.debugState = 0;
 	primDesc.transformCount = 1;
 	primDesc.transformOffset = transformOffset;
 	primDesc.transformOffsetPreviousFrame = transformOffset;
@@ -92,7 +111,9 @@ void onUpdate(double time)
 	asSceneRendererSubmissionAddPrimitiveGroups(subQueue, 1, &primDesc);
 
 	/*End Queue*/
-	asSceneRendererSubmissionQueueFinalize(subQueue);
+	asSceneRendererSubmissionQueuePopulateEnd(subQueue);
+
+	if (renderDebug > 0) { asSceneRendererSubmissionQueuePrepareFrameSubmit(subQueue); }
 }
 
 void onExit(void)

@@ -132,6 +132,10 @@ ASEXPORT void asFatalError(const char* msg);
 #include "../thirdparty/stb/stb_ds.h"
 #include "../thirdparty/tiny-regex/re.h"
 
+/*3D Math*/
+#include "../thirdparty/cglm/cglm.h"
+typedef versor quat;
+
 #ifdef __cplusplus
 }
 #endif

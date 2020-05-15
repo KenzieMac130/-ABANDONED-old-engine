@@ -12,6 +12,13 @@
 VkPipelineLayout scenePipelineLayout;
 VkRenderPass sceneRenderPass;
 VkFramebuffer sceneFramebuffer;
+
+VkDescriptorSetLayout sceneViewDescSetLayout;
+VkDescriptorPool sceneDescriptorPool;
+#define SCENE_MAX_DESC_SETS 16
+
+#define AS_BINDING_VIEWER_UBO 0
+#define AS_DESCSET_VIEWER_UBO 1
 #endif
 
 /*Primitive Submission Queue*/
@@ -23,7 +30,6 @@ struct primInstanceData {
 struct asPrimitiveSubmissionQueueT {
 	enum PrimitiveSubmissionQueueState state;
 	int32_t currentFrame;
-	int32_t finishedFrame;
 
 	asBufferHandle_t offsetBuffs[AS_MAX_INFLIGHT];
 	asBufferHandle_t transformBuffs[AS_MAX_INFLIGHT];
@@ -52,11 +58,128 @@ struct asPrimitiveSubmissionQueueT {
 };
 
 /*Scene Viewport*/
+#define AS_MAX_SUBVIEWPORTS 6
+struct sceneUbo {
+	mat4 viewMatrix[AS_MAX_SUBVIEWPORTS];
+	mat4 projMatrix[AS_MAX_SUBVIEWPORTS];
+	float width;
+	float height;
+	float time;
+	int32_t debug;
+};
+
+void sceneUbo_SetMatrices(struct sceneUbo* pUbo,
+	int subViewportIdx,
+	vec3 viewPos,
+	quat viewRot,
+	float near,
+	float far,
+	float fov,
+	bool ortho,
+	vec2 renderDim)
+{
+	/*Set Render Dimensions*/
+	pUbo->width = renderDim[0];
+	pUbo->height = renderDim[1];
+
+	/*Create View Matrix*/
+	glm_quat_mat4(viewRot, pUbo->viewMatrix[subViewportIdx]);
+	glm_translate(pUbo->viewMatrix[subViewportIdx], viewPos);
+
+	/*Create Projection Matrix*/
+	const float aspect = renderDim[0] / renderDim[1];
+	if (ortho) {
+		const float size = fov;
+		glm_ortho(-size * aspect,
+			size * aspect,
+			-size,
+			size,
+			near,
+			far,
+			pUbo->projMatrix[subViewportIdx]);
+	}
+	else {
+		glm_perspective(glm_rad(fov), aspect, near, far, pUbo->projMatrix[subViewportIdx]);
+	}
+}
+
 struct sceneViewport
 {
 	struct asPrimitiveSubmissionQueueT** pPrimQueues;
+	struct sceneUbo* sceneUboData[AS_MAX_INFLIGHT];
+	asBufferHandle_t sceneUboBuffer[AS_MAX_INFLIGHT];
+#ifdef ASTRENGINE_VK
+	VkDescriptorSet vDescriptorSets[AS_MAX_INFLIGHT];
+#endif
 };
 struct sceneViewport mainSceneViewport;
+
+void sceneViewport_Init(struct sceneViewport* pViewport)
+{
+	memset(pViewport, 0, sizeof(*pViewport));
+
+	/*Uniform Buffers*/
+	asBufferDesc_t buffDesc = asBufferDesc_Init();
+	buffDesc.bufferSize = sizeof(struct sceneUbo);
+	buffDesc.cpuAccess = AS_GPURESOURCEACCESS_STREAM;
+	buffDesc.usageFlags = AS_BUFFERUSAGE_UNIFORM;
+	buffDesc.initialContentsBufferSize = buffDesc.bufferSize;
+	buffDesc.pInitialContentsBuffer = &(struct sceneUbo) { 2 };
+	for (int i = 0; i < AS_MAX_INFLIGHT; i++)
+	{
+		pViewport->sceneUboBuffer[i] = asCreateBuffer(&buffDesc);
+#if ASTRENGINE_VK
+		asVkAllocation_t alloc = asVkGetAllocFromBuffer(pViewport->sceneUboBuffer[i]);
+		asVkMapMemory(alloc, 0, alloc.size, &pViewport->sceneUboData[i]);
+#endif
+	}
+	/*Descriptor Set*/
+	{
+		VkDescriptorSetLayout layouts[AS_MAX_INFLIGHT];
+		for (int i = 0; i < AS_MAX_INFLIGHT; i++) { layouts[i] = sceneViewDescSetLayout; }
+		VkDescriptorSetAllocateInfo descSetAllocInfo = (VkDescriptorSetAllocateInfo){ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
+		descSetAllocInfo.descriptorPool = sceneDescriptorPool;
+		descSetAllocInfo.descriptorSetCount = AS_MAX_INFLIGHT;
+		descSetAllocInfo.pSetLayouts = layouts;
+		if (vkAllocateDescriptorSets(asVkDevice, &descSetAllocInfo, &pViewport->vDescriptorSets) != VK_SUCCESS)
+			asFatalError("vkAllocateDescriptorSets() Failed to allocate pViewport->vDescriptorSets");
+
+		for (int i = 0; i < AS_MAX_INFLIGHT; i++)
+		{
+			VkWriteDescriptorSet descSetWrite = (VkWriteDescriptorSet){ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
+			descSetWrite.dstSet = pViewport->vDescriptorSets[i];
+			descSetWrite.dstBinding = AS_BINDING_VIEWER_UBO;
+			descSetWrite.descriptorCount = 1;
+			descSetWrite.dstArrayElement = 0;
+			descSetWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			descSetWrite.pBufferInfo = &(VkDescriptorBufferInfo) {
+				.buffer = asVkGetBufferFromBuffer(pViewport->sceneUboBuffer[i]),
+				.offset = 0,
+				.range = sizeof(struct sceneUbo)
+			};
+			vkUpdateDescriptorSets(asVkDevice, 1, &descSetWrite, 0, NULL);
+		}
+	}
+}
+
+void sceneViewport_FlushGPU(struct sceneViewport* pViewport)
+{
+#if ASTRENGINE_VK
+	asVkAllocation_t bufferData = asVkGetAllocFromBuffer(pViewport->sceneUboBuffer[asVkCurrentFrame]);
+	asVkFlushMemory(bufferData);
+#endif
+}
+
+void sceneViewport_Destroy(struct sceneViewport* pViewport)
+{
+	for (int i = 0; i < AS_MAX_INFLIGHT; i++)
+	{
+#if ASTRENGINE_VK
+		asVkUnmapMemory(asVkGetAllocFromBuffer(pViewport->sceneUboBuffer[i]));
+#endif
+		asReleaseBuffer(pViewport->sceneUboBuffer[i]);
+	}
+}
 
 struct scenePushConstants
 {
@@ -66,16 +189,45 @@ struct scenePushConstants
 	int32_t debugIdx;
 };
 
+/*Viewer Params*/
+ASEXPORT asResults asSceneRendererSetViewerParams(size_t descCount, asGfxViewerParamsDesc* pDescs)
+{
+	ASASSERT(descCount);
+	ASASSERT(pDescs);
+#if ASTRENGINE_VK
+const int currentUboIdx = asVkCurrentFrame;
+#endif
+	struct sceneUbo* pUboData = mainSceneViewport.sceneUboData[currentUboIdx];
+	const asGfxViewerParamsDesc desc = pDescs[0];
+
+	int32_t w, h;
+	asGetRenderDimensions(desc.viewportIdx, true, &w, &h);
+	sceneUbo_SetMatrices(pUboData,
+		desc.subViewportIdx,
+		desc.viewPos,
+		desc.viewRotation,
+		desc.clipStart, desc.clipEnd,
+		desc.fov,
+		false,
+		(vec2) {(float)w, (float)h});
+
+	pUboData->time = desc.time;
+	pUboData->debug = desc.debugState;
+	return AS_SUCCESS;
+}
+
 /*Record Command Buffer*/
 void recordSecondaryCommands(uint32_t primCount,
 	asGfxPrimativeGroupDesc* pPrims,
 	asSceneRenderPass scenePass,
+	struct sceneViewport* pViewport,
 	float viewport[4],
 #if ASTRENGINE_VK
-	VkCommandBuffer vCmd
+	VkCommandBuffer vCmd,
 #else
-	void*
+	void* _UNK,
 #endif
+	int bufferedFrame
 ){
 #if ASTRENGINE_VK
 	VkCommandBufferInheritanceInfo inheritInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO };
@@ -107,8 +259,10 @@ void recordSecondaryCommands(uint32_t primCount,
 	scissor.extent.height = (uint32_t)viewport[1];
 	vkCmdSetScissor(vCmd, 0, 1, &scissor);
 
-	/*Bind Descriptor Set*/
-	//Todo:
+	/*Bind Descriptor Sets*/
+	asTexturePoolBindCmd(AS_GFXAPI_VULKAN, &vCmd, &scenePipelineLayout, bufferedFrame);
+	vkCmdBindDescriptorSets(vCmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+		scenePipelineLayout, AS_DESCSET_VIEWER_UBO, 1, &pViewport->vDescriptorSets[bufferedFrame], 0, NULL);
 
 	VkPipeline lastPipeline = VK_NULL_HANDLE;
 	uint32_t lastStencilWrite = 0;
@@ -193,6 +347,7 @@ void _unregisterSubmissionQueue(struct asPrimitiveSubmissionQueueT* pQueue)
 enum PrimitiveSubmissionQueueState {
 	PRIMITIVE_SUBMISSION_QUEUE_STATE_EMPTY,
 	PRIMITIVE_SUBMISSION_QUEUE_STATE_RECORDING,
+	PRIMITIVE_SUBMISSION_QUEUE_STATE_RECORDED,
 	PRIMITIVE_SUBMISSION_QUEUE_STATE_READY,
 	PRIMITIVE_SUBMISSION_QUEUE_STATE_INVALID
 };
@@ -264,7 +419,7 @@ ASEXPORT asResults asSceneRendererDestroySubmissionQueue(asPrimitiveSubmissionQu
 	return AS_SUCCESS;
 }
 
-ASEXPORT asResults asSceneRendererSubmissionQueueBegin(asPrimitiveSubmissionQueue queue)
+ASEXPORT asResults asSceneRendererSubmissionQueuePopulateBegin(asPrimitiveSubmissionQueue queue)
 {
 	queue->pInstanceTransformOffsets = queue->_InstanceBufferMappings[queue->currentFrame];
 	queue->pTransforms = queue->_transformBufferMappings[queue->currentFrame];
@@ -274,7 +429,7 @@ ASEXPORT asResults asSceneRendererSubmissionQueueBegin(asPrimitiveSubmissionQueu
 	queue->initialPrimitiveGroupCount = 0;
 	queue->transformCount = 0;
 
-	queue->state == PRIMITIVE_SUBMISSION_QUEUE_STATE_RECORDING;
+	queue->state = PRIMITIVE_SUBMISSION_QUEUE_STATE_RECORDING;
 	return AS_SUCCESS;
 }
 
@@ -290,8 +445,7 @@ void primQueueRecordCmds(asPrimitiveSubmissionQueue queue)
 	asVkAllocation_t xformAlloc = asVkGetAllocFromBuffer(queue->transformBuffs[queue->currentFrame]);
 	asVkFlushMemory(indexAlloc);
 	asVkFlushMemory(xformAlloc);
-	queue->finishedFrame = queue->currentFrame;
-	queue->currentFrame = (queue->currentFrame + 1) % AS_MAX_INFLIGHT;
+	queue->currentFrame = asVkCurrentFrame;
 #endif
 	/*Allocate Command Buffers as Necessary*/
 	for (int i = 0; i < AS_SCENE_RENDERPASS_COUNT; i++)
@@ -300,7 +454,7 @@ void primQueueRecordCmds(asPrimitiveSubmissionQueue queue)
 		if (queue->renderpassPopulatedFlags & (1 << i))
 		{
 #if ASTRENGINE_VK
-			const VkCommandBuffer* pVCmd = &queue->vSecondaryCommandBuffers[queue->finishedFrame][i];
+			const VkCommandBuffer* pVCmd = &queue->vSecondaryCommandBuffers[queue->currentFrame][i];
 			if (*pVCmd == VK_NULL_HANDLE)
 			{
 				VkCommandBufferAllocateInfo allocInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
@@ -310,7 +464,9 @@ void primQueueRecordCmds(asPrimitiveSubmissionQueue queue)
 				if (vkAllocateCommandBuffers(asVkDevice, &allocInfo, pVCmd) != VK_SUCCESS) {
 					asFatalError("vkAllocateCommandBuffers() Failed to create queue->vSecondaryCommandBuffers[]");
 				}
-			} else { vkResetCommandBuffer(queue->vSecondaryCommandBuffers[queue->finishedFrame][i], 0); }
+			} else { 
+				vkResetCommandBuffer(*pVCmd, 0);
+			}
 
 			/*Dimensions*/
 			int32_t width, height;
@@ -320,14 +476,16 @@ void primQueueRecordCmds(asPrimitiveSubmissionQueue queue)
 			recordSecondaryCommands(queue->initialPrimitiveGroupCount,
 				queue->pInitialPrimGroups,
 				AS_SCENE_RENDERPASS_SOLID,
+				&mainSceneViewport,
 				(float[]){(float)width, (float)height, 0.0f, 0.0f},
-				*pVCmd);
+				*pVCmd,
+				asVkCurrentFrame);
 #endif
 		}
 	}
 }
 
-ASEXPORT asResults asSceneRendererSubmissionQueueFinalize(asPrimitiveSubmissionQueue queue)
+ASEXPORT asResults asSceneRendererSubmissionQueuePopulateEnd(asPrimitiveSubmissionQueue queue)
 {
 	/*Sort*/
 	//Todo:
@@ -351,11 +509,16 @@ ASEXPORT asResults asSceneRendererSubmissionQueueFinalize(asPrimitiveSubmissionQ
 		}
 		nextInstanceOffset += instanceCount;
 	}
+	queue->instanceCount = nextInstanceOffset;
+	queue->state = PRIMITIVE_SUBMISSION_QUEUE_STATE_RECORDED;
+	return AS_SUCCESS;
+}
 
+ASEXPORT asResults asSceneRendererSubmissionQueuePrepareFrameSubmit(asPrimitiveSubmissionQueue queue)
+{
 	/*Build Commands*/
 	primQueueRecordCmds(queue);
 
-	queue->instanceCount = nextInstanceOffset;
 	queue->state = PRIMITIVE_SUBMISSION_QUEUE_STATE_READY;
 	return AS_SUCCESS;
 }
@@ -536,7 +699,7 @@ void _createScreenResources()
 		createInfo.layers = 1;
 
 		if (vkCreateFramebuffer(asVkDevice, &createInfo, AS_VK_MEMCB, &sceneFramebuffer) != VK_SUCCESS)
-			asFatalError("vkCreateFramebuffer() Failed to create pScreen->simpleFrameBuffer");
+			asFatalError("vkCreateFramebuffer() Failed to create simpleFrameBuffer");
 	}
 }
 
@@ -549,11 +712,25 @@ void _destroyScreenResources()
 ASEXPORT asResults asInitSceneRenderer()
 {
 #if ASTRENGINE_VK
+	/*Descriptor Set Layout*/
+	{
+		VkDescriptorSetLayoutCreateInfo desc = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
+		desc.bindingCount = 1;
+
+		VkDescriptorSetLayoutBinding uboBinding = { 0 };
+		uboBinding.binding = AS_BINDING_VIEWER_UBO;
+		uboBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		uboBinding.stageFlags = VK_SHADER_STAGE_ALL;
+		uboBinding.descriptorCount = 1;
+		desc.pBindings = &uboBinding;
+		if (vkCreateDescriptorSetLayout(asVkDevice, &desc, AS_VK_MEMCB, &sceneViewDescSetLayout) != VK_SUCCESS)
+			asFatalError("vkCreateDescriptorSetLayout() Failed to create sceneViewDescSetLayout");
+	}
 	/*Setup Pipeline Layout*/
 	{
-		VkDescriptorSetLayout descSetLayouts[1] = { 0 };
+		VkDescriptorSetLayout descSetLayouts[2] = { 0 };
 		asVkGetTexturePoolDescSetLayout(&descSetLayouts[0]);
-		//Todo: Other Desc Sets
+		descSetLayouts[1] = sceneViewDescSetLayout;
 
 		VkPipelineLayoutCreateInfo createInfo = (VkPipelineLayoutCreateInfo){ VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
 		createInfo.setLayoutCount = ASARRAYLEN(descSetLayouts);
@@ -567,7 +744,22 @@ ASEXPORT asResults asInitSceneRenderer()
 		if (vkCreatePipelineLayout(asVkDevice, &createInfo, AS_VK_MEMCB, &scenePipelineLayout) != VK_SUCCESS)
 			asFatalError("vkCreatePipelineLayout() Failed to create imGuiPipelineLayout");
 	}
+	/*Descriptor Pool*/
+	{
+		VkDescriptorPoolSize fontImagePoolSize = { 0 };
+		fontImagePoolSize.descriptorCount = SCENE_MAX_DESC_SETS;
+		fontImagePoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+
+		VkDescriptorPoolCreateInfo createInfo = (VkDescriptorPoolCreateInfo){ VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
+		createInfo.maxSets = SCENE_MAX_DESC_SETS;
+		createInfo.poolSizeCount = 1;
+		createInfo.pPoolSizes = &fontImagePoolSize;
+		if (vkCreateDescriptorPool(asVkDevice, &createInfo, AS_VK_MEMCB, &sceneDescriptorPool) != VK_SUCCESS)
+			asFatalError("vkCreateDescriptorPool() Failed to create sceneDescriptorPool");
+	}
+
 	_createScreenResources();
+	sceneViewport_Init(&mainSceneViewport);
 #endif
 	return AS_SUCCESS;
 }
@@ -584,8 +776,36 @@ ASEXPORT asResults asTriggerResizeSceneRenderer()
 	return AS_SUCCESS;
 }
 
+void executeVpSubmissionQueues(VkCommandBuffer vCmd, struct sceneViewport* viewport, int renderpass)
+{
+	for (int i = 0; i < arrlen(viewport->pPrimQueues); i++)
+	{
+		const struct asPrimitiveSubmissionQueueT* pPrimQueue = viewport->pPrimQueues[i];
+		if (pPrimQueue->state == PRIMITIVE_SUBMISSION_QUEUE_STATE_READY) {
+#if ASTRENGINE_VK
+			vkCmdExecuteCommands(vCmd, 1, &pPrimQueue->vSecondaryCommandBuffers[asVkCurrentFrame][renderpass]);
+#endif
+		}
+	}
+}
+
+void resetVpSubmissionQueues(struct sceneViewport* viewport)
+{
+	for (int i = 0; i < arrlen(viewport->pPrimQueues); i++)
+	{
+		struct asPrimitiveSubmissionQueueT* pPrimQueue = viewport->pPrimQueues[i];
+		if (pPrimQueue->state == PRIMITIVE_SUBMISSION_QUEUE_STATE_READY)
+		{
+			pPrimQueue->state = PRIMITIVE_SUBMISSION_QUEUE_STATE_RECORDED;
+		}
+	}
+}
+
 ASEXPORT asResults asSceneRendererDraw(int32_t viewport)
 {
+	/*Upload Scene Viewports to GPU*/
+	sceneViewport_FlushGPU(&mainSceneViewport);
+
 #if ASTRENGINE_VK
 	/*Begin Command Buffer*/
 	VkCommandBuffer vCmd = asVkGetNextGraphicsCommandBuffer();
@@ -614,22 +834,23 @@ ASEXPORT asResults asSceneRendererDraw(int32_t viewport)
 	beginInfo.framebuffer = sceneFramebuffer;
 	vkCmdBeginRenderPass(vCmd, &beginInfo, VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
 
-	for(int i = 0; i < arrlen(mainSceneViewport.pPrimQueues); i++)
-	{
-		const struct asPrimitiveSubmissionQueueT* pPrimQueue = mainSceneViewport.pPrimQueues[i];
-		vkCmdExecuteCommands(vCmd, 1, &pPrimQueue->vSecondaryCommandBuffers[pPrimQueue->finishedFrame][2]);
-	}
+	executeVpSubmissionQueues(vCmd, &mainSceneViewport, 2);
 
 	vkCmdEndRenderPass(vCmd);
 	vkEndCommandBuffer(vCmd);
 #endif
+	/*Invalidate all command buffers for frame*/
+	resetVpSubmissionQueues(&mainSceneViewport);
 	return AS_SUCCESS;
 }
 
 ASEXPORT asResults asShutdownSceneRenderer()
 {
+	sceneViewport_Destroy(&mainSceneViewport);
 #if ASTRENGINE_VK
+	vkDestroyDescriptorPool(asVkDevice, sceneDescriptorPool, AS_VK_MEMCB);
 	vkDestroyPipelineLayout(asVkDevice, scenePipelineLayout, AS_VK_MEMCB);
+	vkDestroyDescriptorSetLayout(asVkDevice, sceneViewDescSetLayout, AS_VK_MEMCB);
 #endif
 	_destroyScreenResources();
 	return AS_SUCCESS;

@@ -467,7 +467,7 @@ ASEXPORT void asImGuiDraw(int32_t viewport)
 
 	/*Bind shader pipeline*/
 	vkCmdBindPipeline(vCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, (VkPipeline)imGuiShaderFx.pipelines[0]);
-	asTexturePoolBindCmd(AS_GFXAPI_VULKAN, &vCmd, &imGuiPipelineLayout);
+	asTexturePoolBindCmd(AS_GFXAPI_VULKAN, &vCmd, &imGuiPipelineLayout, asVkCurrentFrame);
 
 	/*Begin Render Pass*/
 	VkClearValue clearValues[] = {
