@@ -2,6 +2,7 @@
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/xxhash)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/lz4)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/cimgui)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/imnodes)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tiny-regex)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/flecs)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tiny_ktx)
