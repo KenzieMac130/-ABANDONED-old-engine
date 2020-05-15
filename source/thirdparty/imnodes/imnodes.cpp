@@ -821,7 +821,7 @@ void begin_canvas_interaction(EditorContext& editor)
 
     const bool started_panning =
         g.io.emulate_three_button_mouse.enabled
-            ? (left_mouse_clicked && *g.io.emulate_three_button_mouse.modifier)
+            ? (left_mouse_clicked && *g.io.emulate_three_button_mouse.modifier) || middle_mouse_clicked
             : middle_mouse_clicked;
 
     editor.click_interaction_type = started_panning
@@ -1042,7 +1042,8 @@ void click_interaction_update(EditorContext& editor)
         const bool dragging =
             g.io.emulate_three_button_mouse.enabled
                 ? (ImGui::IsMouseDragging(0, 0.f) &&
-                   (*g.io.emulate_three_button_mouse.modifier))
+                   (*g.io.emulate_three_button_mouse.modifier)) ||
+                   ImGui::IsMouseDragging(2, 0.f)
                 : ImGui::IsMouseDragging(2, 0.f);
 
         if (dragging)

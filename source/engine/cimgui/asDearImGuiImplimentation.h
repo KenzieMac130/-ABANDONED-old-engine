@@ -6,6 +6,8 @@
 #if ASTRENGINE_DEARIMGUI
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #include "../thirdparty/cimgui/cimgui.h"
+#define CIMNODES_DEFINE_ENUMS_AND_STRUCTS
+#include "../thirdparty/imnodes/cimnodes.h"
 #ifdef __cplusplus
 extern "C" {
 #endif 

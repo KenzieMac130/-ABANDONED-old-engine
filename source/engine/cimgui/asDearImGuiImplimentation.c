@@ -405,6 +405,13 @@ ASEXPORT void asInitImGui()
 			asUserFileClose(&iniFile);
 		}
 	}
+	/*ImNodes Setup*/
+	{
+		inodeInitialize();
+		ImNodesIO* io = inodeGetIO();
+		io->emulate_three_button_mouse.enabled = true;
+		io->link_detach_with_modifier_click.modifier = &pImGuiIo->KeysDown[ImGuiKey_Delete];
+	}
 
 	igNewFrame();
 }
@@ -689,6 +696,7 @@ ASEXPORT void asShutdownImGui()
 		asUserFileClose(&iniFile);
 	}
 
+	inodeShutdown();
 	igDestroyContext(pImGuiContext);
 	
 	if (_clipboardContent)

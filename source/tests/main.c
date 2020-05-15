@@ -61,6 +61,29 @@ void onUpdate(double time)
 	}
 	igEnd();
 
+	/*Node Editor Test*/
+	if (igBegin("Node Editor Test", NULL, 0))
+	{
+		inodeBeginNodeEditor();
+
+		const int nodeId = 1;
+		const int inputAttrId = 2;
+		inodeBeginNode(nodeId);
+
+		inodeBeginNodeTitleBar();
+		igText("Hello Node!");
+		inodeEndNodeTitleBar();
+
+		inodeBeginOutputAttribute(inputAttrId, ImNodesPinShape_PinShape_Circle);
+		igText("Output");
+		inodeEndAttribute();
+
+		inodeEndNode();
+
+		inodeEndNodeEditor();
+	}
+	igEnd();
+
 	/*Mid-frame Texture Submission Test*/
 	static float texUploadTimer = 0;
 	if (texUploadTimer > 5.0f) /*Wait 5 Seconds*/
