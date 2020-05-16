@@ -285,7 +285,7 @@ glm_perspective_infinite(float fovy,
     float aspect,
     float nearVal,
     mat4  dest) {
-    float f, fn;
+    float f;
 
     glm_mat4_zero(dest);
 
