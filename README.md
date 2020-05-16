@@ -18,8 +18,9 @@ In-House Toy Game Engine by Alex Strand
   * Register config variables for save/load from disk or from the dev console
 * Rendering
   * In-house Vulkan renderer
-  * Easy to use, Thread-safe primitive submission pipeline
+  * Easy to use, Thread-safe Primitive Submission pipeline
   * Bindless texture system
+  * High Precision Depth Buffering and Infinite draw distances
 * Asset Pipeline
   * Asset conditioning tools hooked together by small Python script using WAF meta-build system
 * More to Come
