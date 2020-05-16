@@ -272,6 +272,33 @@ glm_perspective(float fovy,
 }
 
 /*!
+ * @brief set up perspective projection matrix as an infinite projection matrix
+ *
+ * @param[in]  fovy    field of view angle
+ * @param[in]  aspect  aspect ratio ( width / height )
+ * @param[in]  nearVal near clipping plane
+ * @param[out] dest    result matrix
+ */
+CGLM_INLINE
+void
+glm_perspective_infinite(float fovy,
+    float aspect,
+    float nearVal,
+    mat4  dest) {
+    float f, fn;
+
+    glm_mat4_zero(dest);
+
+    f = 1.0f / tanf(fovy * 0.5f);
+
+    dest[0][0] = f / aspect;
+    dest[1][1] = f;
+    dest[2][2] = 0.0f;
+    dest[2][3] = -1.0f;
+    dest[3][2] = nearVal;
+}
+
+/*!
  * @brief extend perspective projection matrix's far distance
  *
  * this function does not guarantee far >= near, be aware of that!
