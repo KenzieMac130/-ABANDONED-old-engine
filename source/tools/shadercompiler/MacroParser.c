@@ -76,7 +76,7 @@ asResults processMacros(FxCreator* pCreator, const char* content, size_t content
 					floatCount++;
 				}
 			}
-			if (FxCreator_DataSection_AddEntry(pCreator, typeName, varName, floats, floatCount) != AS_SUCCESS) { return AS_FAILURE_OUT_OF_MEMORY; }
+			if (FxCreator_DataSection_AddEntry(pCreator, typeName, varName, floats, floatCount * sizeof(float)) != AS_SUCCESS) { return AS_FAILURE_OUT_OF_MEMORY; }
 		}
 		else if (asIsSizedStringEqual(command, "EXTERN_C_STRING", CMD_MAX))
 		{
