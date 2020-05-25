@@ -1124,7 +1124,7 @@ void vScreenResourcesCreate(asVkScreenResources*pScreen, SDL_Window* pWindow)
 	pScreen->pWindow = pWindow;
 
 	/*Recreate Surface if Necessary*/
-	if(pScreen->surface != VK_NULL_HANDLE){
+	if(pScreen->surface == VK_NULL_HANDLE){
 		if (!SDL_Vulkan_CreateSurface(pScreen->pWindow, asVkInstance, &pScreen->surface))
 			asFatalError("SDL_Vulkan_CreateSurface() Failed to create surface");
 	}
@@ -1311,6 +1311,7 @@ void vScreenResourcesDestroy(asVkScreenResources*pScreen)
 		vkDestroySwapchainKHR(asVkDevice, pScreen->swapchain, AS_VK_MEMCB);
 	if (pScreen->surface != VK_NULL_HANDLE)
 		vkDestroySurfaceKHR(asVkInstance, pScreen->surface, AS_VK_MEMCB);
+	pScreen->surface = VK_NULL_HANDLE;
 }
 
 void asVkInit(asAppInfo_t *pAppInfo, int32_t deviceIndex)
