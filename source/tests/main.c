@@ -24,10 +24,12 @@
 #include "engine/renderer/asTextureFromKtx.h"
 #include "engine/renderer/asBindlessTexturePool.h"
 
-#include "engine/model/runtime/asModelRuntime.h"
-
 #include "engine/renderer/asSceneRenderer.h"
 #include "engine/model/runtime/asModelRuntime.h"
+
+#include "engine/input/asInput.h"
+
+asInputPlayer mainPlayerInput;
 
 asTextureHandle_t texture;
 asBufferHandle_t vBuffer;
@@ -41,10 +43,11 @@ asPrimitiveSubmissionQueue subQueue;
 
 float renderDebug = -1;
 vec3 cameraPos = { 0, 0, -1 };
-vec3 lookAtPos = { 0, 0, 0 };
-float lookRotation;
+quat cameraRot = { 0, 0, 0, 1 };
+vec3 lookat = ASVEC3_FORWARD;
+vec2 cameraLook;
 float fov = 90.0f;
-void onUpdate(double time)
+void onUpdate(double deltaTime)
 {
 	if (igBegin("Hello Triangle", NULL, 0))
 	{
@@ -54,9 +57,10 @@ void onUpdate(double time)
 			renderDebug = (float)debugValue;
 		}
 
+		igDragFloat2("CameraLook", cameraLook, 0.1f, -FLT_MAX, FLT_MAX, NULL, 1.0f);
 		igDragFloat3("Camera Position", cameraPos, 0.1f, -FLT_MAX, FLT_MAX, NULL, 1.0f);
-		igDragFloat3("LookAt Position", lookAtPos, 0.1f, -FLT_MAX, FLT_MAX, NULL, 1.0f);
-		igDragFloat("Look Roatation", &lookRotation, 0.1f, -360.0f, 360.0f, NULL, 1.0f);
+		igDragFloat3("Camera Lookat", lookat, 0.1f, -FLT_MAX, FLT_MAX, NULL, 1.0f);
+		igDragFloat4("Camera Quaternion", cameraRot, 0.1f, -FLT_MAX, FLT_MAX, NULL, 1.0f);
 		igDragFloat("FOV", &fov, 0.1f, 1.0f, 180.0f, NULL, 1.0f);
 	}
 	igEnd();
@@ -83,6 +87,66 @@ void onUpdate(double time)
 		inodeEndNodeEditor();
 	}
 	igEnd();
+	/*Debug Drawing*/
+	{
+		for(int i = 0; i < 126; i++ )
+		{
+			float yPos = (1.0f / (float)126) * i;
+			asDebugDrawLine3D(
+			(vec3) { -1.0f, yPos, 1.0f },
+			(vec3) { 1.0f, yPos, 1.0f },
+			1.0f,
+			(vec4) { 1.0f, 1.0f, 1.0f, 1.0f });
+		}
+	}
+	/*Input Test*/
+	{
+		if (asInputGetButtonDown(mainPlayerInput, asInputGetMappingHandle(mainPlayerInput, "FlyCam"))) {
+			asInputMouseSetRelative(true);
+		}
+		else if (asInputGetButtonUp(mainPlayerInput, asInputGetMappingHandle(mainPlayerInput, "FlyCam"))) {
+			asInputMouseSetRelative(false);
+		}
+		if (asInputGetButton(mainPlayerInput, asInputGetMappingHandle(mainPlayerInput, "FlyCam")))
+		{
+			float x = asInputGetAxisClamped(mainPlayerInput, asInputGetMappingHandle(mainPlayerInput, "MoveRight"));
+			float y = asInputGetAxisClamped(mainPlayerInput, asInputGetMappingHandle(mainPlayerInput, "MoveForward"));
+			float z = asInputGetAxisClamped(mainPlayerInput, asInputGetMappingHandle(mainPlayerInput, "MoveUp"));
+			float lookX = asInputGetAxisClamped(mainPlayerInput, asInputGetMappingHandle(mainPlayerInput, "LookX"));
+			float lookY = asInputGetAxisClamped(mainPlayerInput, asInputGetMappingHandle(mainPlayerInput, "LookY"));
+
+			/*Camera Look*/
+			vec3 forward = ASVEC3_FORWARD;
+			vec3 right = ASVEC3_RIGHT;
+			vec3 up = ASVEC3_UP;
+			
+			cameraLook[0] += lookX * 0.5;
+			cameraLook[1] -= lookY * 0.5;
+			if (cameraLook[1] > 89.999f)
+				cameraLook[1] = 89.999f;
+			if (cameraLook[1] < -89.999f)
+				cameraLook[1] = -89.999f;
+			const float yaw = cameraLook[0];
+			const float pitch = cameraLook[1];
+			//lookat[0] = cos(glm_rad(yaw)) * cos(glm_rad(pitch));
+			//lookat[1] = sin(glm_rad(yaw)) * cos(glm_rad(pitch));
+			//lookat[2] = sin(glm_rad(pitch));
+			glm_vec3_normalize(lookat);
+			glm_quat_for(lookat, (vec3)ASVEC3_FORWARD, (vec3)ASVEC3_UP, cameraRot);
+
+			/*Camera Movement*/
+			glm_quat_rotatev(cameraRot, forward, forward);
+			glm_quat_rotatev(cameraRot, right, right);
+			glm_cross(forward, right, up);
+			const float speed = 2.5f;
+			glm_vec3_scale(forward, (speed * deltaTime * y), forward);
+			glm_vec3_scale(right, (speed * deltaTime * x), right);
+			glm_vec3_scale(up, (speed * deltaTime * z), up);
+			glm_vec3_add(cameraPos, forward, cameraPos);
+			glm_vec3_add(cameraPos, right, cameraPos);
+			glm_vec3_add(cameraPos, up, cameraPos);
+		}
+	}
 
 	/*Mid-frame Texture Submission Test*/
 	static float texUploadTimer = 0;
@@ -90,7 +154,7 @@ void onUpdate(double time)
 	{
 		asTexturePoolAddFromHandle(texture, NULL);
 		texUploadTimer = -1.0;
-	} else if (texUploadTimer >= 0.0f) { texUploadTimer += time; }
+	} else if (texUploadTimer >= 0.0f) { texUploadTimer += deltaTime; }
 
 	/*Set Viewport*/
 	asGfxViewerParamsDesc viewParams = { 0 };
@@ -98,8 +162,8 @@ void onUpdate(double time)
 	viewParams.clipStart = 0.001f;
 	viewParams.clipEnd = 10000.0f;
 	viewParams.debugState = (int32_t)renderDebug;
-	glm_vec3_copy(cameraPos, viewParams.viewPos);
-	glm_quatv(viewParams.viewRotation, glm_rad(lookRotation), (vec3) { 0, 1, 0 });
+	glm_vec3_copy(cameraPos, viewParams.viewPosition);
+	glm_quat_copy(cameraRot, viewParams.viewRotation);
 	asSceneRendererSetViewerParams(1, &viewParams);
 
 	/*Begin Recording*/
@@ -232,6 +296,46 @@ int main(int argc, char* argv[])
 
 		asDebugLog("Test String:%.*s", 80, testStr);
 	}
+	/*Setup Player*/
+	{
+		asInputMappingDesc inputs[] = {
+			{
+				.name = "FlyCam",
+				.mouseButtonPositive = "Right"
+			},
+			{
+				.name = "MoveRight",
+				.keyPostivie = "D",
+				.keyNegative = "A"
+			},
+			{
+				.name = "MoveForward",
+				.keyPostivie = "W",
+				.keyNegative = "S"
+			},
+			{
+				.name = "MoveUp",
+				.keyPostivie = "E",
+				.keyNegative = "Q"
+			},
+			{
+				.name = "LookX",
+				.mouseAxis = "X"
+			},
+			{
+				.name = "LookY",
+				.mouseAxis = "Y"
+			},
+		};
+
+		asInputPlayerDesc playerDesc;
+		playerDesc.controllerIndex = 0;
+		playerDesc.playerConfigFileName = "playerInput_0.ini";
+		playerDesc.ownsKeyboardMouse = true;
+		playerDesc.inputMappingCount = ASARRAYLEN(inputs);
+		playerDesc.pInputMappings = inputs;
+		asInputCreatePlayer(&mainPlayerInput, &playerDesc);
+	}
 	/*Test handle manager*/
 	{
 		asHandleManager_t man;
@@ -306,46 +410,54 @@ int main(int argc, char* argv[])
 		ECS_ENTITY(world, MyEntity, TestComponent2);
 		ecs_set(world, MyEntity, TestComponent2, { 65 });
 	}*/
-	/*Hello Triange*/
+	/*Super Hello Triange*/
 	{
+#define triCount 64
 		/*Triangles*/
-		asVertexGeneric vtx[3] = { 0 };
-		uint16_t indices[3] = { 0, 1, 2 };
+		asVertexGeneric vtx[3 * triCount] = { 0 };
+		uint16_t indices[3 * triCount];
 		vtxCount = ASARRAYLEN(vtx);
 		idxCount = ASARRAYLEN(indices);
-		uint8_t vColors[ASARRAYLEN(vtx)][4] = {
+		uint8_t vColors[3][4] = {
 			{ 255, 0, 0, 255 },
 			{ 0, 255, 0, 255 },
 			{ 0, 0, 255, 255 },
 		};
-		float vPos[ASARRAYLEN(vtx)][3] = {
-			{0.0f, -0.5f, 0.0f},
-			{0.5f, 0.5f, 0.0f},
-			{-0.5f, 0.5f, 0.0f},
+		float vPos[3][3] = {
+			{0.0f, 0.5f, 0.0f},
+			{0.5f, -0.5f, 0.0f},
+			{-0.5f, -0.5f, 0.0f},
 		};
-		vec3 vNormal[ASARRAYLEN(vtx)] = {
+		vec3 vNormal[3] = {
 			{-1.0f, -1.0f, 1.0f},
 			{-1.0f, -1.0f, 1.0f},
 			{-1.0f, -1.0f, 1.0f},
 		};
-		float vTan[ASARRAYLEN(vtx)][4] = {
+		float vTan[3][4] = {
 			{0.0f, 0.0f, 0.0f, 1.0f},
 			{0.0f, 0.0f, 0.0f, 1.0f},
 			{0.0f, 0.0f, 0.0f, 1.0f},
 		};
-		float vUV[ASARRAYLEN(vtx)][2] = {
+		float vUV[3][2] = {
 			{0.5f, 0.0f},
 			{1.0f, 1.0f},
 			{0.0f, 1.0f},
 		};
 
-		for (int i = 0; i < ASARRAYLEN(vtx); i++)
+		float zOffset = 0.0f;
+		for (int tri = 0; tri < triCount; tri++)
 		{
-			asVertexGeneric_encodePosition(&vtx[i], vPos[i]);
-			asVertexGeneric_encodeColor(&vtx[i], vColors[i]);
-			asVertexGeneric_encodeNormal(&vtx[i], vNormal[i]);
-			asVertexGeneric_encodeTangent(&vtx[i], vTan[i], (int)vTan[i][3]);
-			asVertexGeneric_encodeUV(&vtx[i], 0, vUV[i]);
+			for (int i = 0; i < 3; i++)
+			{
+				float posCalc[3] = { vPos[i][0], vPos[i][1], vPos[i][2] + zOffset };
+				asVertexGeneric_encodePosition(&vtx[(tri * 3) + i], posCalc);
+				asVertexGeneric_encodeColor(&vtx[(tri * 3) + i], vColors[i]);
+				asVertexGeneric_encodeNormal(&vtx[(tri * 3) + i], vNormal[i]);
+				asVertexGeneric_encodeTangent(&vtx[(tri * 3) + i], vTan[i], (int)vTan[i][3]);
+				asVertexGeneric_encodeUV(&vtx[(tri * 3) + i], 0, vUV[i]);
+				indices[(tri * 3) + i] = (tri * 3) + i;
+			}
+			zOffset -= 1.0f;
 		}
 
 		/*Buffers*/
@@ -383,5 +495,6 @@ int main(int argc, char* argv[])
 	asLoopDesc_t loopDesc;
 	loopDesc.fpOnUpdate = (asUpdateFunction_t)onUpdate;
 	loopDesc.fpOnTick = (asUpdateFunction_t)NULL;
+
 	return asEnterLoop(loopDesc);
 }

@@ -47,7 +47,8 @@ ASEXPORT size_t _asDebugLoggerGetEntryCount();
 ASEXPORT asResults _asDebugLoggerGetEntryAtIdx(size_t idx, asDebugLogSeverity* pLevel, const char** ppString, size_t* pLength);
 
 /*Setup Log Dumper*/
-ASEXPORT asResults _asDebugLoggerInitializeFile(const char* path);
+ASEXPORT asResults _asDebugLoggerInitializeFile(const char* path, size_t freq);
+ASEXPORT asResults _asDebugLoggerSetSaveFreq(size_t freq);
 
 #ifdef __cplusplus
 }

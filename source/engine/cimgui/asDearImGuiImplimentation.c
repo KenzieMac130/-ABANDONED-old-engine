@@ -2,6 +2,7 @@
 
 #include "../common/preferences/asPreferences.h"
 #include "../resource/asUserFiles.h"
+#include "../input/asInput.h"
 
 #if ASTRENGINE_DEARIMGUI
 
@@ -626,6 +627,15 @@ ASEXPORT void asImGuiPushEvent(void *evt)
 	}
 }
 
+ASEXPORT bool asImGuiIsFocused()
+{
+	return igIsAnyItemActive() |
+		igIsAnyItemHovered() |
+		igIsAnyItemFocused() |
+		igIsWindowFocused(ImGuiHoveredFlags_AnyWindow) |
+		igIsWindowHovered(ImGuiHoveredFlags_AnyWindow);
+}
+
 ASEXPORT void asImGuiPumpInput()
 {
 	/*Mouse Cursor*/
@@ -663,6 +673,10 @@ ASEXPORT void asImGuiPumpInput()
 
 		if (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS)
 			pImGuiIo->MousePos = (ImVec2){(float)mx, (float)my};
+	}
+	/*Passthrough Main Input*/
+	{
+		asInputOverrideKeyMouseNextFrame(asImGuiIsFocused());
 	}
 }
 

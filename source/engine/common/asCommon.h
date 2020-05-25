@@ -19,6 +19,15 @@ extern "C" {
 #include <assert.h>
 #include <stdarg.h>
 
+
+/*3D Math*/
+/*https://cglm.readthedocs.io/en/latest/api.html*/
+#include "../thirdparty/cglm/cglm.h"
+typedef versor quat; /*Better quaternion name*/
+#define ASVEC3_FORWARD {0,0,-1}
+#define ASVEC3_RIGHT {1,0,0}
+#define ASVEC3_UP {0,1,0}
+
 /**
 * @file
 * @brief Common utilities for the engine
@@ -99,6 +108,7 @@ typedef struct {
 	asVersion_t appVersion; /**< Version of the app*/
 } asAppInfo_t;
 
+#include "asDebugDraw.h"
 #include "asDebugLog.h"
 /**
 * @brief Display an error in a platform independent way
@@ -131,10 +141,6 @@ ASEXPORT void asFatalError(const char* msg);
 
 #include "../thirdparty/stb/stb_ds.h"
 #include "../thirdparty/tiny-regex/re.h"
-
-/*3D Math*/
-#include "../thirdparty/cglm/cglm.h"
-typedef versor quat;
 
 #ifdef __cplusplus
 }

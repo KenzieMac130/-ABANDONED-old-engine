@@ -237,7 +237,13 @@ bool vDeviceHasRequiredExtensions(VkPhysicalDevice gpu)
 bool vDeviceHasRequiredFeatures(VkPhysicalDeviceFeatures *pFeatures)
 {
 	if (!pFeatures->imageCubeArray || /*Cubemap arrays must be supported*/
-		!pFeatures->shaderFloat64) /*Float 64 for Shaders must be supported*/
+		!pFeatures->shaderFloat64 || /*Float 64 for Shaders must be supported*/
+		!pFeatures->fillModeNonSolid ||
+		!pFeatures->depthClamp ||
+		!pFeatures->depthBounds ||
+		!pFeatures->wideLines ||
+		!pFeatures->shaderSampledImageArrayDynamicIndexing ||
+		!pFeatures->shaderStorageBufferArrayDynamicIndexing)
 		return false;
 	return true;
 }
@@ -1472,6 +1478,10 @@ void asVkInit(asAppInfo_t *pAppInfo, int32_t deviceIndex)
 		VkPhysicalDeviceFeatures enabledFeatures = (VkPhysicalDeviceFeatures) { 0 };
 		enabledFeatures.imageCubeArray = VK_TRUE;
 		enabledFeatures.shaderFloat64 = VK_TRUE;
+		enabledFeatures.fillModeNonSolid = VK_TRUE;
+		enabledFeatures.depthBounds = VK_TRUE;
+		enabledFeatures.depthClamp = VK_TRUE;
+		enabledFeatures.wideLines = VK_TRUE;
 		if(asVkDeviceFeatures.samplerAnisotropy)
 			enabledFeatures.samplerAnisotropy = VK_TRUE;
 

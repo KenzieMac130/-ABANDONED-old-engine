@@ -17,6 +17,8 @@
 #include "../common/preferences/asPreferences.h"
 #include "asBindlessTexturePool.h"
 
+#include "asSceneRenderer.h"
+
 ASEXPORT uint32_t asTextureCalcPitch(asColorFormat format, uint32_t width)
 {
 	uint32_t tmpVal = 0;
@@ -282,6 +284,7 @@ ASEXPORT void asGfxTriggerResizeEvent()
 ASEXPORT void asGfxInternalDebugDraws()
 {
 	_asTexturePoolDebug();
+	asSceneRendererUploadDebugDraws(0);
 }
 
 ASEXPORT void asGfxRenderFrame()

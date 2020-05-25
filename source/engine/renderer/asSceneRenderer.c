@@ -62,6 +62,8 @@ struct asPrimitiveSubmissionQueueT {
 struct sceneUbo {
 	mat4 viewMatrix[AS_MAX_SUBVIEWPORTS];
 	mat4 projMatrix[AS_MAX_SUBVIEWPORTS];
+	vec4 viewPosition;
+	vec4 viewRotation;
 	float width;
 	float height;
 	float time;
@@ -83,8 +85,15 @@ void sceneUbo_SetMatrices(struct sceneUbo* pUbo,
 	pUbo->height = renderDim[1];
 
 	/*Create View Matrix*/
-	glm_quat_mat4(viewRot, pUbo->viewMatrix[subViewportIdx]);
+	glm_mat4_identity(pUbo->viewMatrix[subViewportIdx]);
 	glm_translate(pUbo->viewMatrix[subViewportIdx], viewPos);
+	glm_quat_rotate(pUbo->viewMatrix[subViewportIdx], viewRot, pUbo->viewMatrix[subViewportIdx]);
+	glm_mat4_inv(pUbo->viewMatrix[subViewportIdx], pUbo->viewMatrix[subViewportIdx]);
+
+	/*Fill out Camera Setup*/
+	glm_vec4_zero(pUbo->viewPosition);
+	glm_vec3_copy(viewPos, pUbo->viewPosition);
+	glm_vec4_copy(viewRot, pUbo->viewRotation);
 
 	/*Create Projection Matrix*/
 	const float aspect = renderDim[0] / renderDim[1];
@@ -94,13 +103,16 @@ void sceneUbo_SetMatrices(struct sceneUbo* pUbo,
 			size * aspect,
 			-size,
 			size,
-			near,
 			far,
+			near,
 			pUbo->projMatrix[subViewportIdx]);
 	}
 	else {
-		glm_perspective(glm_rad(fov), aspect, near, far, pUbo->projMatrix[subViewportIdx]);
+		glm_perspective_infinite(glm_rad(fov), aspect, near, pUbo->projMatrix[subViewportIdx]);
 	}
+#ifdef ASTRENGINE_VK
+	pUbo->projMatrix[subViewportIdx][1][1] *= -1.0f; /*Vulkan NDC*/
+#endif
 }
 
 struct sceneViewport
@@ -204,7 +216,7 @@ const int currentUboIdx = asVkCurrentFrame;
 	asGetRenderDimensions(desc.viewportIdx, true, &w, &h);
 	sceneUbo_SetMatrices(pUboData,
 		desc.subViewportIdx,
-		desc.viewPos,
+		desc.viewPosition,
 		desc.viewRotation,
 		desc.clipStart, desc.clipEnd,
 		desc.fov,
@@ -404,6 +416,9 @@ ASEXPORT asResults asSceneRendererDestroySubmissionQueue(asPrimitiveSubmissionQu
 	_unregisterSubmissionQueue(queue);
 	for (int i = 0; i < AS_MAX_INFLIGHT; i++)
 	{
+		if (!asHandleValid(queue->offsetBuffs[i])) { 
+			continue;
+		}
 #if ASTRENGINE_VK
 		asVkUnmapMemory(asVkGetAllocFromBuffer(queue->offsetBuffs[i]));
 		asVkUnmapMemory(asVkGetAllocFromBuffer(queue->transformBuffs[i]));
@@ -550,6 +565,20 @@ ASEXPORT asResults asSceneRendererSubmissionAddPrimitiveGroups(asPrimitiveSubmis
 	return AS_SUCCESS;
 }
 
+/*Shader Settings Reflect Struct*/
+
+#define REFLECT_MACRO_SceneShaderReflectData AS_REFLECT_STRUCT(asSceneShaderSettings,\
+	AS_REFLECT_ENTRY_SINGLE(asSceneShaderSettings, float, lineWidth, AS_REFLECT_FORMAT_NONE)\
+	AS_REFLECT_ENTRY_SINGLE(asSceneShaderSettings, float, backfaceCull, AS_REFLECT_FORMAT_NONE)\
+	AS_REFLECT_ENTRY_SINGLE(asSceneShaderSettings, float, topologyMode, AS_REFLECT_FORMAT_NONE)\
+	AS_REFLECT_ENTRY_SINGLE(asSceneShaderSettings, float, blendMode, AS_REFLECT_FORMAT_NONE)\
+	AS_REFLECT_ENTRY_SINGLE(asSceneShaderSettings, float, depthWrite, AS_REFLECT_FORMAT_NONE)\
+	AS_REFLECT_ENTRY_SINGLE(asSceneShaderSettings, float, depthTest, AS_REFLECT_FORMAT_NONE)\
+)
+REFLECT_MACRO_SceneShaderReflectData
+#include "engine/common/reflection/asManualSerialList.h"
+asReflectContainer SceneShaderReflectDataInstructions = REFLECT_MACRO_SceneShaderReflectData
+
 /*Fill out Vulkan Pipelines for Scene*/
 ASEXPORT asResults _asFillGfxPipeline_Scene(
 	asBinReader* pShaderAsBin,
@@ -560,6 +589,21 @@ ASEXPORT asResults _asFillGfxPipeline_Scene(
 	asPipelineHandle* pPipelineOut,
 	void* pUserData)
 {
+	/*Load Settings from Shader*/
+	asSceneShaderSettings settings = { 0 };
+	settings.lineWidth = 1.0f;
+	settings.backfaceCull = 1;
+	settings.topologyMode = 0;
+	settings.depthWrite = 1;
+	settings.depthTest = 1;
+	settings.blendMode = 0;
+	char* reflectData = NULL;
+	size_t reflectDataSize = 0;
+	asHash32_t sectionNameHash = asHashBytes32_xxHash("asSceneShaderSettings", 21);
+	asBinReaderGetSection(pShaderAsBin, (asBinSectionIdentifier) {"BLOB", sectionNameHash}, &reflectData, &reflectDataSize);
+	asReflectLoadFromBinary(&settings, sizeof(settings), 1, &SceneShaderReflectDataInstructions, reflectData, reflectDataSize, NULL, NULL);
+
+	/*Create Pipeline*/
 #if ASTRENGINE_VK
 	if (api != AS_GFXAPI_VULKAN || pipelineType != AS_PIPELINETYPE_GRAPHICS) { return AS_FAILURE_UNKNOWN_FORMAT; }
 	VkGraphicsPipelineCreateInfo* pGraphicsPipelineDesc = (VkGraphicsPipelineCreateInfo*)pDesc;
@@ -568,22 +612,31 @@ ASEXPORT asResults _asFillGfxPipeline_Scene(
 
 	/*Color Blending*/
 	VkPipelineColorBlendAttachmentState attachmentBlends[] = {
-		AS_VK_INIT_HELPER_ATTACHMENT_BLEND_MIX(VK_TRUE)
+		settings.blendMode? AS_VK_INIT_HELPER_ATTACHMENT_BLEND_MIX(VK_TRUE) : AS_VK_INIT_HELPER_ATTACHMENT_BLEND_MIX(VK_FALSE)
 	};
 	pGraphicsPipelineDesc->pColorBlendState = &AS_VK_INIT_HELPER_PIPE_COLOR_BLEND_STATE(ASARRAYLEN(attachmentBlends), attachmentBlends);
 	/*Depth Stencil*/
 	pGraphicsPipelineDesc->pDepthStencilState = &AS_VK_INIT_HELPER_PIPE_DEPTH_STENCIL_STATE(
-		VK_FALSE, VK_FALSE, VK_COMPARE_OP_LESS, VK_FALSE, 0.0f, 1.0f);
+		settings.depthTest? VK_TRUE : VK_FALSE,
+		settings.depthWrite? VK_TRUE : VK_FALSE,
+		VK_COMPARE_OP_GREATER, VK_FALSE, 0.0f, 1.0f);
 	/*Rasterizer*/
 	pGraphicsPipelineDesc->pRasterizationState = &AS_VK_INIT_HELPER_PIPE_RASTERIZATION_STATE(
-		VK_POLYGON_MODE_FILL,
-		VK_CULL_MODE_NONE,
+		settings.topologyMode == 0 ? VK_POLYGON_MODE_FILL:
+		(settings.topologyMode == 1 ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_POINT),
+		settings.backfaceCull? VK_CULL_MODE_BACK_BIT : VK_CULL_MODE_NONE,
 		VK_FRONT_FACE_CLOCKWISE,
 		VK_FALSE,
-		0.0f, 0.0f, 0.0f, 1.0f);
+		0.0f, 0.0f, 0.0f, settings.lineWidth);
 	/*Input Assembler*/
-	pGraphicsPipelineDesc->pInputAssemblyState = &AS_VK_INIT_HELPER_PIPE_INPUT_ASSEMBLER_STATE(
-		VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_FALSE);
+	VkPrimitiveTopology vkTopology;
+	switch ((int)settings.topologyMode)
+	{
+	default: vkTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST; break;
+	case 1: vkTopology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST; break;
+	case 2: vkTopology = VK_PRIMITIVE_TOPOLOGY_POINT_LIST; break;
+	}
+	pGraphicsPipelineDesc->pInputAssemblyState = &AS_VK_INIT_HELPER_PIPE_INPUT_ASSEMBLER_STATE(topologyMode, VK_FALSE);
 	/*MSAA*/
 	pGraphicsPipelineDesc->pMultisampleState = &AS_VK_INIT_HELPER_PIPE_MSAA_STATE_NONE();
 	/*Tess*/
@@ -709,6 +762,8 @@ void _destroyScreenResources()
 	vkDestroyFramebuffer(asVkDevice, sceneFramebuffer, AS_VK_MEMCB);
 }
 
+asPrimitiveSubmissionQueue debugDrawPrimQueue;
+
 ASEXPORT asResults asInitSceneRenderer()
 {
 #if ASTRENGINE_VK
@@ -761,6 +816,18 @@ ASEXPORT asResults asInitSceneRenderer()
 	_createScreenResources();
 	sceneViewport_Init(&mainSceneViewport);
 #endif
+
+	/*Debug Drawing*/
+	{
+		asPrimitiveSubmissionQueueDesc desc = {
+			.viewportIdx = 0,
+			.maxTransforms = 1,
+			.maxPrimitives = 1,
+			.maxInstances = 1,
+		};
+		debugDrawPrimQueue = asSceneRendererCreateSubmissionQueue(&desc);
+	}
+
 	return AS_SUCCESS;
 }
 
@@ -781,7 +848,8 @@ void executeVpSubmissionQueues(VkCommandBuffer vCmd, struct sceneViewport* viewp
 	for (int i = 0; i < arrlen(viewport->pPrimQueues); i++)
 	{
 		const struct asPrimitiveSubmissionQueueT* pPrimQueue = viewport->pPrimQueues[i];
-		if (pPrimQueue->state == PRIMITIVE_SUBMISSION_QUEUE_STATE_READY) {
+		if (pPrimQueue->state == PRIMITIVE_SUBMISSION_QUEUE_STATE_READY &&
+			pPrimQueue->vSecondaryCommandBuffers[asVkCurrentFrame][renderpass] != VK_NULL_HANDLE) {
 #if ASTRENGINE_VK
 			vkCmdExecuteCommands(vCmd, 1, &pPrimQueue->vSecondaryCommandBuffers[asVkCurrentFrame][renderpass]);
 #endif
@@ -799,6 +867,46 @@ void resetVpSubmissionQueues(struct sceneViewport* viewport)
 			pPrimQueue->state = PRIMITIVE_SUBMISSION_QUEUE_STATE_RECORDED;
 		}
 	}
+}
+
+ASEXPORT asResults asSceneRendererUploadDebugDraws(int32_t viewport)
+{
+	/*Draw Debug Lines for Viewport via ImGui*/
+	_asDebugDrawSecureLists();
+	asDebugDrawLineData* lineData;
+	size_t lineCount = _asDebugDrawGetLineList(&lineData);
+	asSceneRendererSubmissionQueuePopulateBegin(debugDrawPrimQueue);
+
+	for (size_t i = 0; i < lineCount; i++)
+	{
+		const asDebugDrawLineData line = lineData[i];
+		vec3* inVerts = line.start;
+
+		/*Convert Verts*/
+		for (int i = 0; i < 2; i++)
+		{
+			/*Upload*/
+		}
+		
+	}
+
+	/*Transform*/
+	asGfxInstanceTransform xform = { 0 };
+	asSceneRendererSubmissionAddTransforms(debugDrawPrimQueue, 1, &xform, 0);
+
+	/*Prim*/
+	asGfxPrimativeGroupDesc prim = { 0 };
+	prim.indexBuffer = asHandle_Invalidate();
+	prim.baseInstanceCount = 1;
+	prim.vertexCount = lineCount * 2;
+	asSceneRendererSubmissionAddPrimitiveGroups(debugDrawPrimQueue, 1, &prim);
+
+	asSceneRendererSubmissionQueuePopulateEnd(debugDrawPrimQueue);
+	asSceneRendererSubmissionQueuePrepareFrameSubmit(debugDrawPrimQueue);
+
+	_asDebugDrawResetLineList();
+	_asDebugDrawUnlockLists();
+	return AS_SUCCESS;
 }
 
 ASEXPORT asResults asSceneRendererDraw(int32_t viewport)
@@ -819,7 +927,7 @@ ASEXPORT asResults asSceneRendererDraw(int32_t viewport)
 			.color = {0.0f,0.0f,0.0f,1.0f}
 		},
 		(VkClearValue) {
-			.depthStencil = {1.0f, 0}
+			.depthStencil = {0.0f, 0}
 		}
 	};
 
@@ -846,6 +954,8 @@ ASEXPORT asResults asSceneRendererDraw(int32_t viewport)
 
 ASEXPORT asResults asShutdownSceneRenderer()
 {
+	asSceneRendererDestroySubmissionQueue(debugDrawPrimQueue);
+
 	sceneViewport_Destroy(&mainSceneViewport);
 #if ASTRENGINE_VK
 	vkDestroyDescriptorPool(asVkDevice, sceneDescriptorPool, AS_VK_MEMCB);

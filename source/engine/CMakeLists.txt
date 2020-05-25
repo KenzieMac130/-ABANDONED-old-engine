@@ -47,6 +47,8 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/common)
 	link_libraries(asCommon) #link core to all other libraries
 #asResource
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/resource)
+#asInput
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/input)
 #asRenderer
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/renderer) 
 #Mesh API

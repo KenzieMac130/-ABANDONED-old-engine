@@ -37,11 +37,13 @@ ASEXPORT asHandle_t asCreateHandle(asHandleManager_t* pMan)
 	if (pMan->_slotCount >= pMan->_maxSlots)
 		return asHandle_Invalidate();
 	uint32_t idx;
-	if (pMan->_freeIndicesCount)
+	if (pMan->_freeIndicesCount > 0)
 	{
 		idx = pMan->pFreeIndices[0];
 		memcpy(pMan->pFreeIndices, pMan->pFreeIndices + 1, (pMan->_freeIndicesCount - 1) * sizeof(pMan->pFreeIndices[0]));
-		--pMan->_freeIndicesCount;
+		pMan->_freeIndicesCount--;
+		if (pMan->_freeIndicesCount >= pMan->_maxSlots)
+			pMan->_freeIndicesCount = 0;
 	}
 	else
 	{
@@ -49,6 +51,7 @@ ASEXPORT asHandle_t asCreateHandle(asHandleManager_t* pMan)
 		idx = pMan->_slotCount;
 		pMan->_slotCount++;
 	}
+	ASASSERT(pMan->_freeIndicesCount < pMan->_maxSlots);
 	return _constructHandle(idx, pMan->pGeneration[idx]);
 }
 
@@ -56,9 +59,11 @@ ASEXPORT void asDestroyHandle(asHandleManager_t* pMan, asHandle_t hndl)
 {
 	if (hndl._index >= pMan->_maxSlots)
 		return;
+	if (pMan->_freeIndicesCount >= pMan->_maxSlots)
+		pMan->_freeIndicesCount = 0;
 	++pMan->pGeneration[hndl._index];
 	pMan->pFreeIndices[pMan->_freeIndicesCount] = hndl._index;
-	++pMan->_freeIndicesCount;
+	pMan->_freeIndicesCount++;
 }
 
 ASEXPORT bool asHandleExists(asHandleManager_t* pMan, asHandle_t hndl)

@@ -103,7 +103,7 @@ typedef struct {
 	int32_t subViewportIdx;
 	int32_t flags;
 	float time;
-	vec3 viewPos;
+	vec3 viewPosition;
 	quat viewRotation;
 	float fov;
 	float clipStart;
@@ -113,6 +113,7 @@ typedef struct {
 
 ASEXPORT asResults asSceneRendererSetViewerParams(size_t descCount, asGfxViewerParamsDesc* pDescs);
 
+ASEXPORT asResults asSceneRendererUploadDebugDraws(int32_t viewport);
 ASEXPORT asResults asSceneRendererDraw(int32_t viewport);
 
 /**

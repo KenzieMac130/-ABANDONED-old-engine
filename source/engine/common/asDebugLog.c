@@ -1,16 +1,13 @@
 #include "asDebugLog.h"
 
 #include <SDL_thread.h>
-SDL_mutex* accessMutex = NULL;
+SDL_mutex* logAccessMutex = NULL;
 
 #define AS_MAX_INTERNAL_DEBUG_LOG_INTENRAL_TEXT_LENGTH 4096
 #define AS_MAX_INTERNAL_DEBUG_LOG_HISTORY 256
 
-#ifndef NDEBUG
-#define AS_MAX_INTENRAL_DEBUG_LOG_BEFORE_DUMP 1
-#else
-#define AS_MAX_INTENRAL_DEBUG_LOG_BEFORE_DUMP 16
-#endif
+static size_t logBeforeDump = 1;
+#define AS_MAX_INTENRAL_DEBUG_LOG_BEFORE_DUMP logBeforeDump
 
 static size_t internalEntryCount = 0;
 static size_t nextDumpIndex = 0;
@@ -50,10 +47,11 @@ void _dumpUpToIndex(size_t start, size_t count)
 
 void _logAtExit(void)
 {
-	if (accessMutex)
+	if (logAccessMutex)
 	{
-		SDL_DestroyMutex(accessMutex);
-		accessMutex = NULL;
+		SDL_UnlockMutex(logAccessMutex);
+		SDL_DestroyMutex(logAccessMutex);
+		logAccessMutex = NULL;
 	}
 
 	if (pLogFile)
@@ -65,13 +63,13 @@ void _logAtExit(void)
 
 ASEXPORT asResults _asDebugLoggerGetEntrySecureLogger()
 {
-	if (SDL_LockMutex(accessMutex) == 0) { return AS_SUCCESS; }
+	if (SDL_LockMutex(logAccessMutex) == 0) { return AS_SUCCESS; }
 	return AS_FAILURE_UNKNOWN;
 }
 
 ASEXPORT void _asDebugLoggerGetEntryReleaseLogger()
 {
-	SDL_UnlockMutex(accessMutex);
+	SDL_UnlockMutex(logAccessMutex);
 }
 
 ASEXPORT size_t _asDebugLoggerGetEntryCount()
@@ -90,9 +88,9 @@ ASEXPORT asResults _asDebugLoggerGetEntryAtIdx(size_t idx, asDebugLogSeverity* p
 	return AS_SUCCESS;
 }
 
-ASEXPORT asResults _asDebugLoggerInitializeFile(const char* path)
+ASEXPORT asResults _asDebugLoggerInitializeFile(const char* path, size_t freq)
 {
-	if (accessMutex && SDL_LockMutex(accessMutex) == 0)
+	if (logAccessMutex && SDL_LockMutex(logAccessMutex) == 0)
 	{
 		if (pLogFile) /*Log file Already Opened*/
 		{
@@ -100,18 +98,29 @@ ASEXPORT asResults _asDebugLoggerInitializeFile(const char* path)
 			fclose(pLogFile);
 		}
 		pLogFile = fopen(path, "w");
+		logBeforeDump = freq;
+		SDL_UnlockMutex(logAccessMutex);
 		if (!pLogFile) { return AS_FAILURE_FILE_INACCESSIBLE; }
 		return AS_SUCCESS;
 	}
 }
 
+ASEXPORT asResults _asDebugLoggerSetSaveFreq(size_t freq)
+{
+	if (logAccessMutex && SDL_LockMutex(logAccessMutex) == 0)
+	{
+		logBeforeDump = freq;
+		SDL_UnlockMutex(logAccessMutex);
+	}
+}
+
 ASEXPORT void _asDebugLoggerLogArgs(asDebugLogSeverity level, const char* format, va_list args)
 {
-	if (!accessMutex) /*Assumes first call to debug log happens before thread management system is launched*/
+	if (!logAccessMutex) /*Assumes first call to debug log happens before thread management system is launched*/
 	{
-		accessMutex = SDL_CreateMutex();
+		logAccessMutex = SDL_CreateMutex();
 		atexit(_logAtExit);
-		ASASSERT(accessMutex);
+		ASASSERT(logAccessMutex);
 	}
 
 	/*Print to OS Console*/
@@ -119,7 +128,7 @@ ASEXPORT void _asDebugLoggerLogArgs(asDebugLogSeverity level, const char* format
 	printf("\n");
 
 	/*Print to Internal Ringbuffer*/
-	if (SDL_LockMutex(accessMutex) == 0)
+	if (SDL_LockMutex(logAccessMutex) == 0)
 	{
 		internalMessageLog[nextWriteIndex];
 
@@ -140,7 +149,7 @@ ASEXPORT void _asDebugLoggerLogArgs(asDebugLogSeverity level, const char* format
 			_dumpUpToIndex(nextDumpIndex, writtenSinceLastDump);
 		}
 
-		SDL_UnlockMutex(accessMutex);
+		SDL_UnlockMutex(logAccessMutex);
 	}
 	else { asFatalError("Mutex Lock failed in Debug Log!!!"); }
 }

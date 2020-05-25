@@ -59,6 +59,8 @@ ASEXPORT void asImGuiReset();
 */
 ASEXPORT void asImGuiPushEvent(void *pEvent);
 
+ASEXPORT bool asImGuiIsFocused();
+
 /**
 * @brief begin DearImgui input (events)
 * @warning The engine update should handle this for you

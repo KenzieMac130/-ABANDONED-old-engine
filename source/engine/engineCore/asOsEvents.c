@@ -3,6 +3,7 @@
 
 #include "asEntry.h"
 #include "../renderer/asRendererCore.h"
+#include "../input/asInput.h"
 #if ASTRENGINE_NUKLEAR
 #include "../nuklear/asNuklearImplimentation.h"
 #include "../thirdparty/nuklear/nuklear.h"
@@ -48,11 +49,13 @@ ASEXPORT void asPollOSEvents()
 		default:
 			break;
 		}
+
 #if ASTRENGINE_NUKLEAR
 		asNkPushEvent(&event);
 #endif
 #if ASTRENGINE_DEARIMGUI
 		asImGuiPushEvent(&event);
+		
 #endif
 	}
 

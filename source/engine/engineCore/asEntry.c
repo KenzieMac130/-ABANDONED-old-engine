@@ -3,6 +3,7 @@
 #include "asOsEvents.h"
 #include "../renderer/asRendererCore.h"
 #include "../resource/asUserFiles.h"
+#include "../input/asInput.h"
 #include "../common/preferences/asPreferences.h"
 #if ASTRENGINE_NUKLEAR
 #include "../nuklear/asNuklearImplimentation.h"
@@ -31,21 +32,29 @@ asResults _commandQuit(const char* propName, void* pCurrentValue, void* pNewValu
 	return AS_SUCCESS;
 }
 
+asResults _commandSetLogFreq(const char* propName, void* pCurrentValue, void* pNewValueTmp, void* pUserData)
+{
+	_asDebugLoggerSetSaveFreq((size_t)*(int32_t*)pNewValueTmp);
+	return AS_SUCCESS;
+}
+
 ASEXPORT int asIgnite(int argc, char *argv[], asAppInfo_t *pAppInfo, void *pCustomWindow)
 {
 	/*Info*/
 	asDebugLog("%s %d.%d.%d", pAppInfo->pAppName, pAppInfo->appVersion.major, pAppInfo->appVersion.minor, pAppInfo->appVersion.patch);
 	asDebugLog("astrengine %d.%d.%d", ASTRENGINE_VERSION_MAJOR, ASTRENGINE_VERSION_MINOR, ASTRENGINE_VERSION_PATCH);
 
-	/*Init All Systems*/
-	SDL_Init(SDL_INIT_EVENTS | SDL_INIT_VIDEO | SDL_INIT_TIMER);
+	/*SDL*/
+	SDL_Init(SDL_INIT_EVERYTHING);
+
+	/*User Files*/
 	asInitUserFiles(pAppInfo->pDevName, pAppInfo->pAppName);
 
 	/*Set Debug Log Output File*/
 	char debugLogPath[4096];
 	memset(debugLogPath, 0, 4096);
 	asUserFileMakePath("astrengineLog.txt", debugLogPath, 4096);
-	_asDebugLoggerInitializeFile(debugLogPath);
+	_asDebugLoggerInitializeFile(debugLogPath, 16);
 
 	/*Init Preferences*/
 	asPreferenceManager* pPrefMan;
@@ -55,6 +64,7 @@ ASEXPORT int asIgnite(int argc, char *argv[], asAppInfo_t *pAppInfo, void *pCust
 
 	/*Set Global Preferences Data*/
 	asPreferencesRegisterOpenSection(asGetGlobalPrefs(), "core");
+	asPreferencesRegisterParamInt32(asGetGlobalPrefs(), "logSaveFreq", NULL, 1, 1024, true, _commandSetLogFreq, NULL, "Number of Lines before Saving");
 	asPreferencesRegisterParamInt32(asGetGlobalPrefs(), "devConsoleEnabled", &gShowDevConsole, 0, 1, false, NULL, NULL, "Show Developer Console");
 	asPreferencesRegisterParamInt32(asGetGlobalPrefs(), "devConsoleToggleable", &gDevConsoleToggleable, 0, 1, true, NULL, NULL, "Dev Console Toggleable Developer Console");
 	asPreferencesRegisterNullFunction(asGetGlobalPrefs(), "quit", _commandQuit, false, NULL, NULL, "Quit Engine (Alt+F4)");
@@ -63,9 +73,14 @@ ASEXPORT int asIgnite(int argc, char *argv[], asAppInfo_t *pAppInfo, void *pCust
 	/*Console Global Preferences*/
 	asGuiToolCommandConsole_RegisterPrefManager(pPrefMan, "as");
 
+	/*Resource*/
 	asInitResource();
 
+	/*Graphics*/
 	asInitGfx(pAppInfo, pCustomWindow);
+
+	/*Input*/
+	asInitInputSystem();
 
 #if ASTRENGINE_NUKLEAR
 	asInitNk();
@@ -83,6 +98,7 @@ ASEXPORT int asIgnite(int argc, char *argv[], asAppInfo_t *pAppInfo, void *pCust
 
 ASEXPORT void asShutdown(void)
 {
+	asShutdownInputSystem();
 #if ASTRENGINE_FLECS
 	asShutdownFlecs();
 #endif
@@ -129,10 +145,11 @@ ASEXPORT int asLoopSingleShot(double time, asLoopDesc_t loopDesc)
 
 	asGfxInternalDebugDraws();
 	asImGuiEndFrame();
-	asPollOSEvents();
 #if ASTRENGINE_DEARIMGUI
 	asImGuiPumpInput();
 #endif
+	asInputSystemNextFrame();
+	asPollOSEvents();
 	asGfxRenderFrame();
 #if ASTRENGINE_DEARIMGUI
 	asImGuiNewFrame(time);

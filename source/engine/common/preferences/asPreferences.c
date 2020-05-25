@@ -322,7 +322,7 @@ ASEXPORT asResults asPreferencesSaveSectionsToIni(asPreferenceManager* pManager,
 		{
 			const char* entryName = section.prefHM[j].key;
 			const struct prefEntry entry = section.prefHM[j].value;
-			if (!entry.saveLoad) { continue; }
+			if (!entry.saveLoad || !entry.pValue) { continue; }
 
 			if(iniSectionId == INI_NOT_FOUND)
 				iniSectionId = ini_section_add(saverIni, sectionName, strlen(sectionName));
