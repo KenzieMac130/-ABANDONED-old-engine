@@ -7,7 +7,7 @@ extern "C" {
 
 #include "../common/asCommon.h"
 
-ASEXPORT void asGameUtils_FirstPersonCamera(float deltaTime,
+ASEXPORT void asGameUtils_FlyCamera(float deltaTime,
 	vec3 movement,
 	float xLook, float yLook,
 	float* pYaw, float* pPitch,

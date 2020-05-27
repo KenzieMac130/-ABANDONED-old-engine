@@ -29,7 +29,7 @@
 
 #include "engine/input/asInput.h"
 
-#include "engine/gameUtilities/asFirstPersonCamera.h"
+#include "engine/gameUtilities/asFlyCamera.h"
 
 asInputPlayer mainPlayerInput;
 
@@ -118,7 +118,7 @@ void onUpdate(double deltaTime)
 
 			float sensitivity = 360.0f;
 
-			asGameUtils_FirstPersonCamera(deltaTime, movement, lookX, lookY, &cameraLook[0], &cameraLook[1], sensitivity, 2.5f, cameraPos, cameraRot);
+			asGameUtils_FlyCamera(deltaTime, movement, lookX, lookY, &cameraLook[0], &cameraLook[1], sensitivity, 2.5f, cameraPos, cameraRot);
 		}
 	}
 
