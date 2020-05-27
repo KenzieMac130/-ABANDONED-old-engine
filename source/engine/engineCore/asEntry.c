@@ -64,7 +64,7 @@ ASEXPORT int asIgnite(int argc, char *argv[], asAppInfo_t *pAppInfo, void *pCust
 
 	/*Set Global Preferences Data*/
 	asPreferencesRegisterOpenSection(asGetGlobalPrefs(), "core");
-	asPreferencesRegisterParamInt32(asGetGlobalPrefs(), "logSaveFreq", NULL, 1, 1024, true, _commandSetLogFreq, NULL, "Number of Lines before Saving");
+	asPreferencesRegisterParamInt32(asGetGlobalPrefs(), "logSaveFrequency", NULL, 1, 1024, true, _commandSetLogFreq, NULL, "Number of Lines before Saving");
 	asPreferencesRegisterParamInt32(asGetGlobalPrefs(), "devConsoleEnabled", &gShowDevConsole, 0, 1, false, NULL, NULL, "Show Developer Console");
 	asPreferencesRegisterParamInt32(asGetGlobalPrefs(), "devConsoleToggleable", &gDevConsoleToggleable, 0, 1, true, NULL, NULL, "Dev Console Toggleable Developer Console");
 	asPreferencesRegisterNullFunction(asGetGlobalPrefs(), "quit", _commandQuit, false, NULL, NULL, "Quit Engine (Alt+F4)");

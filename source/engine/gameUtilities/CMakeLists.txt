@@ -1,0 +1,5 @@
+file(GLOB_RECURSE SRC_FILES ${CMAKE_CURRENT_SOURCE_DIR}/*.c)
+file(GLOB_RECURSE HEADER_FILES ${CMAKE_CURRENT_SOURCE_DIR}/*.h)
+add_library(asGameUtilities ${SRC_FILES} ${HEADER_FILES})
+set_property(TARGET asGameUtilities PROPERTY FOLDER "astrengine/GameUtilities")
+set_property(TARGET asGameUtilities PROPERTY C_STANDARD 99)

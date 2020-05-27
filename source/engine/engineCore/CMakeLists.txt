@@ -21,3 +21,6 @@ endif()
 
 #LINK GUI TOOLS
 target_link_libraries(astrengine asCmdConsole)
+
+#LINK GAME UTILS
+target_link_libraries(astrengine asGameUtilities)

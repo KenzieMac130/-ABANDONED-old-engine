@@ -29,6 +29,8 @@
 
 #include "engine/input/asInput.h"
 
+#include "engine/gameUtilities/asFirstPersonCamera.h"
+
 asInputPlayer mainPlayerInput;
 
 asTextureHandle_t texture;
@@ -43,8 +45,7 @@ asPrimitiveSubmissionQueue subQueue;
 
 float renderDebug = -1;
 vec3 cameraPos = { 0, 0, -1 };
-quat cameraRot = { 0, 0, 0, 1 };
-vec3 lookat = ASVEC3_FORWARD;
+quat cameraRot = ASQUAT_IDENTITY;
 vec2 cameraLook;
 float fov = 90.0f;
 void onUpdate(double deltaTime)
@@ -59,7 +60,6 @@ void onUpdate(double deltaTime)
 
 		igDragFloat2("CameraLook", cameraLook, 0.1f, -FLT_MAX, FLT_MAX, NULL, 1.0f);
 		igDragFloat3("Camera Position", cameraPos, 0.1f, -FLT_MAX, FLT_MAX, NULL, 1.0f);
-		igDragFloat3("Camera Lookat", lookat, 0.1f, -FLT_MAX, FLT_MAX, NULL, 1.0f);
 		igDragFloat4("Camera Quaternion", cameraRot, 0.1f, -FLT_MAX, FLT_MAX, NULL, 1.0f);
 		igDragFloat("FOV", &fov, 0.1f, 1.0f, 180.0f, NULL, 1.0f);
 	}
@@ -109,42 +109,16 @@ void onUpdate(double deltaTime)
 		}
 		if (asInputGetButton(mainPlayerInput, asInputGetMappingHandle(mainPlayerInput, "FlyCam")))
 		{
-			float x = asInputGetAxisClamped(mainPlayerInput, asInputGetMappingHandle(mainPlayerInput, "MoveRight"));
-			float y = asInputGetAxisClamped(mainPlayerInput, asInputGetMappingHandle(mainPlayerInput, "MoveForward"));
-			float z = asInputGetAxisClamped(mainPlayerInput, asInputGetMappingHandle(mainPlayerInput, "MoveUp"));
-			float lookX = asInputGetAxisClamped(mainPlayerInput, asInputGetMappingHandle(mainPlayerInput, "LookX"));
-			float lookY = asInputGetAxisClamped(mainPlayerInput, asInputGetMappingHandle(mainPlayerInput, "LookY"));
+			vec3 movement;
+			movement[0] = asInputGetAxisClamped(mainPlayerInput, asInputGetMappingHandle(mainPlayerInput, "MoveRight"));
+			movement[1] = asInputGetAxisClamped(mainPlayerInput, asInputGetMappingHandle(mainPlayerInput, "MoveUp"));
+			movement[2] = asInputGetAxisClamped(mainPlayerInput, asInputGetMappingHandle(mainPlayerInput, "MoveForward"));
+			float lookX = asInputGetAxis(mainPlayerInput, asInputGetMappingHandle(mainPlayerInput, "LookX"));
+			float lookY = asInputGetAxis(mainPlayerInput, asInputGetMappingHandle(mainPlayerInput, "LookY"));
 
-			/*Camera Look*/
-			vec3 forward = ASVEC3_FORWARD;
-			vec3 right = ASVEC3_RIGHT;
-			vec3 up = ASVEC3_UP;
-			
-			cameraLook[0] += lookX * 0.5;
-			cameraLook[1] -= lookY * 0.5;
-			if (cameraLook[1] > 89.999f)
-				cameraLook[1] = 89.999f;
-			if (cameraLook[1] < -89.999f)
-				cameraLook[1] = -89.999f;
-			const float yaw = cameraLook[0];
-			const float pitch = cameraLook[1];
-			//lookat[0] = cos(glm_rad(yaw)) * cos(glm_rad(pitch));
-			//lookat[1] = sin(glm_rad(yaw)) * cos(glm_rad(pitch));
-			//lookat[2] = sin(glm_rad(pitch));
-			glm_vec3_normalize(lookat);
-			glm_quat_for(lookat, (vec3)ASVEC3_FORWARD, (vec3)ASVEC3_UP, cameraRot);
+			float sensitivity = 360.0f;
 
-			/*Camera Movement*/
-			glm_quat_rotatev(cameraRot, forward, forward);
-			glm_quat_rotatev(cameraRot, right, right);
-			glm_cross(forward, right, up);
-			const float speed = 2.5f;
-			glm_vec3_scale(forward, (speed * deltaTime * y), forward);
-			glm_vec3_scale(right, (speed * deltaTime * x), right);
-			glm_vec3_scale(up, (speed * deltaTime * z), up);
-			glm_vec3_add(cameraPos, forward, cameraPos);
-			glm_vec3_add(cameraPos, right, cameraPos);
-			glm_vec3_add(cameraPos, up, cameraPos);
+			asGameUtils_FirstPersonCamera(deltaTime, movement, lookX, lookY, &cameraLook[0], &cameraLook[1], sensitivity, 2.5f, cameraPos, cameraRot);
 		}
 	}
 
@@ -315,8 +289,8 @@ int main(int argc, char* argv[])
 			},
 			{
 				.name = "MoveUp",
-				.keyPostivie = "E",
-				.keyNegative = "Q"
+				.keyPostivie = "Q",
+				.keyNegative = "E"
 			},
 			{
 				.name = "LookX",

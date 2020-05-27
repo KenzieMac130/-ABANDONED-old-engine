@@ -27,6 +27,7 @@ typedef versor quat; /*Better quaternion name*/
 #define ASVEC3_FORWARD {0,0,-1}
 #define ASVEC3_RIGHT {1,0,0}
 #define ASVEC3_UP {0,1,0}
+#define ASQUAT_IDENTITY {0,0,0,1}
 
 /**
 * @file

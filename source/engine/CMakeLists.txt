@@ -63,10 +63,13 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/cimgui)
 endif()
 #Gui Tools
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/guiTools)
-#Flecs
+#asFlecs
 if(ASTRENGINE_FLECS)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/flecs)
 endif()
+
+#asGameUtilities
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/gameUtilities)
 #astrengine
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/engineCore) 
 

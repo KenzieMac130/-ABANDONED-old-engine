@@ -148,15 +148,16 @@ ASEXPORT asResults asInputSystemNextFrame()
 		{
 			int32_t width, height;
 			SDL_GetWindowSize(mouseWindow, &width, &height);
+			float aspectRatio = (float)width / height;
 			for (int i = 0; i < hmlen(player->bindingsMouseAxis); i++)
 			{
 				const struct bindMapping mapping = player->bindingsMouseAxis[i].value;
 				float value = 0.0f;
 				if (player->bindingsMouseAxis[i].key == MOUSEAXIS_X) {
-					value = (float)x * width;
+					value = ((float)x / (width/2)) * aspectRatio;
 				}
 				if (player->bindingsMouseAxis[i].key == MOUSEAXIS_Y) {
-					value = (float)y * height;
+					value = ((float)y / (height/2));
 				}
 
 				player->inputValues[mapping.idx].current += mapping.scale * value;
