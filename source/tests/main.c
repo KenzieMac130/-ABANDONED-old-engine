@@ -44,7 +44,7 @@ asResourceFileID_t standardSurfaceShaderFileID;
 asPrimitiveSubmissionQueue subQueue;
 
 float renderDebug = -1;
-vec3 cameraPos = { 0, 0, -1 };
+vec3 cameraPos = { 0, 0, 1 };
 quat cameraRot = ASQUAT_IDENTITY;
 vec2 cameraLook;
 float fov = 90.0f;

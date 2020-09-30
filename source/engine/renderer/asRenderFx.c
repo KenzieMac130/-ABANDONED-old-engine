@@ -119,8 +119,10 @@ ASEXPORT void asFreeShaderFx(asShaderFx* pShaderfx)
 	for (int i = 0; i < pShaderfx->registration->pipelineCount; i++)
 	{
 #if ASTRENGINE_VK
-		if(pShaderfx->pipelines[i] != VK_NULL_HANDLE)
+		if (pShaderfx->pipelines[i] != VK_NULL_HANDLE) {
 			vkDestroyPipeline(asVkDevice, (VkPipeline)pShaderfx->pipelines[i], AS_VK_MEMCB);
+			pShaderfx->pipelines[i] = VK_NULL_HANDLE;
+		}
 #endif
 	}
 }

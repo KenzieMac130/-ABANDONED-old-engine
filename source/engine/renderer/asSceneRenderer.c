@@ -289,8 +289,8 @@ void recordSecondaryCommands(uint32_t primCount,
 		if (!(prim.renderPass & scenePass)) { continue; }
 
 		/*Bind Pipeline*/
-		ASASSERT(prim.pShaderFx);
-		VkPipeline nextPipeline = (VkPipeline)prim.pShaderFx->pipelines[0];
+		if (!prim.pShaderFx) { continue; }
+		VkPipeline nextPipeline = (VkPipeline)prim.pShaderFx->pipelines[0]; /*Todo: Pipeline Selection*/
 		if (nextPipeline != lastPipeline)
 		{
 			vkCmdBindPipeline(vCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nextPipeline);
@@ -490,7 +490,7 @@ void primQueueRecordCmds(asPrimitiveSubmissionQueue queue)
 			/*Build Command Buffers*/
 			recordSecondaryCommands(queue->initialPrimitiveGroupCount,
 				queue->pInitialPrimGroups,
-				AS_SCENE_RENDERPASS_SOLID,
+				(asSceneRenderPass)(1 << i),
 				&mainSceneViewport,
 				(float[]){(float)width, (float)height, 0.0f, 0.0f},
 				*pVCmd,
@@ -763,6 +763,12 @@ void _destroyScreenResources()
 }
 
 asPrimitiveSubmissionQueue debugDrawPrimQueue;
+asBufferHandle_t debugDrawVtxBuffer[AS_MAX_INFLIGHT];
+asVertexGeneric* pDebugDrawVerts[AS_MAX_INFLIGHT];
+#define AS_MAX_DRAWABLE_DEBUG_LINES 10000
+
+asShaderFx* pDebugSurfaceShader;
+asResourceFileID_t debugSurfaceShaderFileID;
 
 ASEXPORT asResults asInitSceneRenderer()
 {
@@ -826,6 +832,27 @@ ASEXPORT asResults asInitSceneRenderer()
 			.maxInstances = 1,
 		};
 		debugDrawPrimQueue = asSceneRendererCreateSubmissionQueue(&desc);
+
+		/*Shader*/
+		const char* path = "shaders/core/DebugLines_FX.asfx";
+		debugSurfaceShaderFileID = asResource_FileIDFromRelativePath(path, strlen(path));
+		pDebugSurfaceShader = asShaderFxManagerGetShaderFx(debugSurfaceShaderFileID);
+
+
+		asBufferDesc_t vBuffDesc = asBufferDesc_Init();
+		vBuffDesc.bufferSize = sizeof(asVertexGeneric) * (AS_MAX_DRAWABLE_DEBUG_LINES * 2);
+		vBuffDesc.cpuAccess = AS_GPURESOURCEACCESS_STREAM;
+		vBuffDesc.usageFlags = AS_BUFFERUSAGE_VERTEX;
+		vBuffDesc.initialContentsBufferSize = NULL;
+		vBuffDesc.pInitialContentsBuffer = NULL;
+		vBuffDesc.pDebugLabel = "VertexBuffer";
+		for (int i = 0; i < AS_MAX_INFLIGHT; i++) {
+			debugDrawVtxBuffer[i] = asCreateBuffer(&vBuffDesc);
+#if ASTRENGINE_VK
+			asVkAllocation_t vertAlloc = asVkGetAllocFromBuffer(debugDrawVtxBuffer[i]);
+			asVkMapMemory(vertAlloc, 0, vertAlloc.size, &pDebugDrawVerts[i]);
+#endif
+		}
 	}
 
 	return AS_SUCCESS;
@@ -875,7 +902,11 @@ ASEXPORT asResults asSceneRendererUploadDebugDraws(int32_t viewport)
 	_asDebugDrawSecureLists();
 	asDebugDrawLineData* lineData;
 	size_t lineCount = _asDebugDrawGetLineList(&lineData);
+	if (lineCount > AS_MAX_DRAWABLE_DEBUG_LINES) { lineCount = AS_MAX_DRAWABLE_DEBUG_LINES; }
 	asSceneRendererSubmissionQueuePopulateBegin(debugDrawPrimQueue);
+
+	asVertexGeneric* gfxVtx = pDebugDrawVerts[asVkCurrentFrame];
+	memset(gfxVtx, 0, sizeof(asVertexGeneric) * lineCount * 2);
 
 	for (size_t i = 0; i < lineCount; i++)
 	{
@@ -883,22 +914,37 @@ ASEXPORT asResults asSceneRendererUploadDebugDraws(int32_t viewport)
 		vec3* inVerts = line.start;
 
 		/*Convert Verts*/
-		for (int i = 0; i < 2; i++)
+		for (int v = 0; v < 2; v++)
 		{
+			const int vtxIdx = lineCount * 2 + v;
 			/*Upload*/
+			asVertexGeneric_encodePosition(&gfxVtx[vtxIdx], inVerts[v]);
+			asVertexGeneric_encodeColor(&gfxVtx[vtxIdx], line.color);
+			asVertexGeneric_encodeUV(&gfxVtx[vtxIdx], 1, (vec2) { line.thickness, 0.0f });
 		}
-		
 	}
 
+#if ASTRENGINE_VK
+	asVkAllocation_t vertAlloc = asVkGetAllocFromBuffer(debugDrawVtxBuffer[asVkCurrentFrame]);
+	asVkFlushMemory(vertAlloc);
+#endif
+
 	/*Transform*/
-	asGfxInstanceTransform xform = { 0 };
+	asGfxInstanceTransform xform = { 
+		.rotation = ASQUAT_IDENTITY,
+		.scale = {1,1,1},
+		.opacity = 1.0f
+	};
 	asSceneRendererSubmissionAddTransforms(debugDrawPrimQueue, 1, &xform, 0);
 
 	/*Prim*/
 	asGfxPrimativeGroupDesc prim = { 0 };
+	prim.vertexBuffer = debugDrawVtxBuffer[asVkCurrentFrame];
 	prim.indexBuffer = asHandle_Invalidate();
 	prim.baseInstanceCount = 1;
 	prim.vertexCount = lineCount * 2;
+	prim.pShaderFx = pDebugSurfaceShader;
+	prim.renderPass = AS_SCENE_RENDERPASS_GUI;
 	asSceneRendererSubmissionAddPrimitiveGroups(debugDrawPrimQueue, 1, &prim);
 
 	asSceneRendererSubmissionQueuePopulateEnd(debugDrawPrimQueue);
@@ -942,7 +988,9 @@ ASEXPORT asResults asSceneRendererDraw(int32_t viewport)
 	beginInfo.framebuffer = sceneFramebuffer;
 	vkCmdBeginRenderPass(vCmd, &beginInfo, VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
 
-	executeVpSubmissionQueues(vCmd, &mainSceneViewport, 2);
+	executeVpSubmissionQueues(vCmd, &mainSceneViewport, 2); /*Render Solids*/
+
+	executeVpSubmissionQueues(vCmd, &mainSceneViewport, 7); /*Render GUI*/
 
 	vkCmdEndRenderPass(vCmd);
 	vkEndCommandBuffer(vCmd);
@@ -954,7 +1002,11 @@ ASEXPORT asResults asSceneRendererDraw(int32_t viewport)
 
 ASEXPORT asResults asShutdownSceneRenderer()
 {
+	for (int i = 0; i < AS_MAX_INFLIGHT; i++) {
+		asReleaseBuffer(debugDrawVtxBuffer[i]);
+	}
 	asSceneRendererDestroySubmissionQueue(debugDrawPrimQueue);
+	asShaderFxManagerDereferenceShaderFx(debugSurfaceShaderFileID);
 
 	sceneViewport_Destroy(&mainSceneViewport);
 #if ASTRENGINE_VK
