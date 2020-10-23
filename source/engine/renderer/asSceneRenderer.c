@@ -820,13 +820,13 @@ void _destroyScreenResources()
 	vkDestroyFramebuffer(asVkDevice, sceneFramebuffer, AS_VK_MEMCB);
 }
 
-asPrimitiveSubmissionQueue debugDrawPrimQueue;
-asBufferHandle_t debugDrawVtxBuffer[AS_MAX_INFLIGHT];
-asVertexGeneric* pDebugDrawVerts[AS_MAX_INFLIGHT];
-#define AS_MAX_DRAWABLE_DEBUG_LINES 10000
-
-asShaderFx* pDebugSurfaceShader;
-asResourceFileID_t debugSurfaceShaderFileID;
+//asPrimitiveSubmissionQueue debugDrawPrimQueue;
+//asBufferHandle_t debugDrawVtxBuffer[AS_MAX_INFLIGHT];
+//asVertexGeneric* pDebugDrawVerts[AS_MAX_INFLIGHT];
+//#define AS_MAX_DRAWABLE_DEBUG_LINES 10000
+//
+//asShaderFx* pDebugSurfaceShader;
+//asResourceFileID_t debugSurfaceShaderFileID;
 
 ASEXPORT asResults asInitSceneRenderer()
 {
@@ -1058,11 +1058,11 @@ ASEXPORT asResults asSceneRendererDraw(int32_t screenIndex)
 
 ASEXPORT asResults asShutdownSceneRenderer()
 {
-	for (int i = 0; i < AS_MAX_INFLIGHT; i++) {
+	/*for (int i = 0; i < AS_MAX_INFLIGHT; i++) {
 		asReleaseBuffer(debugDrawVtxBuffer[i]);
 	}
 	asSceneRendererSubmissionQueueDestroy(debugDrawPrimQueue);
-	asShaderFxManagerDereferenceShaderFx(debugSurfaceShaderFileID);
+	asShaderFxManagerDereferenceShaderFx(debugSurfaceShaderFileID);*/
 
 #if ASTRENGINE_VK
 	vkDestroyDescriptorPool(asVkDevice, sceneDescriptorPool, AS_VK_MEMCB);
