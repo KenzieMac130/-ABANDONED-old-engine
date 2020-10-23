@@ -48,7 +48,7 @@ const char* deviceReqExtensions[] = {
 
 #if AS_VK_VALIDATION
 const char* validationLayers[] = {
-	"VK_LAYER_LUNARG_standard_validation"
+	"VK_LAYER_KHRONOS_validation"
 };
 bool vMarkersExtensionFound;
 PFN_vkDebugMarkerSetObjectNameEXT vkDebugMarkerSetObjectName;
@@ -337,8 +337,8 @@ void asVkAlloc(asVkAllocation_t *pMem, VkDeviceSize size, uint32_t type)
 	VkMemoryAllocateInfo allocInfo = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
 	allocInfo.allocationSize = size;
 	allocInfo.memoryTypeIndex = type;
-	if (vkAllocateMemory(asVkDevice, &allocInfo, AS_VK_MEMCB, &pMem->memHandle) != VK_SUCCESS)
-		asFatalError("vkAllocateMemory() Failed to allocate memory");
+	AS_VK_CHECK(vkAllocateMemory(asVkDevice, &allocInfo, AS_VK_MEMCB, &pMem->memHandle), 
+		"vkAllocateMemory() Failed to allocate memory");
 	pMem->size = size;
 	pMem->memType = type;
 	pMem->offset = 0;
@@ -586,8 +586,8 @@ ASEXPORT asTextureHandle_t asCreateTexture(asTextureDesc_t *pDesc)
 		createInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
 		if (pDesc->cpuAccess != AS_GPURESOURCEACCESS_STREAM){
-			if (vkCreateImage(asVkDevice, &createInfo, AS_VK_MEMCB, &pTex->image) != VK_SUCCESS)
-				asFatalError("vkCreateImage() Failed to create an image");
+			AS_VK_CHECK(vkCreateImage(asVkDevice, &createInfo, AS_VK_MEMCB, &pTex->image), 
+				"vkCreateImage() Failed to create an image");
 			VkMemoryRequirements memReq;
 			vkGetImageMemoryRequirements(asVkDevice, pTex->image, &memReq);
 			asVkAlloc(&pTex->alloc, memReq.size, asVkFindMemoryType(memReq.memoryTypeBits,
@@ -595,8 +595,8 @@ ASEXPORT asTextureHandle_t asCreateTexture(asTextureDesc_t *pDesc)
 			vkBindImageMemory(asVkDevice, pTex->image, pTex->alloc.memHandle, pTex->alloc.offset);
 		}
 		else{
-			if (vkCreateImage(asVkDevice, &createInfo, AS_VK_MEMCB, &pTex->image) != VK_SUCCESS)
-				asFatalError("vkCreateImage() Failed to create an image");
+			AS_VK_CHECK(vkCreateImage(asVkDevice, &createInfo, AS_VK_MEMCB, &pTex->image),
+				"vkCreateImage() Failed to create an image");
 			VkMemoryRequirements memReq;
 			vkGetImageMemoryRequirements(asVkDevice, pTex->image, &memReq);
 			asVkAlloc(&pTex->alloc, memReq.size, asVkFindMemoryType(memReq.memoryTypeBits,
@@ -616,8 +616,8 @@ ASEXPORT asTextureHandle_t asCreateTexture(asTextureDesc_t *pDesc)
 		createInfo.subresourceRange.baseMipLevel = 0;
 		createInfo.subresourceRange.layerCount = pDesc->type != AS_TEXTURETYPE_3D ? pDesc->depth : 1;
 		createInfo.subresourceRange.levelCount = pDesc->mips;
-		if (vkCreateImageView(asVkDevice, &createInfo, AS_VK_MEMCB, &pTex->view) != VK_SUCCESS)
-			asFatalError("vkCreateImageView() Failed to create an image view");
+		AS_VK_CHECK(vkCreateImageView(asVkDevice, &createInfo, AS_VK_MEMCB, &pTex->view),
+			"vkCreateImageView() Failed to create an image view");
 	}
 	/*Upload Data*/
 	{
@@ -633,8 +633,8 @@ ASEXPORT asTextureHandle_t asCreateTexture(asTextureDesc_t *pDesc)
 					bufferInfo.size = pDesc->initialContentsBufferSize;
 					bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 					bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-					if (vkCreateBuffer(asVkDevice, &bufferInfo, AS_VK_MEMCB, &stagingBuffer) != VK_SUCCESS)
-						asFatalError("vkCreateBuffer() Failed to create a staging buffer");
+					AS_VK_CHECK(vkCreateBuffer(asVkDevice, &bufferInfo, AS_VK_MEMCB, &stagingBuffer),
+						"vkCreateBuffer() Failed to create a staging buffer");
 					VkMemoryRequirements memReq;
 					vkGetBufferMemoryRequirements(asVkDevice, stagingBuffer, &memReq);
 					asVkAlloc(&stagingAlloc, memReq.size, asVkFindMemoryType(memReq.memoryTypeBits,
@@ -855,8 +855,8 @@ ASEXPORT asBufferHandle_t asCreateBuffer(asBufferDesc_t *pDesc)
 		createInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
 		if (pDesc->cpuAccess != AS_GPURESOURCEACCESS_STREAM) {
-			if (vkCreateBuffer(asVkDevice, &createInfo, AS_VK_MEMCB, &pBuff->buffer) != VK_SUCCESS)
-				asFatalError("vkCreateBuffer() Failed to create a buffer");
+			AS_VK_CHECK(vkCreateBuffer(asVkDevice, &createInfo, AS_VK_MEMCB, &pBuff->buffer), 
+				"vkCreateBuffer() Failed to create a buffer");
 			VkMemoryRequirements memReq;
 			vkGetBufferMemoryRequirements(asVkDevice, pBuff->buffer, &memReq);
 			asVkAlloc(&pBuff->alloc, memReq.size, asVkFindMemoryType(memReq.memoryTypeBits,
@@ -864,8 +864,8 @@ ASEXPORT asBufferHandle_t asCreateBuffer(asBufferDesc_t *pDesc)
 			vkBindBufferMemory(asVkDevice, pBuff->buffer, pBuff->alloc.memHandle, pBuff->alloc.offset);
 		}
 		else {
-			if (vkCreateBuffer(asVkDevice, &createInfo, AS_VK_MEMCB, &pBuff->buffer) != VK_SUCCESS)
-				asFatalError("vkCreateBuffer() Failed to create a buffer");
+			AS_VK_CHECK(vkCreateBuffer(asVkDevice, &createInfo, AS_VK_MEMCB, &pBuff->buffer),
+				"vkCreateBuffer() Failed to create a buffer");
 			VkMemoryRequirements memReq;
 			vkGetBufferMemoryRequirements(asVkDevice, pBuff->buffer, &memReq);
 			asVkAlloc(&pBuff->alloc, memReq.size, asVkFindMemoryType(memReq.memoryTypeBits,
@@ -887,8 +887,8 @@ ASEXPORT asBufferHandle_t asCreateBuffer(asBufferDesc_t *pDesc)
 					bufferInfo.size = pDesc->initialContentsBufferSize;
 					bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 					bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-					if (vkCreateBuffer(asVkDevice, &bufferInfo, AS_VK_MEMCB, &stagingBuffer) != VK_SUCCESS)
-						asFatalError("vkCreateBuffer() Failed to create a staging buffer");
+					AS_VK_CHECK(vkCreateBuffer(asVkDevice, &bufferInfo, AS_VK_MEMCB, &stagingBuffer),
+						"vkCreateBuffer() Failed to create a staging buffer");
 					VkMemoryRequirements memReq;
 					vkGetBufferMemoryRequirements(asVkDevice, stagingBuffer, &memReq);
 					asVkAlloc(&stagingAlloc, memReq.size, asVkFindMemoryType(memReq.memoryTypeBits,
@@ -1013,8 +1013,8 @@ void vPrimaryCommandBufferManager_Init(struct vPrimaryCommandBufferManager_t *pM
 	{
 		VkCommandPoolCreateInfo poolInfo = { VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO };
 		poolInfo.queueFamilyIndex = queueFamilyIndex;
-		if (vkCreateCommandPool(asVkDevice, &poolInfo, AS_VK_MEMCB, &pMan->pools[i]) != VK_SUCCESS)
-			asFatalError("vkCreateCommandPool() Failed to create primary command pool for manager");
+		AS_VK_CHECK(vkCreateCommandPool(asVkDevice, &poolInfo, AS_VK_MEMCB, &pMan->pools[i]),
+			"vkCreateCommandPool() Failed to create primary command pool for manager");
 		pMan->pBuffers[i] = asMalloc(sizeof(VkCommandBuffer) * count);
 		pMan->maxBuffs = count;
 		pMan->count[i] = 0;
@@ -1023,8 +1023,8 @@ void vPrimaryCommandBufferManager_Init(struct vPrimaryCommandBufferManager_t *pM
 		allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 		allocInfo.commandPool = pMan->pools[i];
 		allocInfo.commandBufferCount = count;
-		if (vkAllocateCommandBuffers(asVkDevice, &allocInfo, pMan->pBuffers[i]) != VK_SUCCESS)
-			asFatalError("vkAllocateCommandBuffers() Failed to allocate primary command buffers for manager");
+		AS_VK_CHECK(vkAllocateCommandBuffers(asVkDevice, &allocInfo, pMan->pBuffers[i]),
+			"vkAllocateCommandBuffers() Failed to allocate primary command buffers for manager");
 	}
 }
 
@@ -1084,7 +1084,7 @@ VkCommandBuffer asVkGetNextComputeCommandBuffer()
 }
 
 
-ASEXPORT asResults asGetRenderDimensions(int viewportId, bool dynamicRes, int32_t* pWidth, int32_t* pHeight)
+ASEXPORT asResults asGetRenderDimensions(int screenId, bool dynamicRes, int32_t* pWidth, int32_t* pHeight)
 {
 	*pWidth = vMainScreen.extents.width;
 	*pHeight = vMainScreen.extents.height;
@@ -1097,7 +1097,7 @@ asUboGlobal globalUboData;
 
 ASEXPORT asResults asSetGlobalCustomShaderParam(int slot, float values[4])
 {
-	ASASSERT(slot < AS_MAX_GLOBAL_CUSTOM_PARAMS);
+	if (slot >= AS_MAX_GLOBAL_CUSTOM_PARAMS) { return AS_FAILURE_OUT_OF_BOUNDS; }
 	memcpy(globalUboData.customParams[slot], values, sizeof(float) * 4);
 	return AS_SUCCESS;
 }
@@ -1125,8 +1125,8 @@ void vScreenResourcesCreate(asVkScreenResources*pScreen, SDL_Window* pWindow)
 
 	/*Recreate Surface if Necessary*/
 	if(pScreen->surface == VK_NULL_HANDLE){
-		if (!SDL_Vulkan_CreateSurface(pScreen->pWindow, asVkInstance, &pScreen->surface))
-			asFatalError("SDL_Vulkan_CreateSurface() Failed to create surface");
+		AS_VK_CHECK(!SDL_Vulkan_CreateSurface(pScreen->pWindow, asVkInstance, &pScreen->surface),
+			"SDL_Vulkan_CreateSurface() Failed to create surface");
 	}
 	/*Swapchain*/
 	{
@@ -1164,8 +1164,8 @@ void vScreenResourcesCreate(asVkScreenResources*pScreen, SDL_Window* pWindow)
 			createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
 		}
 
-		if (vkCreateSwapchainKHR(asVkDevice, &createInfo, AS_VK_MEMCB, &pScreen->swapchain) != VK_SUCCESS)
-			asFatalError("vkCreateSwapchainKHR() Failed to create swapchain");
+		AS_VK_CHECK(vkCreateSwapchainKHR(asVkDevice, &createInfo, AS_VK_MEMCB, &pScreen->swapchain),
+			"vkCreateSwapchainKHR() Failed to create swapchain");
 	}
 	/*Get Swapchain Images*/
 	{
@@ -1178,10 +1178,10 @@ void vScreenResourcesCreate(asVkScreenResources*pScreen, SDL_Window* pWindow)
 		VkSemaphoreCreateInfo createInfo = (VkSemaphoreCreateInfo) { VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
 		for (uint32_t i = 0; i < AS_MAX_INFLIGHT; i++)
 		{
-			if (vkCreateSemaphore(asVkDevice, &createInfo, AS_VK_MEMCB, &pScreen->swapImageAvailableSemaphores[i]) != VK_SUCCESS)
-				asFatalError("vkCreateSemaphore() Failed to create semaphore");
-			if (vkCreateSemaphore(asVkDevice, &createInfo, AS_VK_MEMCB, &pScreen->blitFinishedSemaphores[i]) != VK_SUCCESS)
-				asFatalError("vkCreateSemaphore() Failed to create semaphore");
+			AS_VK_CHECK(vkCreateSemaphore(asVkDevice, &createInfo, AS_VK_MEMCB, &pScreen->swapImageAvailableSemaphores[i]),
+				"vkCreateSemaphore() Failed to create semaphore");
+			AS_VK_CHECK(vkCreateSemaphore(asVkDevice, &createInfo, AS_VK_MEMCB, &pScreen->blitFinishedSemaphores[i]),
+				"vkCreateSemaphore() Failed to create semaphore");
 		}
 	}
 	/*Render Targets*/
@@ -1211,8 +1211,8 @@ void vScreenResourcesCreate(asVkScreenResources*pScreen, SDL_Window* pWindow)
 		allocInfo.commandPool = asVkGeneralCommandPool;
 		allocInfo.commandBufferCount = pScreen->imageCount;
 		allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-		if(vkAllocateCommandBuffers(asVkDevice, &allocInfo, pScreen->pPresentImageToScreenCmds) != VK_SUCCESS)
-			asFatalError("vkAllocateCommandBuffers() Failed to allocate presentation commands");
+		AS_VK_CHECK(vkAllocateCommandBuffers(asVkDevice, &allocInfo, pScreen->pPresentImageToScreenCmds),
+			"vkAllocateCommandBuffers() Failed to allocate presentation commands");
 
 		for (uint32_t i = 0; i < pScreen->imageCount; i++)
 		{
@@ -1321,12 +1321,12 @@ void asVkInit(asAppInfo_t *pAppInfo, int32_t deviceIndex)
 	{
 #if AS_VK_VALIDATION
 		if (!vValidationLayersAvailible())
-			asFatalError("Vulkan Validation layers requested but not avalible");
+			asFatalError("Vulkan Validation layers requested but not avalible", -1);
 #endif
 		unsigned int sdlExtCount;
 		uint32_t extraExtCount = 1;
 		if (!SDL_Vulkan_GetInstanceExtensions(asGetMainWindowPtr(), &sdlExtCount, NULL)) 
-			asFatalError("SDL_Vulkan_GetInstanceExtensions() Failed to get instance extensions");
+			asFatalError("SDL_Vulkan_GetInstanceExtensions() Failed to get instance extensions", -1);
 		const char** extensions;
 		extensions = (const char**)asMalloc(sizeof(unsigned char*) * (sdlExtCount + extraExtCount));
 		extensions[0] = VK_EXT_DEBUG_REPORT_EXTENSION_NAME;
@@ -1353,22 +1353,22 @@ void asVkInit(asAppInfo_t *pAppInfo, int32_t deviceIndex)
 		createInfo.enabledLayerCount = 0;
 #endif
 
-		if(vkCreateInstance(&createInfo, AS_VK_MEMCB, &asVkInstance) != VK_SUCCESS)
-			asFatalError("vkCreateInstance() Failed to create vulkan instance");
+		AS_VK_CHECK(vkCreateInstance(&createInfo, AS_VK_MEMCB, &asVkInstance),
+			"vkCreateInstance() Failed to create vulkan instance");
 		asFree((void*)extensions);
 	}
 	/*Create Starting Surface*/
 	{
 		if (!SDL_Vulkan_CreateSurface(asGetMainWindowPtr(), asVkInstance, &vMainScreen.surface))
-			asFatalError("SDL_Vulkan_CreateSurface() Failed to create surface");
+			asFatalError("SDL_Vulkan_CreateSurface() Failed to create surface", -1);
 	}
 	/*Pick Physical Device*/
 	{
 		uint32_t gpuCount;
-		if(vkEnumeratePhysicalDevices(asVkInstance, &gpuCount, NULL) != VK_SUCCESS)
-			asFatalError("Failed to find devices with vkEnumeratePhysicalDevices()");
+		AS_VK_CHECK(vkEnumeratePhysicalDevices(asVkInstance, &gpuCount, NULL),
+			"Failed to find devices with vkEnumeratePhysicalDevices()");
 		if(!gpuCount)
-			asFatalError("No Supported Vulkan Compatible GPU found!");
+			asFatalError("No Supported Vulkan Compatible GPU found!", -1);
 		VkPhysicalDevice *gpus = asMalloc(gpuCount * sizeof(VkPhysicalDevice));
 		vkEnumeratePhysicalDevices(asVkInstance, &gpuCount, gpus);
 
@@ -1381,7 +1381,7 @@ void asVkInit(asAppInfo_t *pAppInfo, int32_t deviceIndex)
 		{
 			asVkPhysicalDevice = vPickBestDevice(gpus, gpuCount);
 			if(asVkPhysicalDevice == VK_NULL_HANDLE)
-				asFatalError("Could not automatically find suitable graphics card");
+				asFatalError("Could not automatically find suitable graphics card", -1);
 		}
 		vkGetPhysicalDeviceProperties(asVkPhysicalDevice, &asVkDeviceProperties);
 		vkGetPhysicalDeviceFeatures(asVkPhysicalDevice, &asVkDeviceFeatures);
@@ -1423,7 +1423,7 @@ void asVkInit(asAppInfo_t *pAppInfo, int32_t deviceIndex)
 		if (vkCreateDebugReportCallback)
 			vkCreateDebugReportCallback(asVkInstance, &createInfo, AS_VK_MEMCB, &vDbgCallback);
 		else
-			asFatalError("Failed to find vkCreateDebugReportCallbackEXT()");
+			asFatalError("Failed to find vkCreateDebugReportCallbackEXT()", 1);
 
 		/*Object Debug Labels*/
 		if (vMarkersExtensionFound)
@@ -1440,7 +1440,7 @@ void asVkInit(asAppInfo_t *pAppInfo, int32_t deviceIndex)
 	{
 		asVkQueueFamilyIndices = vFindQueueFamilyIndices(asVkPhysicalDevice);
 		if (!vIsQueueFamilyComplete(asVkQueueFamilyIndices))
-			asFatalError("Device does not have the necessary queues for rendering");
+			asFatalError("Device does not have the necessary queues for rendering", -1);
 
 		uint32_t uniqueIdxCount = 0;
 		uint32_t uniqueIndices[3] = { UINT32_MAX, UINT32_MAX, UINT32_MAX };
@@ -1504,8 +1504,8 @@ void asVkInit(asAppInfo_t *pAppInfo, int32_t deviceIndex)
 		createInfo.enabledExtensionCount = ASARRAYLEN(deviceReqExtensions);
 		createInfo.ppEnabledExtensionNames = deviceReqExtensions;
 
-		if(vkCreateDevice(asVkPhysicalDevice, &createInfo, AS_VK_MEMCB, &asVkDevice) != VK_SUCCESS)
-			asFatalError("vkCreateDevice() failed to create the device");
+		AS_VK_CHECK(vkCreateDevice(asVkPhysicalDevice, &createInfo, AS_VK_MEMCB, &asVkDevice),
+			"vkCreateDevice() failed to create the device");
 
 		vkGetDeviceQueue(asVkDevice, asVkQueueFamilyIndices.graphicsIdx, 0, &asVkQueue_GFX);
 		vkGetDeviceQueue(asVkDevice, asVkQueueFamilyIndices.presentIdx, 0, &asVkQueue_Present);
@@ -1518,8 +1518,8 @@ void asVkInit(asAppInfo_t *pAppInfo, int32_t deviceIndex)
 		fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 		for (uint32_t i = 0; i < AS_MAX_INFLIGHT; i++)
 		{
-			if(vkCreateFence(asVkDevice, &fenceInfo, AS_VK_MEMCB, &asVkInFlightFences[i]) != VK_SUCCESS)
-				asFatalError("vkCreateFence() Failed to create inflight fence");
+			AS_VK_CHECK(vkCreateFence(asVkDevice, &fenceInfo, AS_VK_MEMCB, &asVkInFlightFences[i]),
+				"vkCreateFence() Failed to create inflight fence");
 		}
 	}
 	/*Command Pools*/
@@ -1528,8 +1528,8 @@ void asVkInit(asAppInfo_t *pAppInfo, int32_t deviceIndex)
 		createInfo.queueFamilyIndex = asVkQueueFamilyIndices.graphicsIdx;
 		createInfo.flags = 0;
 
-		if (vkCreateCommandPool(asVkDevice, &createInfo, AS_VK_MEMCB, &asVkGeneralCommandPool) != VK_SUCCESS)
-			asFatalError("vkCreateCommandPool() Failed to create general command pool");
+		AS_VK_CHECK(vkCreateCommandPool(asVkDevice, &createInfo, AS_VK_MEMCB, &asVkGeneralCommandPool),
+			"vkCreateCommandPool() Failed to create general command pool");
 
 		vPrimaryCommandBufferManager_Init(&vMainGraphicsBufferManager, asVkQueueFamilyIndices.graphicsIdx, 64);
 		vPrimaryCommandBufferManager_Init(&vMainComputeBufferManager, asVkQueueFamilyIndices.computeIdx, 32);
@@ -1598,8 +1598,8 @@ void vPresentFrame(asVkScreenResources*pScreen)
 	submitInfo.signalSemaphoreCount = 1;
 	submitInfo.pSignalSemaphores = &pScreen->blitFinishedSemaphores[asVkCurrentFrame];
 	vkResetFences(asVkDevice, 1, &asVkInFlightFences[asVkCurrentFrame]);
-	if (vkQueueSubmit(asVkQueue_GFX, 1, &submitInfo, asVkInFlightFences[asVkCurrentFrame]) != VK_SUCCESS)
-		asFatalError("vkQueueSubmit() Failed to blit to swapchain");
+	AS_VK_CHECK(vkQueueSubmit(asVkQueue_GFX, 1, &submitInfo, asVkInFlightFences[asVkCurrentFrame]),
+		"vkQueueSubmit() Failed to blit to swapchain");
 	VkPresentInfoKHR presentInfo = (VkPresentInfoKHR){ VK_STRUCTURE_TYPE_PRESENT_INFO_KHR };
 	presentInfo.waitSemaphoreCount = 1;
 	presentInfo.pWaitSemaphores = &pScreen->blitFinishedSemaphores[asVkCurrentFrame];
@@ -1626,8 +1626,8 @@ void asVkDrawFrame()
 {
 	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
 	VkSubmitInfo gfxSubmitInfo = vPrimaryCommandBufferManager_GenSubmitInfo(&vMainGraphicsBufferManager, asVkCurrentFrame, waitStages, 0, NULL, 0, NULL);
-	if (vkQueueSubmit(asVkQueue_GFX, 1, &gfxSubmitInfo, VK_NULL_HANDLE) != VK_SUCCESS)
-		asFatalError("vkQueueSubmit() Failed to submit graphics commands");
+	AS_VK_CHECK(vkQueueSubmit(asVkQueue_GFX, 1, &gfxSubmitInfo, VK_NULL_HANDLE),
+		"vkQueueSubmit() Failed to submit graphics commands");
 
 	vPresentFrame(&vMainScreen);
 

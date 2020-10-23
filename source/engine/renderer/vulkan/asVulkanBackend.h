@@ -22,6 +22,14 @@ extern "C" {
 
 #define AS_VK_MEMCB NULL
 
+#define AS_VK_CHECK(_args, _msg) {\
+VkResult _tmpvresult = _args;\
+if(_tmpvresult != VK_SUCCESS)\
+	{\
+		asFatalError(#_msg ,(int)_tmpvresult);\
+	}\
+}\
+
 typedef struct
 {
 	struct SDL_Window* pWindow;

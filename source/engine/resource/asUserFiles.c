@@ -7,7 +7,7 @@ char* prefPath;
 
 ASEXPORT void asUserFileMakePath(const char* currentName, char* outputBuff, size_t outputBuffSize)
 {
-	snprintf(outputBuff, outputBuffSize, "%.*s%s", prefPathLength, prefPath, currentName);
+	snprintf(outputBuff, outputBuffSize, "%.*s%s", (int)prefPathLength, prefPath, currentName);
 }
 
 ASEXPORT void asInitUserFiles(const char* developerName, const char* appName)
@@ -18,7 +18,7 @@ ASEXPORT void asInitUserFiles(const char* developerName, const char* appName)
 
 	if (!prefPath)
 	{
-		asFatalError("User Save Path Not Availible");
+		asFatalError("User Save Path Not Availible", -1);
 	}
 	asDebugLog("User Save Directory: %s", prefPath);
 	prefPathLength = strlen(prefPath);

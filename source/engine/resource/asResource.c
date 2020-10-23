@@ -52,20 +52,21 @@ ASEXPORT const char* asResource_GetResourceFolderPath()
 		char* binDir = SDL_GetBasePath();
 		if (!binDir)
 		{
-			asFatalError("SDL Base Path is Null?!!?");
+			asFatalError("SDL Base Path is Null?!!?", -1);
 		}
 
 		asDebugLog("Base Path: %s", binDir);
+		/*Todo: Get rid of limmitation*/
 		if (strlen(binDir) > 756)
 		{
-			asFatalError("Executable path exceeds 756 bytes, Please change install directory...");
+			asFatalError("Executable path exceeds 756 bytes, Please change install directory...",-1);
 		}
 		memset(resourceDir, 0, 1024);
 		memcpy(resourceDir, binDir, strlen(binDir));
 		SDL_free(binDir);
 		if (strstr(resourceDir, "bin") == NULL)
 		{
-			asFatalError("Please Relocate Executable to A \"bin\" Directory...");
+			asFatalError("Please Relocate Executable to A \"bin\" Directory...",-1);
 		}
 		const char* tmp;
 		while ((tmp = strstr(resourceDir, "bin")) != NULL)

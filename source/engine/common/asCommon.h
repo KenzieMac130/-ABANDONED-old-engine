@@ -118,7 +118,7 @@ ASEXPORT void asError(const char* msg);
 /**
 * @brief A fatal error that should close the engine
 */
-ASEXPORT void asFatalError(const char* msg);
+ASEXPORT void asFatalError(const char* msg, int exitCode);
 
 /**
 * @brief should behave just like malloc

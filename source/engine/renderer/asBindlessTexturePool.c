@@ -89,8 +89,8 @@ ASEXPORT asResults asInitTexturePool()
 		VkDescriptorSetLayoutCreateInfo descriptorSetLayoutInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
 		descriptorSetLayoutInfo.bindingCount = ASARRAYLEN(descriptorBindings);
 		descriptorSetLayoutInfo.pBindings = descriptorBindings;
-		if (vkCreateDescriptorSetLayout(asVkDevice, &descriptorSetLayoutInfo, AS_VK_MEMCB, &vTexturePoolDescLayout) != VK_SUCCESS)
-			asFatalError("vkCreateDescriptorSetLayout() Failed to create vTexturePoolDescLayout");
+		AS_VK_CHECK(vkCreateDescriptorSetLayout(asVkDevice, &descriptorSetLayoutInfo, AS_VK_MEMCB, &vTexturePoolDescLayout),
+			"vkCreateDescriptorSetLayout() Failed to create vTexturePoolDescLayout");
 	}
 	/*Descriptor Pool*/
 	{
@@ -102,8 +102,8 @@ ASEXPORT asResults asInitTexturePool()
 		createInfo.maxSets = 2;
 		createInfo.poolSizeCount = 1;
 		createInfo.pPoolSizes = &fontImagePoolSize;
-		if (vkCreateDescriptorPool(asVkDevice, &createInfo, AS_VK_MEMCB, &vTexturePoolDescriptorPool) != VK_SUCCESS)
-			asFatalError("vkCreateDescriptorPool() Failed to create vTexturePoolDescriptorPool");
+		AS_VK_CHECK(vkCreateDescriptorPool(asVkDevice, &createInfo, AS_VK_MEMCB, &vTexturePoolDescriptorPool),
+			"vkCreateDescriptorPool() Failed to create vTexturePoolDescriptorPool");
 	}
 	/*Descriptor Set*/
 	{
@@ -113,8 +113,8 @@ ASEXPORT asResults asInitTexturePool()
 		descSetAllocInfo.descriptorPool = vTexturePoolDescriptorPool;
 		descSetAllocInfo.descriptorSetCount = AS_MAX_INFLIGHT;
 		descSetAllocInfo.pSetLayouts = layouts;
-		if (vkAllocateDescriptorSets(asVkDevice, &descSetAllocInfo, vTexturePoolDescSets) != VK_SUCCESS)
-			asFatalError("vkAllocateDescriptorSets() Failed to allocate vTexturePoolDescSets");
+		AS_VK_CHECK(vkAllocateDescriptorSets(asVkDevice, &descSetAllocInfo, vTexturePoolDescSets),
+			"vkAllocateDescriptorSets() Failed to allocate vTexturePoolDescSets");
 	}
 	/*Set all as Blank Texture*/
 	{

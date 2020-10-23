@@ -109,8 +109,8 @@ ASEXPORT asResults _asFillGfxPipeline_DearImgui(
 	pGraphicsPipelineDesc->subpass = 0;
 	pGraphicsPipelineDesc->layout = imGuiPipelineLayout;
 
-	if(vkCreateGraphicsPipelines(asVkDevice, VK_NULL_HANDLE, 1, pGraphicsPipelineDesc, AS_VK_MEMCB, (VkPipeline*)pPipelineOut) != VK_SUCCESS)
-		asFatalError("vkCreateGraphicsPipelines() Failed to create imGuiPipeline");
+	AS_VK_CHECK(vkCreateGraphicsPipelines(asVkDevice, VK_NULL_HANDLE, 1, pGraphicsPipelineDesc, AS_VK_MEMCB, (VkPipeline*)pPipelineOut),
+		"vkCreateGraphicsPipelines() Failed to create imGuiPipeline");
 	return AS_SUCCESS;
 }
 
@@ -194,8 +194,8 @@ void _createScreenDepResources()
 		createInfo.subpassCount = 1;
 		createInfo.pSubpasses = &subpass;
 
-		if (vkCreateRenderPass(asVkDevice, &createInfo, AS_VK_MEMCB, &imGuiRenderPass) != VK_SUCCESS)
-			asFatalError("vkCreateRenderPass() Failed to create pScreen->simpleRenderPass");
+		AS_VK_CHECK(vkCreateRenderPass(asVkDevice, &createInfo, AS_VK_MEMCB, &imGuiRenderPass),
+			"vkCreateRenderPass() Failed to create pScreen->simpleRenderPass");
 	}
 	/*Framebuffer (For Each Screen)*/
 	{
@@ -213,8 +213,8 @@ void _createScreenDepResources()
 		createInfo.height = pScreen->extents.height;
 		createInfo.layers = 1;
 
-		if (vkCreateFramebuffer(asVkDevice, &createInfo, AS_VK_MEMCB, &imGuiFramebuffers[screenIdx]) != VK_SUCCESS)
-			asFatalError("vkCreateFramebuffer() Failed to create pScreen->simpleFrameBuffer");
+		AS_VK_CHECK(vkCreateFramebuffer(asVkDevice, &createInfo, AS_VK_MEMCB, &imGuiFramebuffers[screenIdx]),
+			"vkCreateFramebuffer() Failed to create pScreen->simpleFrameBuffer");
 	}
 }
 
@@ -367,8 +367,8 @@ ASEXPORT void asInitImGui()
 		createInfo.pSetLayouts = descSetLayouts;
 		createInfo.pushConstantRangeCount = 1;
 		createInfo.pPushConstantRanges = &(VkPushConstantRange) { VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(imGuiPushData) };
-		if (vkCreatePipelineLayout(asVkDevice, &createInfo, AS_VK_MEMCB, &imGuiPipelineLayout) != VK_SUCCESS)
-			asFatalError("vkCreatePipelineLayout() Failed to create imGuiPipelineLayout");
+		AS_VK_CHECK(vkCreatePipelineLayout(asVkDevice, &createInfo, AS_VK_MEMCB, &imGuiPipelineLayout),
+			"vkCreatePipelineLayout() Failed to create imGuiPipelineLayout");
 	}
 #endif
 	_createScreenDepResources();
@@ -387,7 +387,7 @@ ASEXPORT void asInitImGui()
 		asBinReader shaderBin;
 		asBinReaderOpenMemory(&shaderBin, "ASFX", fileData, fileSize);
 		if (asCreateShaderFx(&shaderBin, &imGuiShaderFx, AS_QUALITY_HIGH) != AS_SUCCESS)
-			asFatalError("Could not load from shader database \"shaders/core/DearImGui_FX.asfx\"");
+			asFatalError("Could not load from shader database \"shaders/core/DearImGui_FX.asfx\"", -1);
 		asFree(fileData);
 	}
 	/*Load ImGui Settings*/
@@ -639,10 +639,8 @@ ASEXPORT bool asImGuiIsFocused()
 ASEXPORT void asImGuiPumpInput()
 {
 	/*Mouse Cursor*/
+	if (pImGuiIo->ConfigFlags && !ImGuiConfigFlags_NoMouseCursorChange)
 	{
-		if (pImGuiIo->ConfigFlags & ImGuiConfigFlags_NoMouseCursorChange)
-			return;
-
 		ImGuiMouseCursor imgui_cursor = igGetMouseCursor();
 		if (pImGuiIo->MouseDrawCursor || imgui_cursor == ImGuiMouseCursor_None)
 		{

@@ -1,15 +1,63 @@
 #ifndef _ASSCENERENDERER_H_
 #define _ASSCENERENDERER_H_
 
-#include "../engine/common/asCommon.h"
-#include "../engine/renderer/asRendererCore.h"
+#include "engine/common/asCommon.h"
+#include "engine/renderer/asRendererCore.h"
+#include "engine/renderer/asRenderGraph.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+/*Viewer*/
+typedef struct asGfxViewerT* asGfxViewer;
 typedef struct {
-	int32_t viewportIdx; /**< Viewport index (future use)*/
-	uint32_t maxTransforms; /**< Maximum number of uploaded transforms*/
+	int32_t screenIdx;
+	int32_t viewportIdx;
+	int32_t flags;
+	float time;
+	vec3 viewPosition;
+	quat viewRotation;
+	bool ortho;
+	float fov;
+	float clipStart;
+	float clipEnd;
+	int32_t debugState;
+} asGfxViewerParamsDesc;
+
+ASEXPORT asResults asSceneRendererCreateViewer(asGfxViewer* pViewer);
+ASEXPORT asResults asSceneRendererSetViewerParams(asGfxViewer viewer, size_t descCount, asGfxViewerParamsDesc* pDescs);
+ASEXPORT void asSceneRendererDestroyViewer(asGfxViewer viewer);
+
+/*Transform*/
+typedef struct asSceneRendererTransformPoolT* asSceneRendererTransformPool;
+
+/*Layout of structure is to ensure padding with vec4*/
+typedef struct {
+	float position[3]; /**< Position (XYZ)*/
+	float relativeTime; /**< Relative Time Value (Useful for Anim)*/
+	float rotation[4]; /**< Rotation (XYZW)*/
+	float scale[3]; /**< Scale (XYZ)*/
+	float opacity; /**< Per-Transform Fade Opacity (Useful for LOD)*/
+	float boundBoxMin[3]; /**< Bounding Box Minimum (XYZ)*/
+	float bsphere; /**< Bounding sphere*/
+	float boundBoxMax[3]; /**< Bounding Box Maximum (XYZ)*/
+	float random; /**< Per-Transform Seed Value (Useful for Variance)*/
+	float customProps[4]; /**< Custom Shader Props*/
+} asGfxInstanceTransform;
+
+ASEXPORT asResults asSceneRendererTransformPoolCreate(asSceneRendererTransformPool* pPool, uint32_t maxTransforms);
+ASEXPORT asResults asSceneRendererTransformPoolAddTransforms(asSceneRendererTransformPool pool, uint32_t transformCount, asGfxInstanceTransform* pTransforms, uint32_t* pBeginningTransformOffset);
+ASEXPORT asResults asSceneRendererTransformPoolPopulateBegin(asSceneRendererTransformPool pool);
+ASEXPORT asResults asSceneRendererTransformPoolPopulateEnd(asSceneRendererTransformPool pool);
+ASEXPORT asResults asSceneRendererTransformPoolDestroy(asSceneRendererTransformPool pool);
+
+/*Primitive Submission*/
+typedef struct {
+	asRenderGraphStage graphStage; /**< Render graph stage*/
+	asGfxViewer viewer; /**< View parameters*/
+	asSceneRendererTransformPool transformPool; /**< Pool of transformations*/
+
 	uint32_t maxPrimitives; /**< Maximum number of uploaded primatives*/
 	uint32_t maxInstances; /**< Maximum number of instances (post batching)*/
 	bool disableInstanceSort; /**< Disable sorting of instances*/
@@ -26,8 +74,8 @@ ASEXPORT asResults asInitSceneRenderer();
 ASEXPORT asResults asTriggerResizeSceneRenderer();
 ASEXPORT asResults asShutdownSceneRenderer();
 
-ASEXPORT asPrimitiveSubmissionQueue asSceneRendererCreateSubmissionQueue(asPrimitiveSubmissionQueueDesc* pDesc);
-ASEXPORT asResults asSceneRendererDestroySubmissionQueue(asPrimitiveSubmissionQueue queue);
+ASEXPORT asResults asSceneRendererSubmissionQueueCreate(asPrimitiveSubmissionQueue* pQueue, asPrimitiveSubmissionQueueDesc* pDesc);
+ASEXPORT asResults asSceneRendererSubmissionQueueDestroy(asPrimitiveSubmissionQueue queue);
 
 ASEXPORT asResults asSceneRendererSubmissionQueuePopulateBegin(asPrimitiveSubmissionQueue queue);
 ASEXPORT asResults asSceneRendererSubmissionQueuePopulateEnd(asPrimitiveSubmissionQueue queue);
@@ -39,34 +87,9 @@ typedef enum {
 	AS_GFX_DRAW_FLAG_HW_SKINNED = 1 << 1, /**< Use Hardware Skinning to Offset into Transforms by Bone Index*/
 } asGfxInstanceFlagBits;
 
-typedef enum {
-	AS_SCENE_RENDERPASS_SHADOW = 1 << 0,
-	AS_SCENE_RENDERPASS_DEPTH_PREPASS = 1 << 1,
-	AS_SCENE_RENDERPASS_GBUFFER_PASS = 1 << 2,
-	AS_SCENE_RENDERPASS_DEFERRED_LIGHT = 1 << 3,
-	AS_SCENE_RENDERPASS_WATER_DECAL = 1 << 4,
-	AS_SCENE_RENDERPASS_WATER_SURFACE = 1 << 5,
-	AS_SCENE_RENDERPASS_PARTICLE_SOFT = 1 << 6,
-	AS_SCENE_RENDERPASS_GUI = 1 << 7,
-	AS_SCENE_RENDERPASS_COUNT = 8,
-	AS_SCENE_RENDERPASS_SOLID = AS_SCENE_RENDERPASS_SHADOW | AS_SCENE_RENDERPASS_DEPTH_PREPASS | AS_SCENE_RENDERPASS_GBUFFER_PASS,
-	AS_SCENE_RENDERPASS_MAX = UINT32_MAX
-} asSceneRenderPass;
-
-/*Layout of structure is to ensure padding with vec4*/
-typedef struct {
-	float position[3]; /**< Position (XYZ)*/
-	float relativeTime; /**< Relative Time Value*/
-	float rotation[4]; /**< Rotation (XYZW)*/
-	float scale[3]; /**< Scale (XYZ)*/
-	float opacity; /**< Per-Transform Fade Opacity (Useful for LOD)*/
-	float customProps[4]; /**< Custom Shader Props*/
-} asGfxInstanceTransform;
-
 typedef struct {
 	float sortDistance; /**< Sort Distance (will be reversed on transparent renderpasses)*/
 	asGfxDrawFlags flags; /**< Rendering Flags*/
-	asSceneRenderPass renderPass; /**< "Renderpass" to target*/
 	
 	uint32_t vertexByteOffset; /**< Vertex buffer offset in bytes*/
 	uint32_t vertexStart; /**< Beginning Vertex*/
@@ -94,24 +117,7 @@ typedef struct {
 	void* pCustomRenderData; /**< Custom Data (reserved)*/
 } asGfxPrimativeGroupDesc;
 
-ASEXPORT asResults asSceneRendererSubmissionAddBoundingBoxes(asPrimitiveSubmissionQueue queue, uint32_t boundsCount, float* pBoundingBoxes);
-ASEXPORT asResults asSceneRendererSubmissionAddTransforms(asPrimitiveSubmissionQueue queue, uint32_t transformCount, asGfxInstanceTransform* pTransforms, uint32_t* pBeginningTransformOffset);
 ASEXPORT asResults asSceneRendererSubmissionAddPrimitiveGroups(asPrimitiveSubmissionQueue queue, uint32_t primitiveCount, asGfxPrimativeGroupDesc* pDescs);
-
-typedef struct {
-	int32_t viewportIdx;
-	int32_t subViewportIdx;
-	int32_t flags;
-	float time;
-	vec3 viewPosition;
-	quat viewRotation;
-	float fov;
-	float clipStart;
-	float clipEnd;
-	int32_t debugState;
-} asGfxViewerParamsDesc;
-
-ASEXPORT asResults asSceneRendererSetViewerParams(size_t descCount, asGfxViewerParamsDesc* pDescs);
 
 ASEXPORT asResults asSceneRendererUploadDebugDraws(int32_t viewport);
 ASEXPORT asResults asSceneRendererDraw(int32_t viewport);

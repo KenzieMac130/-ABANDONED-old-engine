@@ -151,7 +151,7 @@ ASEXPORT void _asDebugLoggerLogArgs(asDebugLogSeverity level, const char* format
 
 		SDL_UnlockMutex(logAccessMutex);
 	}
-	else { asFatalError("Mutex Lock failed in Debug Log!!!"); }
+	else { asFatalError("Mutex Lock failed in Debug Log!!!", -1); }
 }
 
 ASEXPORT void _asDebugLoggerLog(asDebugLogSeverity level, const char* format, ...)

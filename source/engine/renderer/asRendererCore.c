@@ -70,7 +70,7 @@ ASEXPORT uint32_t asTextureCalcPitch(asColorFormat format, uint32_t width)
 		case AS_COLORFORMAT_DEPTH:
 			asGetDepthFormatSize(format);
 		default:
-			asFatalError("Unknown image format used");
+			asFatalError("Unknown image format used", -1);
 			break;
 		}
 		return (width * tmpVal + 7) / 8;
@@ -153,7 +153,7 @@ void createWindow(asAppInfo_t* pAppInfo, void* pCustomWindow)
 	}
 	if (!asMainWindow)
 	{
-		asFatalError("Failed to find window");
+		asFatalError("Failed to find window", -1);
 	}
 }
 

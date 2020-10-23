@@ -282,7 +282,7 @@ ASEXPORT void asReleaseBuffer(asBufferHandle_t hndl);
 /**
 * @brief Get render dimensions for a viewport 
 */
-ASEXPORT asResults asGetRenderDimensions(int viewportId, bool dynamicRes, int32_t* pWidth, int32_t* pHeight);
+ASEXPORT asResults asGetRenderDimensions(int screenId, bool dynamicRes, int32_t* pWidth, int32_t* pHeight);
 
 /*Global Shader Properties*/
 #define AS_MAX_GLOBAL_CUSTOM_PARAMS 8
@@ -290,11 +290,17 @@ ASEXPORT asResults asSetGlobalCustomShaderParam(int slot, float values[4]);
 ASEXPORT asResults asSetGlobalShaderDebugMode(int mode);
 ASEXPORT asResults asSetGlobalShaderTime(double time);
 
-/*Draw Commands*/
-/*command buffer/drawing abstraction*/
-
-/*Backbuffer Draw*/
-/*todo: setup simple backbuffer drawing (gizmos/ui)*/
+/*Misc*/
+/**
+* @brief Types of queues
+*/
+typedef enum {
+	AS_GFXSTAGE_ALL_GRAPHICS,
+	AS_GFXSTAGE_COMPUTE,
+	AS_GFXSTAGE_TRANSFER,
+	AS_GFXSTAGE_RAYTRACE,
+	AS_GFXSTAGE_MAX = UINT32_MAX
+} asGfxStage;
 
 #ifdef __cplusplus
 }

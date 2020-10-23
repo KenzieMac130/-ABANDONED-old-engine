@@ -22,8 +22,9 @@ ASEXPORT void asError(const char* msg)
 #endif
 }
 
-ASEXPORT void asFatalError(const char* msg)
+ASEXPORT void asFatalError(const char* msg, int exitCode)
 {
+	asDebugError("FATAL ERROR!\n[MESSAGE]\n\t %s\n[EXIT %d]", msg, exitCode);
 	asError(msg);
-	exit(1);
+	exit(exitCode);
 }

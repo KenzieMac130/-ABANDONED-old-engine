@@ -42,14 +42,20 @@ asShaderFx* pStandardSurfaceShader;
 asResourceFileID_t standardSurfaceShaderFileID;
 
 asPrimitiveSubmissionQueue subQueue;
+asSceneRendererTransformPool transformPool;
+asGfxViewer viewer;
 
 float renderDebug = -1;
 vec3 cameraPos = { 0, 0, 1 };
 quat cameraRot = ASQUAT_IDENTITY;
 vec2 cameraLook;
 float fov = 90.0f;
+
+float gameTime = 0.0f;
+
 void onUpdate(double deltaTime)
 {
+	gameTime += deltaTime;
 	if (igBegin("Hello Triangle", NULL, 0))
 	{
 		int debugValue = (int)renderDebug;
@@ -132,13 +138,16 @@ void onUpdate(double deltaTime)
 
 	/*Set Viewport*/
 	asGfxViewerParamsDesc viewParams = { 0 };
+	viewParams.screenIdx = 0;
+	viewParams.viewportIdx = 0;
+	viewParams.time = gameTime;
 	viewParams.fov = fov;
 	viewParams.clipStart = 0.001f;
 	viewParams.clipEnd = 10000.0f;
 	viewParams.debugState = (int32_t)renderDebug;
 	glm_vec3_copy(cameraPos, viewParams.viewPosition);
 	glm_quat_copy(cameraRot, viewParams.viewRotation);
-	asSceneRendererSetViewerParams(1, &viewParams);
+	asSceneRendererSetViewerParams(viewer, 1, &viewParams);
 
 	/*Begin Recording*/
 	asSceneRendererSubmissionQueuePopulateBegin(subQueue);
@@ -151,7 +160,7 @@ void onUpdate(double deltaTime)
 		.scale = {1.0f, 1.0f, 1.0f},
 		.opacity = 1.0f
 	};
-	asSceneRendererSubmissionAddTransforms(subQueue, 1, &transform, &transformOffset);
+	asSceneRendererTransformPoolAddTransforms(transformPool, 1, &transform, &transformOffset);
 
 	/*Primitive*/
 	asGfxPrimativeGroupDesc primDesc = { 0 };
@@ -161,7 +170,6 @@ void onUpdate(double deltaTime)
 	primDesc.indexBuffer = iBuffer;
 	primDesc.indexCount = idxCount;
 	primDesc.sortDistance = 0.0f;
-	primDesc.renderPass = AS_SCENE_RENDERPASS_SOLID;
 	primDesc.baseInstanceCount = 1;
 	primDesc.materialId = 0;
 	primDesc.debugState = 0;
@@ -179,11 +187,13 @@ void onUpdate(double deltaTime)
 
 void onExit(void)
 {
+	asSceneRendererDestroyViewer(viewer);
+	asSceneRendererTransformPoolDestroy(transformPool);
 	asReleaseBuffer(vBuffer);
 	asReleaseBuffer(iBuffer);
 	asReleaseTexture(texture);
 	asShaderFxManagerDereferenceShaderFx(standardSurfaceShaderFileID);
-	asSceneRendererDestroySubmissionQueue(subQueue);
+	asSceneRendererSubmissionQueueDestroy(subQueue);
 	asShutdown();
 }
 
@@ -331,7 +341,7 @@ int main(int argc, char* argv[])
 		asResourceFileID_t resID;
 		if (asResourceLoader_OpenByPath(&file, &resID, "test_image", 11) != AS_SUCCESS)
 		{
-			asFatalError("Failed to open image");
+			asFatalError("Failed to open image", -1);
 		}
 
 		size_t fSize = asResourceLoader_GetContentSize(&file);
@@ -386,8 +396,10 @@ int main(int argc, char* argv[])
 	}*/
 	/*Super Hello Triange*/
 	{
-#define triCount 64
+		/*Setup Render Graph*/
+
 		/*Triangles*/
+		#define triCount 64
 		asVertexGeneric vtx[3 * triCount] = { 0 };
 		uint16_t indices[3 * triCount];
 		vtxCount = ASARRAYLEN(vtx);
@@ -458,12 +470,22 @@ int main(int argc, char* argv[])
 		standardSurfaceShaderFileID = asResource_FileIDFromRelativePath(path, strlen(path));
 		pStandardSurfaceShader = asShaderFxManagerGetShaderFx(standardSurfaceShaderFileID);
 
+		/*Viewer*/
+		asSceneRendererCreateViewer(&viewer);
+
+		/*Transform Pool*/
+		asSceneRendererTransformPoolCreate(&transformPool, 64);
+
 		/*Submission Queue*/
-		asPrimitiveSubmissionQueueDesc desc = { 0 };
-		desc.maxTransforms = 1;
-		desc.maxInstances = 1;
-		desc.maxPrimitives = 1;
-		subQueue = asSceneRendererCreateSubmissionQueue(&desc);
+		{
+			asPrimitiveSubmissionQueueDesc desc = { 0 };
+			desc.maxInstances = 1;
+			desc.maxPrimitives = 1;
+			desc.graphStage = NULL;
+			desc.viewer = NULL;
+			desc.transformPool = transformPool;
+			asSceneRendererSubmissionQueueCreate(&subQueue, &desc);
+		}
 	}
 
 	asLoopDesc_t loopDesc;
