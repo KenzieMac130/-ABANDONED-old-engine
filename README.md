@@ -1,6 +1,9 @@
+
+# Note
+Unfortunately my decision to use my initials backfired, they are no longer my initials. I have planned to move on from this engine and create a new one using the knowledge I have learned. I will aim to make this new engine in C++ to avoid too much time solving too many low level issues but still focus lightweight and prioritize development speed.
+
 # astrengine
-## Planned overhaul in the future
-In-House Toy Game Engine by Alex Strand
+In-House Toy Game Engine by MacKenzie
 
 ![alt text](https://github.com/astrand130/astrengine/blob/master/docs/Screenshots/HelloMultiTriangle.PNG "HelloMultiTriangle.png")
 *(Early Test Screenshot, See Hello Triangle [Upload](https://github.com/astrand130/astrengine/blob/eeef48faa7062fec7acaef64f72084d15573025a/source/tests/main.c#L247), [Shader](https://github.com/astrand130/astrengine-assets/blob/da0f74192989d406283d0c2c96712f5306e6ad81/shaders/core/StandardScene_FX.glsl#L1) and [Submission](https://github.com/astrand130/astrengine/blob/eeef48faa7062fec7acaef64f72084d15573025a/source/tests/main.c#L46))*
